@@ -122,6 +122,65 @@ const resendSignupOtp = asyncHandler(async (req, res) => {
   return res.status(200).json(generic);
 });
 
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  const generic = { message: 'If an account exists, a reset code has been sent.' };
+  if (!email) {
+    return res.status(400).json({ message: 'email is required' });
+  }
+  const normalizedEmail = email.toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail });
+  if (!user || user.banned) {
+    return res.status(200).json(generic);
+  }
+  if (!isMailerConfigured()) {
+    console.warn('[auth] forgot-password requested but mailer is not configured');
+    return res.status(200).json(generic);
+  }
+  const code = generateOtp();
+  const codeHash = await hashOtp(code);
+  await PasswordResetCode.findOneAndUpdate(
+    { user: user._id },
+    { user: user._id, email: normalizedEmail, codeHash, expiresAt: otpExpiry(), attempts: 0, lastSentAt: new Date() },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  await sendOtpEmail({ to: normalizedEmail, code, purpose: 'password_reset' });
+  return res.status(200).json(generic);
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const { email, code, newPassword } = req.body;
+  if (!email || !code || !newPassword) {
+    return res.status(400).json({ message: 'email, code and newPassword are required' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  }
+  const normalizedEmail = email.toLowerCase();
+  const record = await PasswordResetCode.findOne({ email: normalizedEmail });
+  if (!record || record.expiresAt < new Date()) {
+    return res.status(400).json({ message: 'Invalid or expired code' });
+  }
+  if (record.attempts >= MAX_OTP_ATTEMPTS) {
+    return res.status(400).json({ message: 'Too many attempts. Please request a new code.' });
+  }
+  const match = await compareOtp(String(code), record.codeHash);
+  if (!match) {
+    record.attempts += 1;
+    await record.save();
+    return res.status(400).json({ message: 'Invalid or expired code' });
+  }
+  const user = await User.findById(record.user).select('+password');
+  if (!user) {
+    await PasswordResetCode.deleteOne({ _id: record._id });
+    return res.status(400).json({ message: 'Invalid or expired code' });
+  }
+  user.password = newPassword;
+  await user.save();
+  await PasswordResetCode.deleteOne({ _id: record._id });
+  return res.status(200).json({ message: 'Password updated' });
+});
+
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
@@ -220,4 +279,7 @@ const updateProfile = asyncHandler(async (req, res) => {
   res.json({ user: serializeUser(user) });
 });
 
-module.exports = { signup, login, googleAuth, me, updateProfile, serializeUser, verifySignup, resendSignupOtp };
+module.exports = {
+  signup, login, googleAuth, me, updateProfile, serializeUser,
+  verifySignup, resendSignupOtp, forgotPassword, resetPassword,
+};
