@@ -1,10 +1,18 @@
 const { OAuth2Client } = require('google-auth-library');
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const SiteSettings = require('../models/SiteSettings');
+const PendingSignup = require('../models/PendingSignup');
+const PasswordResetCode = require('../models/PasswordResetCode');
 const generateToken = require('../utils/generateToken');
+const { generateOtp, hashOtp, compareOtp, otpExpiry } = require('../utils/otp');
+const { isMailerConfigured, sendOtpEmail } = require('../utils/mailer');
 const { asyncHandler } = require('../middlewares/errorHandler');
 
 const googleClient = new OAuth2Client();
+
+const RESEND_COOLDOWN_MS = 60 * 1000;
+const MAX_OTP_ATTEMPTS = 5;
 
 const serializeUser = (user) => ({
   id: user._id,
@@ -24,8 +32,153 @@ const signup = asyncHandler(async (req, res) => {
   if (!username || !email || !password) {
     return res.status(400).json({ message: 'username, email and password are required' });
   }
-  const user = await User.create({ username, email, password });
-  res.status(201).json({ token: generateToken(user._id), user: serializeUser(user) });
+
+  if (!settings.requireEmailVerification) {
+    const user = await User.create({ username, email, password });
+    return res.status(201).json({ token: generateToken(user._id), user: serializeUser(user) });
+  }
+
+  if (!isMailerConfigured()) {
+    return res.status(503).json({ message: 'Email verification is enabled but email delivery is not configured.' });
+  }
+  if (username.length < 3 || username.length > 30) {
+    return res.status(400).json({ message: 'username must be between 3 and 30 characters' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  }
+
+  const normalizedEmail = email.toLowerCase();
+  const existing = await User.findOne({ $or: [{ email: normalizedEmail }, { username }] });
+  if (existing) {
+    return res.status(409).json({ message: 'email or username already exists' });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const code = generateOtp();
+  const codeHash = await hashOtp(code);
+  await PendingSignup.findOneAndUpdate(
+    { email: normalizedEmail },
+    { email: normalizedEmail, username, passwordHash, codeHash, expiresAt: otpExpiry(), attempts: 0, lastSentAt: new Date() },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  await sendOtpEmail({ to: normalizedEmail, code, purpose: 'signup' });
+  return res.status(202).json({ pendingVerification: true, email: normalizedEmail });
+});
+
+const verifySignup = asyncHandler(async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) {
+    return res.status(400).json({ message: 'email and code are required' });
+  }
+  const normalizedEmail = email.toLowerCase();
+  const pending = await PendingSignup.findOne({ email: normalizedEmail });
+  if (!pending || pending.expiresAt < new Date()) {
+    return res.status(400).json({ message: 'Invalid or expired code' });
+  }
+  if (pending.attempts >= MAX_OTP_ATTEMPTS) {
+    return res.status(400).json({ message: 'Too many attempts. Please request a new code.' });
+  }
+  const match = await compareOtp(String(code), pending.codeHash);
+  if (!match) {
+    pending.attempts += 1;
+    await pending.save();
+    return res.status(400).json({ message: 'Invalid or expired code' });
+  }
+  const conflict = await User.findOne({ $or: [{ email: normalizedEmail }, { username: pending.username }] });
+  if (conflict) {
+    await PendingSignup.deleteOne({ _id: pending._id });
+    return res.status(409).json({ message: 'email or username already exists' });
+  }
+  const user = new User({ username: pending.username, email: pending.email });
+  user.password = pending.passwordHash;
+  user.$locals.passwordAlreadyHashed = true;
+  await user.save();
+  await PendingSignup.deleteOne({ _id: pending._id });
+  return res.status(201).json({ token: generateToken(user._id), user: serializeUser(user) });
+});
+
+const resendSignupOtp = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ message: 'email is required' });
+  }
+  const normalizedEmail = email.toLowerCase();
+  const generic = { message: 'If a pending signup exists, a new code has been sent.' };
+  const pending = await PendingSignup.findOne({ email: normalizedEmail });
+  if (!pending) {
+    return res.status(200).json(generic);
+  }
+  if (Date.now() - new Date(pending.lastSentAt).getTime() < RESEND_COOLDOWN_MS) {
+    return res.status(429).json({ message: 'Please wait before requesting another code.' });
+  }
+  const code = generateOtp();
+  pending.codeHash = await hashOtp(code);
+  pending.expiresAt = otpExpiry();
+  pending.attempts = 0;
+  pending.lastSentAt = new Date();
+  await pending.save();
+  await sendOtpEmail({ to: normalizedEmail, code, purpose: 'signup' });
+  return res.status(200).json(generic);
+});
+
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  const generic = { message: 'If an account exists, a reset code has been sent.' };
+  if (!email) {
+    return res.status(400).json({ message: 'email is required' });
+  }
+  const normalizedEmail = email.toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail });
+  if (!user || user.banned) {
+    return res.status(200).json(generic);
+  }
+  if (!isMailerConfigured()) {
+    console.warn('[auth] forgot-password requested but mailer is not configured');
+    return res.status(200).json(generic);
+  }
+  const code = generateOtp();
+  const codeHash = await hashOtp(code);
+  await PasswordResetCode.findOneAndUpdate(
+    { user: user._id },
+    { user: user._id, email: normalizedEmail, codeHash, expiresAt: otpExpiry(), attempts: 0, lastSentAt: new Date() },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  await sendOtpEmail({ to: normalizedEmail, code, purpose: 'password_reset' });
+  return res.status(200).json(generic);
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const { email, code, newPassword } = req.body;
+  if (!email || !code || !newPassword) {
+    return res.status(400).json({ message: 'email, code and newPassword are required' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters' });
+  }
+  const normalizedEmail = email.toLowerCase();
+  const record = await PasswordResetCode.findOne({ email: normalizedEmail });
+  if (!record || record.expiresAt < new Date()) {
+    return res.status(400).json({ message: 'Invalid or expired code' });
+  }
+  if (record.attempts >= MAX_OTP_ATTEMPTS) {
+    return res.status(400).json({ message: 'Too many attempts. Please request a new code.' });
+  }
+  const match = await compareOtp(String(code), record.codeHash);
+  if (!match) {
+    record.attempts += 1;
+    await record.save();
+    return res.status(400).json({ message: 'Invalid or expired code' });
+  }
+  const user = await User.findById(record.user).select('+password');
+  if (!user) {
+    await PasswordResetCode.deleteOne({ _id: record._id });
+    return res.status(400).json({ message: 'Invalid or expired code' });
+  }
+  user.password = newPassword;
+  await user.save();
+  await PasswordResetCode.deleteOne({ _id: record._id });
+  return res.status(200).json({ message: 'Password updated' });
 });
 
 const login = asyncHandler(async (req, res) => {
@@ -126,4 +279,7 @@ const updateProfile = asyncHandler(async (req, res) => {
   res.json({ user: serializeUser(user) });
 });
 
-module.exports = { signup, login, googleAuth, me, updateProfile, serializeUser };
+module.exports = {
+  signup, login, googleAuth, me, updateProfile, serializeUser,
+  verifySignup, resendSignupOtp, forgotPassword, resetPassword,
+};

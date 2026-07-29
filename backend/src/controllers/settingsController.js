@@ -15,6 +15,7 @@ const getPublicSettings = asyncHandler(async (req, res) => {
       socialLinks: settings.socialLinks,
       homeSections: settings.homeSections,
       allowSignups: settings.allowSignups,
+      requireEmailVerification: settings.requireEmailVerification,
       maintenanceMode: settings.maintenanceMode,
     },
   });

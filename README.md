@@ -45,6 +45,28 @@ Default admin credentials come from `.env` (`ADMIN_EMAIL` / `ADMIN_PASSWORD`).
 
 The Google button appears on Login/Signup only when `VITE_GOOGLE_CLIENT_ID` is set. Accounts with a matching email are linked automatically; Google-only accounts can add a password later from the Profile page.
 
+### Email (OTP verification + password reset)
+
+Configure SMTP in `backend/.env` to enable email:
+
+```
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-smtp-user
+SMTP_PASS=your-smtp-pass
+MAIL_FROM="Apex NovelHub <no-reply@novelhub.com>"
+OTP_TTL_MINUTES=10
+```
+
+- **Forgot password** works whenever SMTP is configured: users request a 6-digit
+  code from the login page's "Forgot password?" link, then set a new password.
+- **Signup email verification** is controlled by the admin **Require email
+  verification on signup** toggle (Admin → Settings). When on, new email/password
+  signups must confirm a 6-digit code before the account is created. Google
+  sign-ins skip this. When SMTP is not configured, codes are logged to the
+  server console instead of sent (useful for local development).
+
 ### Tests
 
 ```bash

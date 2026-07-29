@@ -9,6 +9,7 @@ import NovelDetail from './pages/NovelDetail';
 import Reader from './pages/Reader';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import ForgotPassword from './pages/ForgotPassword';
 import Profile from './pages/Profile';
 import Library from './pages/Library';
 import Notifications from './pages/Notifications';
@@ -48,6 +49,7 @@ const App = () => {
           <Route path="/novel/:slug" element={<NovelDetail />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route
             path="/profile"
             element={

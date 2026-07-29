@@ -79,6 +79,9 @@ const Login = () => {
                 </button>
               </div>
             </div>
+            <div className="text-right -mt-1">
+              <Link to="/forgot-password" className="text-xs text-crimson-soft hover:underline">Forgot password?</Link>
+            </div>
             {error && (
               <p className="rounded-lg bg-crimson/15 px-3 py-2 text-sm text-crimson-soft" role="alert">
                 {error}
