@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Home, List, Settings2, X, MessageSquare, Trash2, Heart } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/Spinner';
+import { stripTextColor } from '../utils/sanitizeContent';
 
 const SETTINGS_KEY = 'novelhub_reader_settings';
 
@@ -96,6 +97,12 @@ const Reader = () => {
   };
 
   const theme = READER_THEMES[settings.theme] || READER_THEMES.dark;
+
+  // Strip hardcoded text colors from stored HTML so prose follows the reader theme.
+  const contentHtml = useMemo(
+    () => stripTextColor(data?.chapter?.content || ''),
+    [data?.chapter?.content]
+  );
 
   if (error) {
     return (
@@ -356,7 +363,7 @@ const Reader = () => {
               lineHeight: settings.lineHeight,
               fontFamily: FONTS[settings.font]?.css || FONTS.serif.css,
             }}
-            dangerouslySetInnerHTML={{ __html: data.chapter.content }}
+            dangerouslySetInnerHTML={{ __html: contentHtml }}
           />
 
           <nav className="mt-12 flex items-center justify-between gap-3 border-t pt-6" style={{ borderColor: 'rgba(128,128,128,0.2)' }} aria-label="Chapter navigation">

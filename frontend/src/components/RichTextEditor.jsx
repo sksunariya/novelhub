@@ -19,6 +19,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import RichTextToolbar from './richTextEditor/RichTextToolbar';
 import { FontSize } from './richTextEditor/fontSizeExtension';
+import { stripPastedColors } from '../utils/sanitizeContent';
 
 const RichTextEditor = ({ value, onChange, placeholder = 'Write the chapter content...' }) => {
   const editor = useEditor({
@@ -48,6 +49,8 @@ const RichTextEditor = ({ value, onChange, placeholder = 'Write the chapter cont
       attributes: {
         class: 'reading-content min-h-64 max-h-[60vh] overflow-y-auto px-4 py-3 text-sm leading-relaxed text-silver focus:outline-none',
       },
+      // Drop hardcoded colors from pasted content so text follows the reader theme.
+      transformPastedHTML: stripPastedColors,
     },
   });
 
