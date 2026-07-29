@@ -435,6 +435,9 @@ const updateSettings = asyncHandler(async (req, res) => {
   if (body.maintenanceMode !== undefined) {
     settings.maintenanceMode = body.maintenanceMode === 'true' || body.maintenanceMode === true;
   }
+  if (body.requireEmailVerification !== undefined) {
+    settings.requireEmailVerification = body.requireEmailVerification === 'true' || body.requireEmailVerification === true;
+  }
   await settings.save();
   res.json({ settings });
 });

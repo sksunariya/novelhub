@@ -30,6 +30,7 @@ const siteSettingsSchema = new mongoose.Schema(
       topRated: { type: Boolean, default: true },
     },
     allowSignups: { type: Boolean, default: true },
+    requireEmailVerification: { type: Boolean, default: false },
     maintenanceMode: { type: Boolean, default: false },
   },
   { timestamps: true }
