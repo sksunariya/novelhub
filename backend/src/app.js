@@ -8,6 +8,7 @@ const libraryRoutes = require('./routes/libraryRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const maintenanceGuard = require('./middlewares/maintenance');
+const requestLogger = require('./middlewares/requestLogger');
 const { notFound, errorHandler } = require('./middlewares/errorHandler');
 
 const app = express();
@@ -15,6 +16,7 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(cors({ origin: process.env.CLIENT_URL || true }));
 app.use(express.json({ limit: '5mb' }));
+app.use(requestLogger);
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 app.use('/api', maintenanceGuard);
