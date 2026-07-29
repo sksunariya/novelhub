@@ -54,6 +54,7 @@ const SettingsAdmin = () => {
       body.append('socialLinks', JSON.stringify(form.socialLinks));
       body.append('homeSections', JSON.stringify(form.homeSections));
       body.append('allowSignups', form.allowSignups);
+      body.append('requireEmailVerification', form.requireEmailVerification);
       body.append('maintenanceMode', form.maintenanceMode);
       if (files.logo) body.append('logo', files.logo);
       if (files.favicon) body.append('favicon', files.favicon);
@@ -207,6 +208,10 @@ const SettingsAdmin = () => {
               <label className="flex cursor-pointer items-center gap-2 text-sm text-silver">
                 <input type="checkbox" checked={form.allowSignups} onChange={(e) => setForm((f) => ({ ...f, allowSignups: e.target.checked }))} className="accent-[var(--color-primary)]" />
                 Allow new signups
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-silver">
+                <input type="checkbox" checked={form.requireEmailVerification || false} onChange={(e) => setForm((f) => ({ ...f, requireEmailVerification: e.target.checked }))} className="accent-[var(--color-primary)]" />
+                Require email verification on signup
               </label>
               <label className="flex cursor-pointer items-center gap-2 text-sm text-silver">
                 <input type="checkbox" checked={form.maintenanceMode} onChange={(e) => setForm((f) => ({ ...f, maintenanceMode: e.target.checked }))} className="accent-[var(--color-primary)]" />

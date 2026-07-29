@@ -34,10 +34,21 @@ export const AuthProvider = ({ children }) => {
 
   const signup = useCallback(async (username, email, password) => {
     const { data } = await client.post('/auth/signup', { username, email, password });
+    if (data.token) {
+      setToken(data.token);
+      setUser(data.user);
+    }
+    return data;
+  }, []);
+
+  const verifySignup = useCallback(async (email, code) => {
+    const { data } = await client.post('/auth/signup/verify', { email, code });
     setToken(data.token);
     setUser(data.user);
     return data.user;
   }, []);
+
+  const resendSignupOtp = useCallback((email) => client.post('/auth/signup/resend', { email }), []);
 
   const googleLogin = useCallback(async (credential) => {
     const { data } = await client.post('/auth/google', { credential });
@@ -54,7 +65,7 @@ export const AuthProvider = ({ children }) => {
   const updateUser = useCallback((updated) => setUser(updated), []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, googleLogin, logout, updateUser, isAdmin: user?.role === 'admin' }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, verifySignup, resendSignupOtp, googleLogin, logout, updateUser, isAdmin: user?.role === 'admin' }}>
       {children}
     </AuthContext.Provider>
   );
