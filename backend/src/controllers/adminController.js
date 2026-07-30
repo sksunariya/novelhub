@@ -6,7 +6,6 @@ const User = require('../models/User');
 const Comment = require('../models/Comment');
 const Review = require('../models/Review');
 const Notification = require('../models/Notification');
-const ReadingProgress = require('../models/ReadingProgress');
 const SiteSettings = require('../models/SiteSettings');
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { uniqueSlug } = require('../utils/slugify');
@@ -141,18 +140,15 @@ const deleteNovel = asyncHandler(async (req, res) => {
   if (!novel) {
     return res.status(404).json({ message: 'Novel not found' });
   }
-  const chapters = await Chapter.find({ novel: novel._id }).select('sourceFile');
+  // Soft delete: mark the novel and its chapters/comments/reviews as deleted.
+  // Nothing is removed — stored files, reading progress and library references
+  // are all preserved; soft-deleted records are just hidden from reads.
   await Promise.all([
-    Chapter.deleteMany({ novel: novel._id }),
-    Comment.deleteMany({ novel: novel._id }),
-    Review.deleteMany({ novel: novel._id }),
-    ReadingProgress.deleteMany({ novel: novel._id }),
-    User.updateMany({ library: novel._id }, { $pull: { library: novel._id } }),
-    novel.deleteOne(),
+    Chapter.softDeleteMany({ novel: novel._id }),
+    Comment.softDeleteMany({ novel: novel._id }),
+    Review.softDeleteMany({ novel: novel._id }),
+    novel.softDelete(),
   ]);
-  // Best-effort cleanup of stored assets (cover + private chapter source files).
-  await storage.remove(novel.coverUrl);
-  await Promise.all(chapters.map((c) => storage.removeKey(c.sourceFile?.key)));
   res.json({ message: 'Novel deleted' });
 });
 
@@ -294,16 +290,13 @@ const deleteChapter = asyncHandler(async (req, res) => {
   if (!chapter) {
     return res.status(404).json({ message: 'Chapter not found' });
   }
-  await Comment.deleteMany({ chapter: chapter._id });
+  // Soft delete the chapter and its comments; the stored source file is kept.
   const novelId = chapter.novel;
-  await chapter.deleteOne();
+  await Promise.all([
+    Comment.softDeleteMany({ chapter: chapter._id }),
+    chapter.softDelete(),
+  ]);
   await syncNovelChapterMeta(novelId);
-  // Remove the private source file only if no other chapter references it
-  // (bulk uploads share one archive across many chapters).
-  if (chapter.sourceFile?.key) {
-    const stillReferenced = await Chapter.countDocuments({ 'sourceFile.key': chapter.sourceFile.key });
-    if (!stillReferenced) await storage.removeKey(chapter.sourceFile.key);
-  }
   res.json({ message: 'Chapter deleted' });
 });
 
@@ -354,12 +347,12 @@ const deleteUser = asyncHandler(async (req, res) => {
   if (user._id.toString() === req.user._id.toString()) {
     return res.status(400).json({ message: 'Cannot delete your own account' });
   }
+  // Soft delete the user and hide their comments/reviews. Reading progress and
+  // notifications are left intact so nothing is lost from the database.
   await Promise.all([
-    Comment.deleteMany({ user: user._id }),
-    Review.deleteMany({ user: user._id }),
-    ReadingProgress.deleteMany({ user: user._id }),
-    Notification.deleteMany({ user: user._id }),
-    user.deleteOne(),
+    Comment.softDeleteMany({ user: user._id }),
+    Review.softDeleteMany({ user: user._id }),
+    user.softDelete(),
   ]);
   res.json({ message: 'User deleted' });
 });

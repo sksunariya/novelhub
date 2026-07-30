@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const softDelete = require('./plugins/softDelete');
 
 const commentSchema = new mongoose.Schema(
   {
@@ -12,5 +13,7 @@ const commentSchema = new mongoose.Schema(
 );
 
 commentSchema.index({ chapter: 1, createdAt: -1 });
+
+commentSchema.plugin(softDelete);
 
 module.exports = mongoose.model('Comment', commentSchema);

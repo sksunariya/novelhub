@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { RATING } = require('../config/constants');
+const softDelete = require('./plugins/softDelete');
 
 const reviewSchema = new mongoose.Schema(
   {
@@ -12,6 +13,9 @@ const reviewSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-reviewSchema.index({ novel: 1, user: 1 }, { unique: true });
+// One active review per user per novel; a deleted review doesn't block re-reviewing.
+reviewSchema.index({ novel: 1, user: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } });
+
+reviewSchema.plugin(softDelete);
 
 module.exports = mongoose.model('Review', reviewSchema);

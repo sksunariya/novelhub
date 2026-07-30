@@ -42,7 +42,7 @@ const deleteComment = asyncHandler(async (req, res) => {
   if (!isOwner && req.user.role !== ROLES.ADMIN) {
     return res.status(403).json({ message: 'Not allowed' });
   }
-  await comment.deleteOne();
+  await comment.softDelete();
   res.json({ message: 'Comment deleted' });
 });
 

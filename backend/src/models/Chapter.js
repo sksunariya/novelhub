@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const softDelete = require('./plugins/softDelete');
 
 const chapterSchema = new mongoose.Schema(
   {
@@ -19,6 +20,9 @@ const chapterSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-chapterSchema.index({ novel: 1, number: 1 }, { unique: true });
+// Unique chapter number per novel only among non-deleted chapters.
+chapterSchema.index({ novel: 1, number: 1 }, { unique: true, partialFilterExpression: { deletedAt: null } });
+
+chapterSchema.plugin(softDelete);
 
 module.exports = mongoose.model('Chapter', chapterSchema);

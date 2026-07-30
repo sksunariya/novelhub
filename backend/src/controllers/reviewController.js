@@ -53,7 +53,7 @@ const deleteReview = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Not allowed' });
   }
   const novelId = review.novel;
-  await review.deleteOne();
+  await review.softDelete();
   await recalcNovelRating(novelId);
   res.json({ message: 'Review deleted' });
 });
