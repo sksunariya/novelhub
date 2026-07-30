@@ -8,6 +8,17 @@ import PageTransition from '../components/PageTransition';
 import Spinner from '../components/Spinner';
 import StarRating from '../components/StarRating';
 
+const SYNOPSIS_LIMIT = 300;
+
+// Trim to at most `max` chars, preferring the last word boundary, and append an ellipsis.
+const truncateAtWord = (text, max) => {
+  if (text.length <= max) return text;
+  const slice = text.slice(0, max);
+  const lastSpace = slice.lastIndexOf(' ');
+  const cut = lastSpace > max * 0.6 ? slice.slice(0, lastSpace) : slice;
+  return `${cut.trimEnd()}…`;
+};
+
 const NovelDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -20,6 +31,7 @@ const NovelDetail = () => {
   const [reviewForm, setReviewForm] = useState({ rating: 0, content: '' });
   const [submitting, setSubmitting] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [showFullSynopsis, setShowFullSynopsis] = useState(false);
 
   const inLibrary = user?.library?.some((id) => id === novel?._id);
 
@@ -140,7 +152,21 @@ const NovelDetail = () => {
               </Link>
             ))}
           </div>
-          <p className="mt-4 whitespace-pre-line leading-relaxed text-silver-muted">{novel.synopsis}</p>
+          {novel.synopsis && (
+            <p className="mt-4 whitespace-pre-line leading-relaxed text-silver-muted">
+              {showFullSynopsis ? novel.synopsis : truncateAtWord(novel.synopsis, SYNOPSIS_LIMIT)}
+              {novel.synopsis.length > SYNOPSIS_LIMIT && (
+                <button
+                  type="button"
+                  onClick={() => setShowFullSynopsis((v) => !v)}
+                  className="ml-1.5 font-medium text-crimson-soft hover:underline"
+                  aria-expanded={showFullSynopsis}
+                >
+                  {showFullSynopsis ? 'Read less' : 'Read more'}
+                </button>
+              )}
+            </p>
+          )}
           <div className="mt-6 flex flex-wrap gap-3">
             {chapters.length > 0 && (
               <Link
