@@ -8,6 +8,13 @@ const chapterSchema = new mongoose.Schema(
     content: { type: String, required: true },
     views: { type: Number, default: 0 },
     published: { type: Boolean, default: true },
+    // Original uploaded source file, stored privately in S3 (key + metadata).
+    sourceFile: {
+      key: { type: String },
+      name: { type: String },
+      size: { type: Number },
+      contentType: { type: String },
+    },
   },
   { timestamps: true }
 );

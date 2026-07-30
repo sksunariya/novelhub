@@ -8,6 +8,7 @@ const {
   deleteNovel,
   listNovelChapters,
   getChapter,
+  getChapterSource,
   createChapter,
   uploadChapterFile,
   bulkUploadChapters,
@@ -43,6 +44,7 @@ router.post('/novels/:id/chapters', createChapter);
 router.post('/novels/:id/chapters/upload', docUpload.single('file'), uploadChapterFile);
 router.post('/novels/:id/chapters/bulk', docUpload.single('file'), bulkUploadChapters);
 router.get('/chapters/:id', getChapter);
+router.get('/chapters/:id/source', getChapterSource);
 router.put('/chapters/:id', updateChapter);
 router.delete('/chapters/:id', deleteChapter);
 

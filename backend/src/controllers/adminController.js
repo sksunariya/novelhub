@@ -1,5 +1,4 @@
 const AdmZip = require('adm-zip');
-const fs = require('fs/promises');
 const path = require('path');
 const Novel = require('../models/Novel');
 const Chapter = require('../models/Chapter');
@@ -11,19 +10,12 @@ const ReadingProgress = require('../models/ReadingProgress');
 const SiteSettings = require('../models/SiteSettings');
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { uniqueSlug } = require('../utils/slugify');
-const { parseChapterFile, parseChapterBuffer, titleFromFilename } = require('../utils/parseChapterFile');
+const { parseChapterBuffer, titleFromFilename } = require('../utils/parseChapterFile');
 const { NOTIFICATION_TYPES, ROLES } = require('../config/constants');
 const { parsePagination } = require('./novelController');
+const storage = require('../services/storage');
 
 const CHAPTER_FILE_EXTENSIONS = ['.txt', '.docx'];
-
-const fileUrl = (file) => `/uploads/${file.filename}`;
-
-const cleanupFile = async (file) => {
-  if (file) {
-    await fs.unlink(file.path).catch(() => {});
-  }
-};
 
 const syncNovelChapterMeta = async (novelId) => {
   const [count, latest] = await Promise.all([
@@ -52,7 +44,8 @@ const uploadEditorImage = asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'image is required' });
   }
-  res.status(201).json({ url: fileUrl(req.file) });
+  const url = await storage.uploadPublic(req.file, 'editor');
+  res.status(201).json({ url });
 });
 
 const getStats = asyncHandler(async (req, res) => {
@@ -109,7 +102,7 @@ const createNovel = asyncHandler(async (req, res) => {
     status,
     published: published !== undefined ? published === 'true' || published === true : true,
     featured: featured === 'true' || featured === true,
-    coverUrl: req.file ? fileUrl(req.file) : coverUrl || '',
+    coverUrl: req.file ? await storage.uploadPublic(req.file, 'covers') : coverUrl || '',
     createdBy: req.user._id,
   });
   res.status(201).json({ novel });
@@ -133,7 +126,9 @@ const updateNovel = asyncHandler(async (req, res) => {
   if (published !== undefined) novel.published = published === 'true' || published === true;
   if (featured !== undefined) novel.featured = featured === 'true' || featured === true;
   if (req.file) {
-    novel.coverUrl = fileUrl(req.file);
+    const previousCover = novel.coverUrl;
+    novel.coverUrl = await storage.uploadPublic(req.file, 'covers');
+    await storage.remove(previousCover);
   } else if (coverUrl !== undefined) {
     novel.coverUrl = coverUrl;
   }
@@ -146,6 +141,7 @@ const deleteNovel = asyncHandler(async (req, res) => {
   if (!novel) {
     return res.status(404).json({ message: 'Novel not found' });
   }
+  const chapters = await Chapter.find({ novel: novel._id }).select('sourceFile');
   await Promise.all([
     Chapter.deleteMany({ novel: novel._id }),
     Comment.deleteMany({ novel: novel._id }),
@@ -154,6 +150,9 @@ const deleteNovel = asyncHandler(async (req, res) => {
     User.updateMany({ library: novel._id }, { $pull: { library: novel._id } }),
     novel.deleteOne(),
   ]);
+  // Best-effort cleanup of stored assets (cover + private chapter source files).
+  await storage.remove(novel.coverUrl);
+  await Promise.all(chapters.map((c) => storage.removeKey(c.sourceFile?.key)));
   res.json({ message: 'Novel deleted' });
 });
 
@@ -203,80 +202,76 @@ const createChapter = asyncHandler(async (req, res) => {
 const uploadChapterFile = asyncHandler(async (req, res) => {
   const novel = await Novel.findById(req.params.id);
   if (!novel) {
-    await cleanupFile(req.file);
     return res.status(404).json({ message: 'Novel not found' });
   }
   if (!req.file) {
     return res.status(400).json({ message: 'file is required' });
   }
-  try {
-    const content = await parseChapterFile(req.file.path);
-    if (!content) {
-      return res.status(400).json({ message: 'File is empty or could not be parsed' });
-    }
-    const chapter = await Chapter.create({
-      novel: novel._id,
-      number: req.body.number ? Number(req.body.number) : await nextChapterNumber(novel._id),
-      title: req.body.title || titleFromFilename(req.file.originalname),
-      content,
-    });
-    await syncNovelChapterMeta(novel._id);
-    await notifyLibraryUsers(novel, [chapter]);
-    res.status(201).json({ chapter });
-  } finally {
-    await cleanupFile(req.file);
+  const content = await parseChapterBuffer(req.file.buffer, req.file.originalname);
+  if (!content) {
+    return res.status(400).json({ message: 'File is empty or could not be parsed' });
   }
+  // Archive the original upload privately so it can be re-downloaded later.
+  const sourceFile = await storage.uploadPrivate(req.file, 'chapter-sources');
+  const chapter = await Chapter.create({
+    novel: novel._id,
+    number: req.body.number ? Number(req.body.number) : await nextChapterNumber(novel._id),
+    title: req.body.title || titleFromFilename(req.file.originalname),
+    content,
+    sourceFile: sourceFile || undefined,
+  });
+  await syncNovelChapterMeta(novel._id);
+  await notifyLibraryUsers(novel, [chapter]);
+  res.status(201).json({ chapter });
 });
 
 const bulkUploadChapters = asyncHandler(async (req, res) => {
   const novel = await Novel.findById(req.params.id);
   if (!novel) {
-    await cleanupFile(req.file);
     return res.status(404).json({ message: 'Novel not found' });
   }
   if (!req.file) {
     return res.status(400).json({ message: 'zip file is required' });
   }
-  try {
-    const zip = new AdmZip(req.file.path);
-    const entries = zip
-      .getEntries()
-      .filter((entry) => !entry.isDirectory && CHAPTER_FILE_EXTENSIONS.includes(path.extname(entry.entryName).toLowerCase()))
-      .filter((entry) => !path.basename(entry.entryName).startsWith('.'))
-      .sort((a, b) => a.entryName.localeCompare(b.entryName, undefined, { numeric: true }));
-    if (!entries.length) {
-      return res.status(400).json({ message: 'No .txt or .docx files found in zip' });
-    }
-    let number = await nextChapterNumber(novel._id);
-    const created = [];
-    const failed = [];
-    for (const entry of entries) {
-      try {
-        const content = await parseChapterBuffer(entry.getData(), entry.entryName);
-        if (!content) {
-          failed.push({ file: entry.entryName, reason: 'empty content' });
-          continue;
-        }
-        const chapter = await Chapter.create({
-          novel: novel._id,
-          number,
-          title: titleFromFilename(entry.entryName),
-          content,
-        });
-        created.push(chapter);
-        number += 1;
-      } catch (error) {
-        failed.push({ file: entry.entryName, reason: error.message });
-      }
-    }
-    await syncNovelChapterMeta(novel._id);
-    if (created.length) {
-      await notifyLibraryUsers(novel, created);
-    }
-    res.status(201).json({ createdCount: created.length, failed });
-  } finally {
-    await cleanupFile(req.file);
+  const zip = new AdmZip(req.file.buffer);
+  const entries = zip
+    .getEntries()
+    .filter((entry) => !entry.isDirectory && CHAPTER_FILE_EXTENSIONS.includes(path.extname(entry.entryName).toLowerCase()))
+    .filter((entry) => !path.basename(entry.entryName).startsWith('.'))
+    .sort((a, b) => a.entryName.localeCompare(b.entryName, undefined, { numeric: true }));
+  if (!entries.length) {
+    return res.status(400).json({ message: 'No .txt or .docx files found in zip' });
   }
+  // Archive the uploaded zip privately once; each chapter records the archive key.
+  const archive = await storage.uploadPrivate(req.file, 'chapter-sources');
+  let number = await nextChapterNumber(novel._id);
+  const created = [];
+  const failed = [];
+  for (const entry of entries) {
+    try {
+      const content = await parseChapterBuffer(entry.getData(), entry.entryName);
+      if (!content) {
+        failed.push({ file: entry.entryName, reason: 'empty content' });
+        continue;
+      }
+      const chapter = await Chapter.create({
+        novel: novel._id,
+        number,
+        title: titleFromFilename(entry.entryName),
+        content,
+        sourceFile: archive ? { ...archive, name: entry.entryName } : undefined,
+      });
+      created.push(chapter);
+      number += 1;
+    } catch (error) {
+      failed.push({ file: entry.entryName, reason: error.message });
+    }
+  }
+  await syncNovelChapterMeta(novel._id);
+  if (created.length) {
+    await notifyLibraryUsers(novel, created);
+  }
+  res.status(201).json({ createdCount: created.length, failed });
 });
 
 const updateChapter = asyncHandler(async (req, res) => {
@@ -303,6 +298,12 @@ const deleteChapter = asyncHandler(async (req, res) => {
   const novelId = chapter.novel;
   await chapter.deleteOne();
   await syncNovelChapterMeta(novelId);
+  // Remove the private source file only if no other chapter references it
+  // (bulk uploads share one archive across many chapters).
+  if (chapter.sourceFile?.key) {
+    const stillReferenced = await Chapter.countDocuments({ 'sourceFile.key': chapter.sourceFile.key });
+    if (!stillReferenced) await storage.removeKey(chapter.sourceFile.key);
+  }
   res.json({ message: 'Chapter deleted' });
 });
 
@@ -408,12 +409,16 @@ const updateSettings = asyncHandler(async (req, res) => {
   });
   const files = req.files || {};
   if (files.logo && files.logo[0]) {
-    settings.logoUrl = fileUrl(files.logo[0]);
+    const previousLogo = settings.logoUrl;
+    settings.logoUrl = await storage.uploadPublic(files.logo[0], 'logos');
+    await storage.remove(previousLogo);
   } else if (body.logoUrl !== undefined) {
     settings.logoUrl = body.logoUrl;
   }
   if (files.favicon && files.favicon[0]) {
-    settings.faviconUrl = fileUrl(files.favicon[0]);
+    const previousFavicon = settings.faviconUrl;
+    settings.faviconUrl = await storage.uploadPublic(files.favicon[0], 'favicons');
+    await storage.remove(previousFavicon);
   } else if (body.faviconUrl !== undefined) {
     settings.faviconUrl = body.faviconUrl;
   }
@@ -459,6 +464,21 @@ const broadcastAnnouncement = asyncHandler(async (req, res) => {
   res.status(201).json({ notifiedCount: users.length });
 });
 
+const getChapterSource = asyncHandler(async (req, res) => {
+  const chapter = await Chapter.findById(req.params.id).select('sourceFile');
+  if (!chapter) {
+    return res.status(404).json({ message: 'Chapter not found' });
+  }
+  if (!chapter.sourceFile?.key) {
+    return res.status(404).json({ message: 'No source file stored for this chapter' });
+  }
+  const url = await storage.getSignedDownloadUrl(chapter.sourceFile.key);
+  if (!url) {
+    return res.status(501).json({ message: 'File storage is not configured' });
+  }
+  res.json({ url, name: chapter.sourceFile.name });
+});
+
 module.exports = {
   uploadEditorImage,
   getStats,
@@ -468,6 +488,7 @@ module.exports = {
   deleteNovel,
   listNovelChapters,
   getChapter,
+  getChapterSource,
   createChapter,
   uploadChapterFile,
   bulkUploadChapters,
