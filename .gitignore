@@ -1,5 +1,8 @@
 node_modules/
 dist/
+# Track the frontend production build so prod can pull & copy it without building
+!frontend/dist/
+!frontend/dist/**
 .env
 backend/uploads/
 .DS_Store
