@@ -46,6 +46,9 @@ const Navbar = () => {
   const submitSearch = (e) => {
     e.preventDefault();
     if (search.trim()) {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
       navigate(`/browse?search=${encodeURIComponent(search.trim())}`);
       setSearch('');
       setMobileOpen(false);
