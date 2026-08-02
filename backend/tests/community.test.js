@@ -18,6 +18,30 @@ describe('Community', () => {
       expect(listRes.body.comments[0].user.username).toBeDefined();
     });
 
+    it('supports replies to existing comments', async () => {
+      const { token: user1Token } = await createUser();
+      const { token: user2Token } = await createUser();
+      const novel = await createNovel();
+      const chapter = await createChapter(novel);
+      const parentRes = await api()
+        .post(`/api/community/chapters/${chapter._id}/comments`)
+        .set('Authorization', `Bearer ${user1Token}`)
+        .send({ content: 'Parent comment' });
+      const parentId = parentRes.body.comment._id;
+      const replyRes = await api()
+        .post(`/api/community/chapters/${chapter._id}/comments`)
+        .set('Authorization', `Bearer ${user2Token}`)
+        .send({ content: 'Reply to parent', parentComment: parentId });
+      expect(replyRes.status).toBe(201);
+      expect(replyRes.body.comment.parentComment).toBe(parentId);
+
+      const listRes = await api().get(`/api/community/chapters/${chapter._id}/comments`);
+      expect(listRes.body.comments).toHaveLength(2);
+      const replyInList = listRes.body.comments.find((c) => c.parentComment === parentId);
+      expect(replyInList).toBeDefined();
+      expect(replyInList.content).toBe('Reply to parent');
+    });
+
     it('rejects empty comment and unauthenticated comment', async () => {
       const { token } = await createUser();
       const novel = await createNovel();

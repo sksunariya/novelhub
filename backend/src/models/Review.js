@@ -2,6 +2,15 @@ const mongoose = require('mongoose');
 const { RATING } = require('../config/constants');
 const softDelete = require('./plugins/softDelete');
 
+const reviewReplySchema = new mongoose.Schema(
+  {
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    content: { type: String, required: true, trim: true, maxlength: 2000 },
+    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  },
+  { timestamps: true }
+);
+
 const reviewSchema = new mongoose.Schema(
   {
     novel: { type: mongoose.Schema.Types.ObjectId, ref: 'Novel', required: true },
@@ -9,6 +18,7 @@ const reviewSchema = new mongoose.Schema(
     rating: { type: Number, required: true, min: RATING.MIN, max: RATING.MAX },
     content: { type: String, default: '', trim: true, maxlength: 5000 },
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    replies: [reviewReplySchema],
   },
   { timestamps: true }
 );

@@ -15,18 +15,27 @@ const listComments = asyncHandler(async (req, res) => {
 });
 
 const createComment = asyncHandler(async (req, res) => {
-  const { content } = req.body;
-  if (!content || !content.trim()) {
+  const { content, parentComment } = req.body;
+  if (!content || typeof content !== 'string' || !content.trim()) {
     return res.status(400).json({ message: 'content is required' });
   }
   const chapter = await Chapter.findById(req.params.chapterId);
   if (!chapter) {
     return res.status(404).json({ message: 'Chapter not found' });
   }
+  let parentId = null;
+  if (parentComment) {
+    const parent = await Comment.findById(parentComment);
+    if (!parent) {
+      return res.status(404).json({ message: 'Parent comment not found' });
+    }
+    parentId = parent._id;
+  }
   const comment = await Comment.create({
     chapter: chapter._id,
     novel: chapter.novel,
     user: req.user._id,
+    parentComment: parentId,
     content: content.trim(),
   });
   await comment.populate('user', 'username avatarUrl');
@@ -43,6 +52,7 @@ const deleteComment = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Not allowed' });
   }
   await comment.softDelete();
+  await Comment.updateMany({ parentComment: comment._id, deletedAt: null }, { deletedAt: new Date() });
   res.json({ message: 'Comment deleted' });
 });
 

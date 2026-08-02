@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, X, Upload, FolderArchive, ArrowLeft } from 'lucid
 import client from '../api/client';
 import Spinner from '../components/Spinner';
 import RichTextEditor from '../components/RichTextEditor';
+import { formatRelativeTime, formatExactDateTime } from '../utils/dateUtils';
 
 const inputClass =
   'w-full rounded-lg border border-line bg-night px-3 py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none';
@@ -147,8 +148,8 @@ const ChaptersAdmin = () => {
               <span className="w-10 shrink-0 text-center font-display font-bold text-crimson">#{chapter.number}</span>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium text-silver">{chapter.title}</p>
-                <p className="text-xs text-silver-muted">
-                  {(chapter.views || 0).toLocaleString()} views · {new Date(chapter.createdAt).toLocaleDateString()}
+                <p className="text-xs text-silver-muted" title={formatExactDateTime(chapter.createdAt)}>
+                  {(chapter.views || 0).toLocaleString()} views · {formatRelativeTime(chapter.createdAt)}
                 </p>
               </div>
               {!chapter.published && (

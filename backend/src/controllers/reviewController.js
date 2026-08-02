@@ -6,7 +6,7 @@ const { parsePagination } = require('./novelController');
 
 const recalcNovelRating = async (novelId) => {
   const stats = await Review.aggregate([
-    { $match: { novel: novelId } },
+    { $match: { novel: novelId, deletedAt: null } },
     { $group: { _id: '$novel', avg: { $avg: '$rating' }, count: { $sum: 1 } } },
   ]);
   const { avg = 0, count = 0 } = stats[0] || {};
@@ -17,7 +17,12 @@ const listReviews = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
   const filter = { novel: req.params.novelId };
   const [reviews, total] = await Promise.all([
-    Review.find(filter).populate('user', 'username avatarUrl').sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Review.find(filter)
+      .populate('user', 'username avatarUrl')
+      .populate('replies.user', 'username avatarUrl')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
     Review.countDocuments(filter),
   ]);
   res.json({ reviews, total, page, pages: Math.ceil(total / limit) });
@@ -40,6 +45,7 @@ const upsertReview = asyncHandler(async (req, res) => {
   );
   await recalcNovelRating(novel._id);
   await review.populate('user', 'username avatarUrl');
+  await review.populate('replies.user', 'username avatarUrl');
   res.status(201).json({ review });
 });
 
@@ -74,4 +80,73 @@ const toggleReviewLike = asyncHandler(async (req, res) => {
   res.json({ liked: !liked, likeCount: review.likes.length });
 });
 
-module.exports = { listReviews, upsertReview, deleteReview, toggleReviewLike };
+const addReviewReply = asyncHandler(async (req, res) => {
+  const { content } = req.body;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    return res.status(400).json({ message: 'content is required' });
+  }
+  const review = await Review.findById(req.params.id);
+  if (!review) {
+    return res.status(404).json({ message: 'Review not found' });
+  }
+  review.replies.push({
+    user: req.user._id,
+    content: content.trim(),
+  });
+  await review.save();
+  await review.populate('user', 'username avatarUrl');
+  await review.populate('replies.user', 'username avatarUrl');
+  res.status(201).json({ review });
+});
+
+const deleteReviewReply = asyncHandler(async (req, res) => {
+  const review = await Review.findById(req.params.id);
+  if (!review) {
+    return res.status(404).json({ message: 'Review not found' });
+  }
+  const reply = review.replies.id(req.params.replyId);
+  if (!reply) {
+    return res.status(404).json({ message: 'Reply not found' });
+  }
+  const isOwner = reply.user.toString() === req.user._id.toString();
+  if (!isOwner && req.user.role !== ROLES.ADMIN) {
+    return res.status(403).json({ message: 'Not allowed' });
+  }
+  reply.deleteOne();
+  await review.save();
+  await review.populate('user', 'username avatarUrl');
+  await review.populate('replies.user', 'username avatarUrl');
+  res.json({ message: 'Reply deleted', review });
+});
+
+const toggleReviewReplyLike = asyncHandler(async (req, res) => {
+  const review = await Review.findById(req.params.id);
+  if (!review) {
+    return res.status(404).json({ message: 'Review not found' });
+  }
+  const reply = review.replies.id(req.params.replyId);
+  if (!reply) {
+    return res.status(404).json({ message: 'Reply not found' });
+  }
+  const userId = req.user._id.toString();
+  const liked = reply.likes.some((id) => id.toString() === userId);
+  if (liked) {
+    reply.likes = reply.likes.filter((id) => id.toString() !== userId);
+  } else {
+    reply.likes.push(req.user._id);
+  }
+  await review.save();
+  await review.populate('user', 'username avatarUrl');
+  await review.populate('replies.user', 'username avatarUrl');
+  res.json({ liked: !liked, likeCount: reply.likes.length, review });
+});
+
+module.exports = {
+  listReviews,
+  upsertReview,
+  deleteReview,
+  toggleReviewLike,
+  addReviewReply,
+  deleteReviewReply,
+  toggleReviewReplyLike,
+};

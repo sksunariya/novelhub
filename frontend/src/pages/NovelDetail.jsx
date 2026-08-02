@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BookOpen, BookmarkPlus, BookmarkCheck, Eye, List, Star, Play } from 'lucide-react';
+import { BookOpen, BookmarkPlus, BookmarkCheck, Eye, List, Star, Play, Search, ArrowUpDown, Clock, Heart, CornerDownRight, Trash2 } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import PageTransition from '../components/PageTransition';
 import Spinner from '../components/Spinner';
 import StarRating from '../components/StarRating';
+import CommentCard from '../components/CommentCard';
+import { formatRelativeTime, formatExactDateTime } from '../utils/dateUtils';
 
 const SYNOPSIS_LIMIT = 300;
 
@@ -22,7 +24,7 @@ const truncateAtWord = (text, max) => {
 const NovelDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, isAdmin } = useAuth();
   const [novel, setNovel] = useState(null);
   const [chapters, setChapters] = useState([]);
   const [reviews, setReviews] = useState([]);
@@ -32,6 +34,53 @@ const NovelDetail = () => {
   const [submitting, setSubmitting] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [showFullSynopsis, setShowFullSynopsis] = useState(false);
+  const [chapterQuery, setChapterQuery] = useState('');
+  const [sortAsc, setSortAsc] = useState(true);
+  const [replyTarget, setReplyTarget] = useState(null);
+  const [replyContent, setReplyContent] = useState('');
+
+  const likeReview = async (reviewId) => {
+    if (!user) return navigate('/login');
+    const { data } = await client.post(`/community/reviews/${reviewId}/like`);
+    setReviews((prev) =>
+      prev.map((r) =>
+        r._id === reviewId
+          ? {
+              ...r,
+              likes: data.liked
+                ? [...(r.likes || []), user.id]
+                : (r.likes || []).filter((id) => id !== user.id),
+            }
+          : r
+      )
+    );
+  };
+
+  const postReviewReply = async (reviewId) => {
+    if (!replyContent.trim()) return;
+    const { data } = await client.post(`/community/reviews/${reviewId}/replies`, { content: replyContent });
+    setReviews((prev) => prev.map((r) => (r._id === reviewId ? data.review : r)));
+    setReplyTarget(null);
+    setReplyContent('');
+  };
+
+  const deleteReview = async (reviewId) => {
+    if (!window.confirm('Delete this review?')) return;
+    await client.delete(`/community/reviews/${reviewId}`);
+    setReviews((prev) => prev.filter((r) => r._id !== reviewId));
+    if (userReview?._id === reviewId) setUserReview(null);
+  };
+
+  const deleteReviewReply = async (reviewId, replyId) => {
+    const { data } = await client.delete(`/community/reviews/${reviewId}/replies/${replyId}`);
+    setReviews((prev) => prev.map((r) => (r._id === reviewId ? data.review : r)));
+  };
+
+  const likeReviewReply = async (reviewId, replyId) => {
+    if (!user) return navigate('/login');
+    const { data } = await client.post(`/community/reviews/${reviewId}/replies/${replyId}/like`);
+    setReviews((prev) => prev.map((r) => (r._id === reviewId ? data.review : r)));
+  };
 
   const inLibrary = user?.library?.some((id) => id === novel?._id);
 
@@ -102,6 +151,14 @@ const NovelDetail = () => {
   }
 
   if (!novel) return <Spinner full />;
+
+  const filteredChapters = chapters
+    .filter((c) => {
+      if (!chapterQuery.trim()) return true;
+      const q = chapterQuery.toLowerCase().trim();
+      return (c.number != null ? String(c.number) : '').includes(q) || (c.title || '').toLowerCase().includes(q);
+    })
+    .sort((a, b) => (sortAsc ? a.number - b.number : b.number - a.number));
 
   const continueChapter = progress ? progress.chapterNumber : chapters[0]?.number;
 
@@ -194,26 +251,67 @@ const NovelDetail = () => {
       </div>
 
       <section className="mt-12" aria-label="Chapters">
-        <h2 className="mb-4 font-display text-xl font-bold text-silver">Chapters</h2>
-        {chapters.length === 0 ? (
-          <p className="rounded-xl border border-line bg-night-surface p-6 text-center text-silver-muted">No chapters yet.</p>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2">
-            {chapters.map((chapter) => (
-              <Link
-                key={chapter._id}
-                to={`/novel/${slug}/chapter/${chapter.number}`}
-                className="flex items-center justify-between gap-3 rounded-lg border border-line bg-night-surface px-4 py-3 text-sm transition-colors duration-150 hover:border-crimson/50"
-              >
-                <span className="truncate">
-                  <span className="mr-2 font-semibold text-crimson-soft">#{chapter.number}</span>
-                  <span className="text-silver">{chapter.title}</span>
-                </span>
-                <span className="shrink-0 text-xs text-silver-muted">{new Date(chapter.createdAt).toLocaleDateString()}</span>
-              </Link>
-            ))}
+        <div className="rounded-2xl border border-line bg-night-surface p-4 sm:p-6 shadow-card overflow-hidden">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-4">
+            <div>
+              <h2 className="font-display text-xl font-bold text-silver">Chapters</h2>
+              <p className="text-xs text-silver-muted">{chapters.length} chapter{chapters.length === 1 ? '' : 's'} available</p>
+            </div>
+            {chapters.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative min-w-[140px] flex-1 sm:w-48 sm:flex-none">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-silver-muted" aria-hidden="true" />
+                  <input
+                    type="text"
+                    placeholder="Search chapter..."
+                    value={chapterQuery}
+                    onChange={(e) => setChapterQuery(e.target.value)}
+                    className="w-full rounded-full border border-line bg-night pl-8 pr-3 py-1.5 text-xs text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSortAsc((v) => !v)}
+                  className="flex items-center gap-1.5 rounded-full border border-line bg-night px-3 py-1.5 text-xs font-medium text-silver-muted transition-colors hover:text-silver hover:border-crimson/50"
+                  aria-label={`Sort ${sortAsc ? 'descending' : 'ascending'}`}
+                >
+                  <ArrowUpDown className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{sortAsc ? '1 → N' : 'N → 1'}</span>
+                </button>
+              </div>
+            )}
           </div>
-        )}
+
+          {chapters.length === 0 ? (
+            <p className="py-8 text-center text-silver-muted text-sm">No chapters yet.</p>
+          ) : filteredChapters.length === 0 ? (
+            <p className="py-8 text-center text-silver-muted text-sm">No chapters match "{chapterQuery}".</p>
+          ) : (
+            <div className="max-h-80 overflow-y-auto overflow-x-hidden pr-1">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {filteredChapters.map((chapter) => (
+                  <Link
+                    key={chapter._id}
+                    to={`/novel/${slug}/chapter/${chapter.number}`}
+                    className="group flex flex-col justify-center gap-1.5 min-w-0 overflow-hidden rounded-lg border border-line bg-night px-4 py-3 text-sm transition-colors duration-150 hover:border-crimson/50 hover:bg-night-raised"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="shrink-0 font-semibold text-crimson-soft">#{chapter.number}</span>
+                      <span className="truncate font-medium text-silver group-hover:text-white transition-colors">{chapter.title}</span>
+                    </div>
+                    <div
+                      className="flex items-center gap-1.5 min-w-0 text-xs text-silver-muted"
+                      title={formatExactDateTime(chapter.createdAt)}
+                    >
+                      <Clock className="h-3 w-3 shrink-0 text-silver-muted/80" aria-hidden="true" />
+                      <span className="truncate">{formatRelativeTime(chapter.createdAt)}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="mt-12" aria-label="Reviews">
@@ -251,21 +349,20 @@ const NovelDetail = () => {
         ) : (
           <div className="space-y-4">
             {reviews.map((review) => (
-              <div key={review._id} className="rounded-xl border border-line bg-night-surface p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-crimson/20 text-xs font-bold uppercase text-crimson-soft">
-                      {review.user?.username?.slice(0, 2) || '??'}
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-silver">{review.user?.username || 'Deleted user'}</p>
-                      <p className="text-xs text-silver-muted">{new Date(review.createdAt).toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                  <StarRating value={review.rating} size="h-4 w-4" />
-                </div>
-                {review.content && <p className="mt-3 text-sm leading-relaxed text-silver-muted">{review.content}</p>}
-              </div>
+              <CommentCard
+                key={review._id}
+                item={review}
+                currentUser={user}
+                isAdmin={isAdmin}
+                onLike={likeReview}
+                onDelete={deleteReview}
+                onReplySubmit={(reviewId, text) => {
+                  setReplyContent(text);
+                  return postReviewReply(reviewId);
+                }}
+                onLikeReply={likeReviewReply}
+                onDeleteReply={deleteReviewReply}
+              />
             ))}
           </div>
         )}

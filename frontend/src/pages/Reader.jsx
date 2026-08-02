@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Home, List, Settings2, X, MessageSquare, Trash2, Heart } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, List, Settings2, X, MessageSquare, Trash2, Heart, CornerDownRight } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/Spinner';
+import StarRating from '../components/StarRating';
+import CommentCard from '../components/CommentCard';
 import { stripTextColor } from '../utils/sanitizeContent';
+import { formatRelativeTime, formatExactDateTime } from '../utils/dateUtils';
 
 const SETTINGS_KEY = 'novelhub_reader_settings';
 
@@ -42,6 +45,13 @@ const Reader = () => {
   const [chapters, setChapters] = useState([]);
   const [comments, setComments] = useState(null);
   const [commentText, setCommentText] = useState('');
+  const [replyTarget, setReplyTarget] = useState(null);
+  const [replyContent, setReplyContent] = useState('');
+  const [activeTab, setActiveTab] = useState('comments');
+  const [userReview, setUserReview] = useState(null);
+  const [reviewForm, setReviewForm] = useState({ rating: 0, content: '' });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewMsg, setReviewMsg] = useState('');
 
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -51,6 +61,8 @@ const Reader = () => {
     setData(null);
     setError('');
     setComments(null);
+    setCommentText('');
+    setReviewMsg('');
     window.scrollTo(0, 0);
     client
       .get(`/novels/${slug}/chapters/${number}`)
@@ -72,11 +84,26 @@ const Reader = () => {
       .catch(() => setComments([]));
   }, [data]);
 
+  const loadUserReview = useCallback(() => {
+    if (!data || !user) return;
+    client
+      .get(`/novels/id/${data.novel._id}/reviews`)
+      .then(({ data: res }) => {
+        const found = res.reviews?.find((r) => r.user?._id === user.id || r.user === user.id);
+        if (found) {
+          setUserReview(found);
+          setReviewForm({ rating: found.rating, content: found.content || '' });
+        }
+      })
+      .catch(() => {});
+  }, [data, user]);
+
   useEffect(() => {
-    if (panel === 'comments' && comments === null) {
+    if (data) {
       loadComments();
+      loadUserReview();
     }
-  }, [panel, comments, loadComments]);
+  }, [data, loadComments, loadUserReview]);
 
   const postComment = async (e) => {
     e.preventDefault();
@@ -94,6 +121,33 @@ const Reader = () => {
   const likeComment = async (id) => {
     await client.post(`/community/comments/${id}/like`);
     loadComments();
+  };
+
+  const postReply = async (parentCommentId) => {
+    if (!replyContent.trim() || !data) return;
+    await client.post(`/community/chapters/${data.chapter._id}/comments`, {
+      content: replyContent,
+      parentComment: parentCommentId,
+    });
+    setReplyTarget(null);
+    setReplyContent('');
+    loadComments();
+  };
+
+  const submitReview = async (e) => {
+    e.preventDefault();
+    if (!reviewForm.rating || !data) return;
+    setSubmittingReview(true);
+    setReviewMsg('');
+    try {
+      await client.post(`/novels/id/${data.novel._id}/reviews`, reviewForm);
+      setReviewMsg('Thank you! Your review has been saved.');
+      loadUserReview();
+    } catch (err) {
+      setReviewMsg(err.response?.data?.message || 'Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   const theme = READER_THEMES[settings.theme] || READER_THEMES.dark;
@@ -297,41 +351,30 @@ const Reader = () => {
                     ) : comments.length === 0 ? (
                       <p className="text-sm text-silver-muted">No comments yet.</p>
                     ) : (
-                      comments.map((comment) => (
-                        <div key={comment._id} className="rounded-lg border border-line bg-night-surface p-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-semibold">{comment.user?.username || 'Deleted user'}</p>
-                            <span className="text-xs text-silver-muted">{new Date(comment.createdAt).toLocaleDateString()}</span>
-                          </div>
-                          <p className="mt-1.5 text-sm text-silver-muted">{comment.content}</p>
-                          <div className="mt-2 flex items-center gap-3">
-                            {user && (
-                              <button
-                                type="button"
-                                onClick={() => likeComment(comment._id)}
-                                className="flex cursor-pointer items-center gap-1 text-xs text-silver-muted transition-colors hover:text-crimson-soft"
-                                aria-label="Like comment"
-                              >
-                                <Heart
-                                  className={`h-3.5 w-3.5 ${comment.likes?.includes(user.id) ? 'fill-crimson text-crimson' : ''}`}
-                                  aria-hidden="true"
-                                />
-                                {comment.likes?.length || 0}
-                              </button>
-                            )}
-                            {user && (comment.user?._id === user.id || isAdmin) && (
-                              <button
-                                type="button"
-                                onClick={() => deleteComment(comment._id)}
-                                className="flex cursor-pointer items-center gap-1 text-xs text-silver-muted transition-colors hover:text-crimson-soft"
-                                aria-label="Delete comment"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Delete
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))
+                      comments
+                        .filter((c) => !c.parentComment)
+                        .map((comment) => (
+                          <CommentCard
+                            key={comment._id}
+                            item={{
+                              ...comment,
+                              replies: comments.filter((r) => (r.parentComment?._id || r.parentComment) === comment._id),
+                            }}
+                            currentUser={user}
+                            isAdmin={isAdmin}
+                            onLike={likeComment}
+                            onDelete={deleteComment}
+                            onReplySubmit={async (parentId, text) => {
+                              await client.post(`/community/chapters/${data.chapter._id}/comments`, {
+                                content: text,
+                                parentComment: parentId,
+                              });
+                              loadComments();
+                            }}
+                            onLikeReply={(_p, replyId) => likeComment(replyId)}
+                            onDeleteReply={(_p, replyId) => deleteComment(replyId)}
+                          />
+                        ))
                     )}
                   </div>
                 )}
@@ -391,6 +434,145 @@ const Reader = () => {
               </Link>
             )}
           </nav>
+
+          {/* End of Chapter Comments and Review Section */}
+          <section className="mt-14 border-t pt-8" style={{ borderColor: 'rgba(128,128,128,0.2)' }} aria-label="End of chapter feedback">
+            <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-display text-xl font-bold">Chapter Feedback & Review</h2>
+                <p className="text-xs opacity-75">Share your thoughts on Chapter {data.chapter.number} or review the novel.</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('comments')}
+                  className={`cursor-pointer rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
+                    activeTab === 'comments' ? 'bg-crimson text-white shadow-glow' : 'border border-line opacity-75 hover:opacity-100'
+                  }`}
+                >
+                  Comments ({comments ? comments.length : 0})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('review')}
+                  className={`cursor-pointer rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
+                    activeTab === 'review' ? 'bg-crimson text-white shadow-glow' : 'border border-line opacity-75 hover:opacity-100'
+                  }`}
+                >
+                  {userReview ? 'Your Review ★' : 'Rate & Review'}
+                </button>
+              </div>
+            </div>
+
+            {activeTab === 'comments' && (
+              <div className="space-y-4 rounded-2xl border border-line bg-night-surface p-5 shadow-card">
+                <h3 className="font-display text-base font-semibold">Comments for Chapter {data.chapter.number}</h3>
+                {user ? (
+                  <form onSubmit={postComment} className="space-y-2">
+                    <label htmlFor="end-comment-input" className="sr-only">Leave a comment</label>
+                    <textarea
+                      id="end-comment-input"
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      placeholder={`What did you think of Chapter ${data.chapter.number}?`}
+                      rows={3}
+                      className="w-full rounded-xl border border-line bg-night px-4 py-3 text-sm placeholder:text-silver-muted focus:border-crimson focus:outline-none"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={!commentText.trim()}
+                        className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white transition-opacity hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Post Comment
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <p className="text-sm text-silver-muted">
+                    <Link to="/login" className="text-crimson-soft hover:underline font-medium">Log in</Link> to post a comment on this chapter.
+                  </p>
+                )}
+
+                {comments === null ? (
+                  <Spinner />
+                ) : comments.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-silver-muted">No comments yet. Be the first to share your thoughts!</p>
+                ) : (
+                  <div className="space-y-4 pt-2">
+                    {comments
+                      .filter((c) => !c.parentComment)
+                      .map((comment) => (
+                        <CommentCard
+                          key={comment._id}
+                          item={{
+                            ...comment,
+                            replies: comments.filter((r) => (r.parentComment?._id || r.parentComment) === comment._id),
+                          }}
+                          currentUser={user}
+                          isAdmin={isAdmin}
+                          onLike={likeComment}
+                          onDelete={deleteComment}
+                          onReplySubmit={async (parentId, text) => {
+                            await client.post(`/community/chapters/${data.chapter._id}/comments`, {
+                              content: text,
+                              parentComment: parentId,
+                            });
+                            loadComments();
+                          }}
+                          onLikeReply={(_p, replyId) => likeComment(replyId)}
+                          onDeleteReply={(_p, replyId) => deleteComment(replyId)}
+                        />
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'review' && (
+              <div className="rounded-2xl border border-line bg-night-surface p-5 shadow-card">
+                <h3 className="mb-2 font-display text-base font-semibold">Rate & Review "{data.novel.title}"</h3>
+                {user ? (
+                  <form onSubmit={submitReview} className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-medium opacity-80">Your Rating:</span>
+                      <StarRating value={reviewForm.rating} onChange={(rating) => setReviewForm((f) => ({ ...f, rating }))} />
+                    </div>
+                    <label htmlFor="end-review-input" className="sr-only">Review text</label>
+                    <textarea
+                      id="end-review-input"
+                      value={reviewForm.content}
+                      onChange={(e) => setReviewForm((f) => ({ ...f, content: e.target.value }))}
+                      placeholder="Write your review for this novel..."
+                      rows={3}
+                      className="w-full rounded-xl border border-line bg-night px-4 py-3 text-sm placeholder:text-silver-muted focus:border-crimson focus:outline-none"
+                    />
+                    {reviewMsg && (
+                      <p className="text-xs font-medium text-crimson-soft">{reviewMsg}</p>
+                    )}
+                    <div className="flex items-center justify-between">
+                      {userReview ? (
+                        <span className="text-xs text-silver-muted">Current review: {userReview.rating}★</span>
+                      ) : (
+                        <span className="text-xs text-silver-muted">Rate this novel out of 5 stars.</span>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={submittingReview || !reviewForm.rating}
+                        className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white transition-opacity hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {submittingReview ? 'Saving...' : userReview ? 'Update Review' : 'Submit Review'}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <p className="text-sm text-silver-muted">
+                    <Link to="/login" className="text-crimson-soft hover:underline font-medium">Log in</Link> to rate and review this novel.
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
         </motion.main>
       )}
     </div>

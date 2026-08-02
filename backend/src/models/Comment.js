@@ -6,6 +6,7 @@ const commentSchema = new mongoose.Schema(
     chapter: { type: mongoose.Schema.Types.ObjectId, ref: 'Chapter', required: true },
     novel: { type: mongoose.Schema.Types.ObjectId, ref: 'Novel', required: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    parentComment: { type: mongoose.Schema.Types.ObjectId, ref: 'Comment', default: null },
     content: { type: String, required: true, trim: true, maxlength: 2000 },
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   },
