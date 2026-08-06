@@ -1,8 +1,10 @@
 const Review = require('../models/Review');
 const Novel = require('../models/Novel');
 const { asyncHandler } = require('../middlewares/errorHandler');
-const { ROLES, RATING } = require('../config/constants');
+const { ROLES, RATING, PUBLIC_USER_FIELDS } = require('../config/constants');
 const { parsePagination } = require('./novelController');
+const { REACTIONS, toggleReaction } = require('../utils/reactions');
+const { notifyReply } = require('../utils/notifications');
 
 const recalcNovelRating = async (novelId) => {
   const stats = await Review.aggregate([
@@ -13,19 +15,33 @@ const recalcNovelRating = async (novelId) => {
   await Novel.updateOne({ _id: novelId }, { ratingAvg: Math.round(avg * 10) / 10, ratingCount: count });
 };
 
+// Replies are subdocuments, so the soft-delete plugin cannot filter them; strip
+// deleted ones before a review leaves the public API.
+const publicReview = (review) => {
+  const json = review.toJSON();
+  json.replies = (json.replies || []).filter((reply) => !reply.deletedAt);
+  return json;
+};
+
+const populateReview = async (review) => {
+  await review.populate('user', PUBLIC_USER_FIELDS);
+  await review.populate('replies.user', PUBLIC_USER_FIELDS);
+  return review;
+};
+
 const listReviews = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
   const filter = { novel: req.params.novelId };
   const [reviews, total] = await Promise.all([
     Review.find(filter)
-      .populate('user', 'username avatarUrl')
-      .populate('replies.user', 'username avatarUrl')
+      .populate('user', PUBLIC_USER_FIELDS)
+      .populate('replies.user', PUBLIC_USER_FIELDS)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
     Review.countDocuments(filter),
   ]);
-  res.json({ reviews, total, page, pages: Math.ceil(total / limit) });
+  res.json({ reviews: reviews.map(publicReview), total, page, pages: Math.ceil(total / limit) });
 });
 
 const upsertReview = asyncHandler(async (req, res) => {
@@ -44,9 +60,8 @@ const upsertReview = asyncHandler(async (req, res) => {
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
   await recalcNovelRating(novel._id);
-  await review.populate('user', 'username avatarUrl');
-  await review.populate('replies.user', 'username avatarUrl');
-  res.status(201).json({ review });
+  await populateReview(review);
+  res.status(201).json({ review: publicReview(review) });
 });
 
 const deleteReview = asyncHandler(async (req, res) => {
@@ -64,21 +79,20 @@ const deleteReview = asyncHandler(async (req, res) => {
   res.json({ message: 'Review deleted' });
 });
 
-const toggleReviewLike = asyncHandler(async (req, res) => {
-  const review = await Review.findById(req.params.id);
-  if (!review) {
-    return res.status(404).json({ message: 'Review not found' });
-  }
-  const userId = req.user._id.toString();
-  const liked = review.likes.some((id) => id.toString() === userId);
-  if (liked) {
-    review.likes = review.likes.filter((id) => id.toString() !== userId);
-  } else {
-    review.likes.push(req.user._id);
-  }
-  await review.save();
-  res.json({ liked: !liked, likeCount: review.likes.length });
-});
+const reactToReview = (field) =>
+  asyncHandler(async (req, res) => {
+    const review = await Review.findById(req.params.id);
+    if (!review) {
+      return res.status(404).json({ message: 'Review not found' });
+    }
+    const counts = toggleReaction(review, field, req.user._id);
+    await review.save();
+    res.json(counts);
+  });
+
+const toggleReviewLike = reactToReview(REACTIONS.LIKE);
+
+const toggleReviewDislike = reactToReview(REACTIONS.DISLIKE);
 
 const addReviewReply = asyncHandler(async (req, res) => {
   const { content } = req.body;
@@ -89,22 +103,30 @@ const addReviewReply = asyncHandler(async (req, res) => {
   if (!review) {
     return res.status(404).json({ message: 'Review not found' });
   }
-  review.replies.push({
-    user: req.user._id,
-    content: content.trim(),
-  });
+  review.replies.push({ user: req.user._id, content: content.trim() });
   await review.save();
-  await review.populate('user', 'username avatarUrl');
-  await review.populate('replies.user', 'username avatarUrl');
-  res.status(201).json({ review });
+  const novel = await Novel.findById(review.novel).select('slug');
+  await notifyReply({
+    recipient: review.user,
+    actor: req.user._id,
+    message: `${req.user.username} replied to your review`,
+    link: novel ? `/novel/${novel.slug}` : '',
+  });
+  await populateReview(review);
+  res.status(201).json({ review: publicReview(review) });
 });
+
+const findVisibleReply = (review, replyId) => {
+  const reply = review.replies.id(replyId);
+  return reply && !reply.deletedAt ? reply : null;
+};
 
 const deleteReviewReply = asyncHandler(async (req, res) => {
   const review = await Review.findById(req.params.id);
   if (!review) {
     return res.status(404).json({ message: 'Review not found' });
   }
-  const reply = review.replies.id(req.params.replyId);
+  const reply = findVisibleReply(review, req.params.replyId);
   if (!reply) {
     return res.status(404).json({ message: 'Reply not found' });
   }
@@ -112,41 +134,41 @@ const deleteReviewReply = asyncHandler(async (req, res) => {
   if (!isOwner && req.user.role !== ROLES.ADMIN) {
     return res.status(403).json({ message: 'Not allowed' });
   }
-  reply.deleteOne();
+  reply.deletedAt = new Date();
   await review.save();
-  await review.populate('user', 'username avatarUrl');
-  await review.populate('replies.user', 'username avatarUrl');
-  res.json({ message: 'Reply deleted', review });
+  await populateReview(review);
+  res.json({ message: 'Reply deleted', review: publicReview(review) });
 });
 
-const toggleReviewReplyLike = asyncHandler(async (req, res) => {
-  const review = await Review.findById(req.params.id);
-  if (!review) {
-    return res.status(404).json({ message: 'Review not found' });
-  }
-  const reply = review.replies.id(req.params.replyId);
-  if (!reply) {
-    return res.status(404).json({ message: 'Reply not found' });
-  }
-  const userId = req.user._id.toString();
-  const liked = reply.likes.some((id) => id.toString() === userId);
-  if (liked) {
-    reply.likes = reply.likes.filter((id) => id.toString() !== userId);
-  } else {
-    reply.likes.push(req.user._id);
-  }
-  await review.save();
-  await review.populate('user', 'username avatarUrl');
-  await review.populate('replies.user', 'username avatarUrl');
-  res.json({ liked: !liked, likeCount: reply.likes.length, review });
-});
+const reactToReviewReply = (field) =>
+  asyncHandler(async (req, res) => {
+    const review = await Review.findById(req.params.id);
+    if (!review) {
+      return res.status(404).json({ message: 'Review not found' });
+    }
+    const reply = findVisibleReply(review, req.params.replyId);
+    if (!reply) {
+      return res.status(404).json({ message: 'Reply not found' });
+    }
+    const counts = toggleReaction(reply, field, req.user._id);
+    await review.save();
+    await populateReview(review);
+    res.json({ ...counts, review: publicReview(review) });
+  });
+
+const toggleReviewReplyLike = reactToReviewReply(REACTIONS.LIKE);
+
+const toggleReviewReplyDislike = reactToReviewReply(REACTIONS.DISLIKE);
 
 module.exports = {
   listReviews,
   upsertReview,
   deleteReview,
   toggleReviewLike,
+  toggleReviewDislike,
   addReviewReply,
   deleteReviewReply,
   toggleReviewReplyLike,
+  toggleReviewReplyDislike,
+  recalcNovelRating,
 };

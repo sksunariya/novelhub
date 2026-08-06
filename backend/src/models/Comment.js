@@ -9,11 +9,15 @@ const commentSchema = new mongoose.Schema(
     parentComment: { type: mongoose.Schema.Types.ObjectId, ref: 'Comment', default: null },
     content: { type: String, required: true, trim: true, maxlength: 2000 },
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    dislikes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    editedAt: { type: Date, default: null },
+    editedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );
 
 commentSchema.index({ chapter: 1, createdAt: -1 });
+commentSchema.index({ parentComment: 1, createdAt: 1 });
 
 commentSchema.plugin(softDelete);
 

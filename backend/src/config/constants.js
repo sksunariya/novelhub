@@ -19,6 +19,16 @@ const RANKING_TYPES = {
 const NOTIFICATION_TYPES = {
   NEW_CHAPTER: 'new_chapter',
   ANNOUNCEMENT: 'announcement',
+  REPLY: 'reply',
+};
+
+const PUBLIC_USER_FIELDS = 'username avatarUrl role';
+
+const ADMIN_USER_FIELDS = 'username email avatarUrl role banned';
+
+const MODERATION_STATUS = {
+  ACTIVE: 'active',
+  DELETED: 'deleted',
 };
 
 const PAGINATION = {
@@ -51,6 +61,9 @@ module.exports = {
   NOVEL_STATUS,
   RANKING_TYPES,
   NOTIFICATION_TYPES,
+  PUBLIC_USER_FIELDS,
+  ADMIN_USER_FIELDS,
+  MODERATION_STATUS,
   PAGINATION,
   UPLOAD_LIMITS,
   RATING,

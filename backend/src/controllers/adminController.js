@@ -10,8 +10,15 @@ const SiteSettings = require('../models/SiteSettings');
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { uniqueSlug } = require('../utils/slugify');
 const { parseChapterBuffer, titleFromFilename } = require('../utils/parseChapterFile');
-const { NOTIFICATION_TYPES, ROLES } = require('../config/constants');
+const {
+  NOTIFICATION_TYPES,
+  ROLES,
+  RATING,
+  ADMIN_USER_FIELDS,
+  MODERATION_STATUS,
+} = require('../config/constants');
 const { parsePagination } = require('./novelController');
+const { recalcNovelRating } = require('./reviewController');
 const storage = require('../services/storage');
 
 const CHAPTER_FILE_EXTENSIONS = ['.txt', '.docx'];
@@ -357,33 +364,241 @@ const deleteUser = asyncHandler(async (req, res) => {
   res.json({ message: 'User deleted' });
 });
 
+const searchRegex = (search) => ({ $regex: search, $options: 'i' });
+
+// An explicit deletedAt condition opts out of the soft-delete read filter, so the
+// same handler can serve the active list and the trash view.
+const moderationFilter = ({ novel, user, status }) => {
+  const filter = { deletedAt: status === MODERATION_STATUS.DELETED ? { $ne: null } : null };
+  if (novel) {
+    filter.novel = novel;
+  }
+  if (user) {
+    filter.user = user;
+  }
+  return filter;
+};
+
+const findAuthorIds = async (search) => {
+  const users = await User.find({
+    $or: [{ username: searchRegex(search) }, { email: searchRegex(search) }],
+  }).select('_id');
+  return users.map((user) => user._id);
+};
+
 const listAllComments = asyncHandler(async (req, res) => {
+  const { search, novel, chapter, user, status } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
+  const filter = { ...moderationFilter({ novel, user, status }), parentComment: null };
+  if (chapter) {
+    filter.chapter = chapter;
+  }
+  if (search) {
+    const [authorIds, matchingReplies] = await Promise.all([
+      findAuthorIds(search),
+      Comment.find({ content: searchRegex(search), parentComment: { $ne: null } }, 'parentComment', {
+        withDeleted: true,
+      }),
+    ]);
+    filter.$or = [
+      { content: searchRegex(search) },
+      { user: { $in: authorIds } },
+      { _id: { $in: matchingReplies.map((reply) => reply.parentComment) } },
+    ];
+  }
   const [comments, total] = await Promise.all([
-    Comment.find()
-      .populate('user', 'username email')
+    Comment.find(filter)
+      .populate('user', ADMIN_USER_FIELDS)
       .populate('novel', 'title slug')
       .populate('chapter', 'number title')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
-    Comment.countDocuments(),
+    Comment.countDocuments(filter),
   ]);
-  res.json({ comments, total, page, pages: Math.ceil(total / limit) });
+  // Replies always travel with their parent — including deleted ones, so they can
+  // be reviewed and restored from the thread they belong to.
+  const replies = await Comment.find({ parentComment: { $in: comments.map((comment) => comment._id) } }, null, {
+    withDeleted: true,
+  })
+    .populate('user', ADMIN_USER_FIELDS)
+    .sort({ createdAt: 1 });
+  const repliesByParent = replies.reduce((grouped, reply) => {
+    const key = reply.parentComment.toString();
+    grouped[key] = grouped[key] || [];
+    grouped[key].push(reply);
+    return grouped;
+  }, {});
+  res.json({
+    comments: comments.map((comment) => ({
+      ...comment.toJSON(),
+      replies: repliesByParent[comment._id.toString()] || [],
+    })),
+    total,
+    page,
+    pages: Math.ceil(total / limit),
+  });
 });
 
 const listAllReviews = asyncHandler(async (req, res) => {
+  const { search, novel, user, status } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
+  const filter = moderationFilter({ novel, user, status });
+  if (search) {
+    const authorIds = await findAuthorIds(search);
+    filter.$or = [
+      { content: searchRegex(search) },
+      { user: { $in: authorIds } },
+      { 'replies.content': searchRegex(search) },
+    ];
+  }
   const [reviews, total] = await Promise.all([
-    Review.find()
-      .populate('user', 'username email')
+    Review.find(filter)
+      .populate('user', ADMIN_USER_FIELDS)
+      .populate('replies.user', ADMIN_USER_FIELDS)
       .populate('novel', 'title slug')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
-    Review.countDocuments(),
+    Review.countDocuments(filter),
   ]);
   res.json({ reviews, total, page, pages: Math.ceil(total / limit) });
+});
+
+const readContent = (req, res) => {
+  const { content } = req.body;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    res.status(400).json({ message: 'content is required' });
+    return null;
+  }
+  return content.trim();
+};
+
+const findModeratedComment = (id) => Comment.findOne({ _id: id }, null, { withDeleted: true });
+
+const findModeratedReview = (id) => Review.findOne({ _id: id }, null, { withDeleted: true });
+
+const updateComment = asyncHandler(async (req, res) => {
+  const content = readContent(req, res);
+  if (!content) {
+    return undefined;
+  }
+  const comment = await findModeratedComment(req.params.id);
+  if (!comment) {
+    return res.status(404).json({ message: 'Comment not found' });
+  }
+  comment.content = content;
+  comment.editedAt = new Date();
+  comment.editedBy = req.user._id;
+  await comment.save();
+  await comment.populate('user', ADMIN_USER_FIELDS);
+  res.json({ comment });
+});
+
+const restoreComment = asyncHandler(async (req, res) => {
+  const comment = await findModeratedComment(req.params.id);
+  if (!comment) {
+    return res.status(404).json({ message: 'Comment not found' });
+  }
+  if (comment.parentComment) {
+    const parent = await findModeratedComment(comment.parentComment);
+    if (parent && parent.deletedAt) {
+      return res.status(400).json({ message: 'Restore the parent comment first' });
+    }
+  }
+  comment.deletedAt = null;
+  await comment.save();
+  await comment.populate('user', ADMIN_USER_FIELDS);
+  res.json({ comment });
+});
+
+const updateReview = asyncHandler(async (req, res) => {
+  const { content, rating } = req.body;
+  const review = await findModeratedReview(req.params.id);
+  if (!review) {
+    return res.status(404).json({ message: 'Review not found' });
+  }
+  if (rating !== undefined) {
+    const numericRating = Number(rating);
+    if (!numericRating || numericRating < RATING.MIN || numericRating > RATING.MAX) {
+      return res.status(400).json({ message: `rating must be between ${RATING.MIN} and ${RATING.MAX}` });
+    }
+    review.rating = numericRating;
+  }
+  if (content !== undefined) {
+    review.content = String(content).trim();
+  }
+  review.editedAt = new Date();
+  review.editedBy = req.user._id;
+  await review.save();
+  if (rating !== undefined) {
+    await recalcNovelRating(review.novel);
+  }
+  await review.populate('user', ADMIN_USER_FIELDS);
+  res.json({ review });
+});
+
+const restoreReview = asyncHandler(async (req, res) => {
+  const review = await findModeratedReview(req.params.id);
+  if (!review) {
+    return res.status(404).json({ message: 'Review not found' });
+  }
+  // Only one active review per user per novel, so a replacement review blocks the restore.
+  const activeReview = await Review.findOne({ novel: review.novel, user: review.user });
+  if (activeReview && activeReview._id.toString() !== review._id.toString()) {
+    return res.status(409).json({ message: 'This user already has an active review for that novel' });
+  }
+  review.deletedAt = null;
+  await review.save();
+  await recalcNovelRating(review.novel);
+  await review.populate('user', ADMIN_USER_FIELDS);
+  res.json({ review });
+});
+
+const findReviewReply = async (reviewId, replyId, res) => {
+  const review = await findModeratedReview(reviewId);
+  if (!review) {
+    res.status(404).json({ message: 'Review not found' });
+    return {};
+  }
+  const reply = review.replies.id(replyId);
+  if (!reply) {
+    res.status(404).json({ message: 'Reply not found' });
+    return {};
+  }
+  return { review, reply };
+};
+
+const respondWithReview = async (res, review) => {
+  await review.populate('user', ADMIN_USER_FIELDS);
+  await review.populate('replies.user', ADMIN_USER_FIELDS);
+  res.json({ review });
+};
+
+const updateReviewReply = asyncHandler(async (req, res) => {
+  const content = readContent(req, res);
+  if (!content) {
+    return undefined;
+  }
+  const { review, reply } = await findReviewReply(req.params.id, req.params.replyId, res);
+  if (!reply) {
+    return undefined;
+  }
+  reply.content = content;
+  reply.editedAt = new Date();
+  reply.editedBy = req.user._id;
+  await review.save();
+  return respondWithReview(res, review);
+});
+
+const restoreReviewReply = asyncHandler(async (req, res) => {
+  const { review, reply } = await findReviewReply(req.params.id, req.params.replyId, res);
+  if (!reply) {
+    return undefined;
+  }
+  reply.deletedAt = null;
+  await review.save();
+  return respondWithReview(res, review);
 });
 
 const getAdminSettings = asyncHandler(async (req, res) => {
@@ -492,6 +707,12 @@ module.exports = {
   deleteUser,
   listAllComments,
   listAllReviews,
+  updateComment,
+  restoreComment,
+  updateReview,
+  restoreReview,
+  updateReviewReply,
+  restoreReviewReply,
   getAdminSettings,
   updateSettings,
   broadcastAnnouncement,

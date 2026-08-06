@@ -1,17 +1,39 @@
 const Comment = require('../models/Comment');
 const Chapter = require('../models/Chapter');
+const Novel = require('../models/Novel');
 const { asyncHandler } = require('../middlewares/errorHandler');
-const { ROLES } = require('../config/constants');
+const { ROLES, PUBLIC_USER_FIELDS } = require('../config/constants');
 const { parsePagination } = require('./novelController');
+const { REACTIONS, toggleReaction } = require('../utils/reactions');
+const { notifyReply } = require('../utils/notifications');
 
+// Pagination applies to top-level comments only; every reply of a returned
+// comment ships with it so a thread is never split across pages.
 const listComments = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
-  const filter = { chapter: req.params.chapterId };
+  const filter = { chapter: req.params.chapterId, parentComment: null };
   const [comments, total] = await Promise.all([
-    Comment.find(filter).populate('user', 'username avatarUrl').sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Comment.find(filter).populate('user', PUBLIC_USER_FIELDS).sort({ createdAt: -1 }).skip(skip).limit(limit),
     Comment.countDocuments(filter),
   ]);
-  res.json({ comments, total, page, pages: Math.ceil(total / limit) });
+  const replies = await Comment.find({ parentComment: { $in: comments.map((comment) => comment._id) } })
+    .populate('user', PUBLIC_USER_FIELDS)
+    .sort({ createdAt: 1 });
+  const repliesByParent = replies.reduce((grouped, reply) => {
+    const key = reply.parentComment.toString();
+    grouped[key] = grouped[key] || [];
+    grouped[key].push(reply);
+    return grouped;
+  }, {});
+  res.json({
+    comments: comments.map((comment) => ({
+      ...comment.toJSON(),
+      replies: repliesByParent[comment._id.toString()] || [],
+    })),
+    total,
+    page,
+    pages: Math.ceil(total / limit),
+  });
 });
 
 const createComment = asyncHandler(async (req, res) => {
@@ -23,22 +45,37 @@ const createComment = asyncHandler(async (req, res) => {
   if (!chapter) {
     return res.status(404).json({ message: 'Chapter not found' });
   }
-  let parentId = null;
+  let parent = null;
   if (parentComment) {
-    const parent = await Comment.findById(parentComment);
+    parent = await Comment.findById(parentComment);
     if (!parent) {
       return res.status(404).json({ message: 'Parent comment not found' });
     }
-    parentId = parent._id;
+    // Threads are two levels deep: replying to a reply attaches to its parent.
+    if (parent.parentComment) {
+      parent = await Comment.findById(parent.parentComment);
+      if (!parent) {
+        return res.status(404).json({ message: 'Parent comment not found' });
+      }
+    }
   }
   const comment = await Comment.create({
     chapter: chapter._id,
     novel: chapter.novel,
     user: req.user._id,
-    parentComment: parentId,
+    parentComment: parent ? parent._id : null,
     content: content.trim(),
   });
-  await comment.populate('user', 'username avatarUrl');
+  await comment.populate('user', PUBLIC_USER_FIELDS);
+  if (parent) {
+    const novel = await Novel.findById(chapter.novel).select('slug');
+    await notifyReply({
+      recipient: parent.user,
+      actor: req.user._id,
+      message: `${req.user.username} replied to your comment`,
+      link: novel ? `/novel/${novel.slug}/chapter/${chapter.number}` : '',
+    });
+  }
   res.status(201).json({ comment });
 });
 
@@ -52,24 +89,23 @@ const deleteComment = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Not allowed' });
   }
   await comment.softDelete();
-  await Comment.updateMany({ parentComment: comment._id, deletedAt: null }, { deletedAt: new Date() });
+  await Comment.softDeleteMany({ parentComment: comment._id, deletedAt: null });
   res.json({ message: 'Comment deleted' });
 });
 
-const toggleCommentLike = asyncHandler(async (req, res) => {
-  const comment = await Comment.findById(req.params.id);
-  if (!comment) {
-    return res.status(404).json({ message: 'Comment not found' });
-  }
-  const userId = req.user._id.toString();
-  const liked = comment.likes.some((id) => id.toString() === userId);
-  if (liked) {
-    comment.likes = comment.likes.filter((id) => id.toString() !== userId);
-  } else {
-    comment.likes.push(req.user._id);
-  }
-  await comment.save();
-  res.json({ liked: !liked, likeCount: comment.likes.length });
-});
+const reactToComment = (field) =>
+  asyncHandler(async (req, res) => {
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) {
+      return res.status(404).json({ message: 'Comment not found' });
+    }
+    const counts = toggleReaction(comment, field, req.user._id);
+    await comment.save();
+    res.json(counts);
+  });
 
-module.exports = { listComments, createComment, deleteComment, toggleCommentLike };
+const toggleCommentLike = reactToComment(REACTIONS.LIKE);
+
+const toggleCommentDislike = reactToComment(REACTIONS.DISLIKE);
+
+module.exports = { listComments, createComment, deleteComment, toggleCommentLike, toggleCommentDislike };

@@ -19,6 +19,12 @@ const {
   deleteUser,
   listAllComments,
   listAllReviews,
+  updateComment,
+  restoreComment,
+  updateReview,
+  restoreReview,
+  updateReviewReply,
+  restoreReviewReply,
   getAdminSettings,
   updateSettings,
   broadcastAnnouncement,
@@ -53,7 +59,14 @@ router.put('/users/:id', updateUser);
 router.delete('/users/:id', deleteUser);
 
 router.get('/comments', listAllComments);
+router.put('/comments/:id', updateComment);
+router.post('/comments/:id/restore', restoreComment);
+
 router.get('/reviews', listAllReviews);
+router.put('/reviews/:id', updateReview);
+router.post('/reviews/:id/restore', restoreReview);
+router.put('/reviews/:id/replies/:replyId', updateReviewReply);
+router.post('/reviews/:id/replies/:replyId/restore', restoreReviewReply);
 
 router.get('/settings', getAdminSettings);
 router.put(

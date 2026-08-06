@@ -240,4 +240,270 @@ describe('Admin', () => {
       expect(reviews.body.reviews).toHaveLength(1);
     });
   });
+
+  describe('comment moderation', () => {
+    const postComment = (chapterId, token, body) =>
+      api().post(`/api/community/chapters/${chapterId}/comments`).set('Authorization', `Bearer ${token}`).send(body);
+
+    const seedThread = async () => {
+      const admin = await createAdmin();
+      const author = await createUser({ username: 'threadauthor' });
+      const novel = await createNovel();
+      const chapter = await createChapter(novel);
+      const parent = await postComment(chapter._id, author.token, { content: 'Original opinion' });
+      const reply = await postComment(chapter._id, author.token, {
+        content: 'Following up on my point',
+        parentComment: parent.body.comment._id,
+      });
+      return {
+        admin,
+        author,
+        novel,
+        chapter,
+        parentId: parent.body.comment._id,
+        replyId: reply.body.comment._id,
+      };
+    };
+
+    it('returns threads with replies and author status for moderation', async () => {
+      const { admin, parentId, replyId } = await seedThread();
+      const res = await api().get('/api/admin/comments').set('Authorization', `Bearer ${admin.token}`);
+      expect(res.body.comments).toHaveLength(1);
+      expect(res.body.total).toBe(1);
+      expect(res.body.comments[0]._id).toBe(parentId);
+      expect(res.body.comments[0].user.banned).toBe(false);
+      expect(res.body.comments[0].novel.title).toBeDefined();
+      expect(res.body.comments[0].chapter.number).toBeDefined();
+      expect(res.body.comments[0].replies.map((reply) => reply._id)).toEqual([replyId]);
+    });
+
+    it('keeps deleted replies visible inside an active thread', async () => {
+      const { admin, parentId, replyId } = await seedThread();
+      await api().delete(`/api/community/comments/${replyId}`).set('Authorization', `Bearer ${admin.token}`);
+      const res = await api().get('/api/admin/comments').set('Authorization', `Bearer ${admin.token}`);
+      expect(res.body.comments[0]._id).toBe(parentId);
+      expect(res.body.comments[0].replies).toHaveLength(1);
+      expect(res.body.comments[0].replies[0].deletedAt).toBeTruthy();
+    });
+
+    it('filters by status, novel and search term', async () => {
+      const { admin, author, novel, chapter, parentId } = await seedThread();
+      const otherNovel = await createNovel({ title: 'Other Novel' });
+      const otherChapter = await createChapter(otherNovel);
+      await postComment(otherChapter._id, author.token, { content: 'Unrelated chatter' });
+
+      const byNovel = await api()
+        .get(`/api/admin/comments?novel=${novel._id}`)
+        .set('Authorization', `Bearer ${admin.token}`);
+      expect(byNovel.body.comments).toHaveLength(1);
+      expect(byNovel.body.comments[0].chapter._id).toBe(chapter._id.toString());
+
+      const byContent = await api().get('/api/admin/comments?search=unrelated').set('Authorization', `Bearer ${admin.token}`);
+      expect(byContent.body.comments).toHaveLength(1);
+      expect(byContent.body.comments[0].content).toBe('Unrelated chatter');
+
+      const byAuthor = await api().get('/api/admin/comments?search=threadauthor').set('Authorization', `Bearer ${admin.token}`);
+      expect(byAuthor.body.comments).toHaveLength(2);
+
+      const byReplyContent = await api()
+        .get('/api/admin/comments?search=Following')
+        .set('Authorization', `Bearer ${admin.token}`);
+      expect(byReplyContent.body.comments).toHaveLength(1);
+      expect(byReplyContent.body.comments[0]._id).toBe(parentId);
+
+      await api().delete(`/api/community/comments/${parentId}`).set('Authorization', `Bearer ${admin.token}`);
+      const trash = await api().get('/api/admin/comments?status=deleted').set('Authorization', `Bearer ${admin.token}`);
+      expect(trash.body.comments).toHaveLength(1);
+      expect(trash.body.comments[0]._id).toBe(parentId);
+      const active = await api().get('/api/admin/comments?status=active').set('Authorization', `Bearer ${admin.token}`);
+      expect(active.body.comments.map((comment) => comment._id)).not.toContain(parentId);
+    });
+
+    it('edits a comment and records who edited it', async () => {
+      const { admin, parentId } = await seedThread();
+      const res = await api()
+        .put(`/api/admin/comments/${parentId}`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ content: 'Cleaned up by staff' });
+      expect(res.status).toBe(200);
+      expect(res.body.comment.content).toBe('Cleaned up by staff');
+      expect(res.body.comment.editedAt).toBeTruthy();
+      expect(res.body.comment.editedBy).toBe(admin.user._id.toString());
+    });
+
+    it('rejects an empty comment edit', async () => {
+      const { admin, parentId } = await seedThread();
+      const res = await api()
+        .put(`/api/admin/comments/${parentId}`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ content: '   ' });
+      expect(res.status).toBe(400);
+    });
+
+    it('restores a deleted thread parent before its replies', async () => {
+      const { admin, chapter, parentId, replyId } = await seedThread();
+      await api().delete(`/api/community/comments/${parentId}`).set('Authorization', `Bearer ${admin.token}`);
+
+      const tooEarly = await api()
+        .post(`/api/admin/comments/${replyId}/restore`)
+        .set('Authorization', `Bearer ${admin.token}`);
+      expect(tooEarly.status).toBe(400);
+
+      const parentRestored = await api()
+        .post(`/api/admin/comments/${parentId}/restore`)
+        .set('Authorization', `Bearer ${admin.token}`);
+      expect(parentRestored.status).toBe(200);
+      expect(parentRestored.body.comment.deletedAt).toBeNull();
+
+      const replyRestored = await api()
+        .post(`/api/admin/comments/${replyId}/restore`)
+        .set('Authorization', `Bearer ${admin.token}`);
+      expect(replyRestored.status).toBe(200);
+
+      const publicList = await api().get(`/api/community/chapters/${chapter._id}/comments`);
+      expect(publicList.body.comments).toHaveLength(1);
+      expect(publicList.body.comments[0].replies).toHaveLength(1);
+    });
+
+    it('lets an admin reply to a comment as staff', async () => {
+      const { admin, chapter, parentId } = await seedThread();
+      const res = await api()
+        .post(`/api/community/chapters/${chapter._id}/comments`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ content: 'Staff response', parentComment: parentId });
+      expect(res.status).toBe(201);
+
+      const publicList = await api().get(`/api/community/chapters/${chapter._id}/comments`);
+      const staffReply = publicList.body.comments[0].replies.find((reply) => reply.content === 'Staff response');
+      expect(staffReply.user.role).toBe('admin');
+    });
+  });
+
+  describe('review moderation', () => {
+    const seedReview = async (rating = 5) => {
+      const admin = await createAdmin();
+      const author = await createUser({ username: 'reviewauthor' });
+      const novel = await createNovel();
+      const { body } = await api()
+        .post(`/api/novels/id/${novel._id}/reviews`)
+        .set('Authorization', `Bearer ${author.token}`)
+        .send({ rating, content: 'Solid read' });
+      return { admin, author, novel, reviewId: body.review._id };
+    };
+
+    it('edits review content and rating, recalculating the novel average', async () => {
+      const { admin, novel, reviewId } = await seedReview(5);
+      const res = await api()
+        .put(`/api/admin/reviews/${reviewId}`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ content: 'Trimmed by staff', rating: 3 });
+      expect(res.status).toBe(200);
+      expect(res.body.review.content).toBe('Trimmed by staff');
+      expect(res.body.review.rating).toBe(3);
+      expect(res.body.review.editedBy).toBe(admin.user._id.toString());
+      expect((await Novel.findById(novel._id)).ratingAvg).toBe(3);
+    });
+
+    it('rejects an out-of-range rating edit', async () => {
+      const { admin, reviewId } = await seedReview();
+      const res = await api()
+        .put(`/api/admin/reviews/${reviewId}`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ rating: 9 });
+      expect(res.status).toBe(400);
+    });
+
+    it('restores a deleted review and its rating contribution', async () => {
+      const { admin, novel, reviewId } = await seedReview(4);
+      await api().delete(`/api/community/reviews/${reviewId}`).set('Authorization', `Bearer ${admin.token}`);
+      expect((await Novel.findById(novel._id)).ratingAvg).toBe(0);
+
+      const trash = await api().get('/api/admin/reviews?status=deleted').set('Authorization', `Bearer ${admin.token}`);
+      expect(trash.body.reviews).toHaveLength(1);
+
+      const restored = await api()
+        .post(`/api/admin/reviews/${reviewId}/restore`)
+        .set('Authorization', `Bearer ${admin.token}`);
+      expect(restored.status).toBe(200);
+      expect(restored.body.review.deletedAt).toBeNull();
+      const updated = await Novel.findById(novel._id);
+      expect(updated.ratingAvg).toBe(4);
+      expect(updated.ratingCount).toBe(1);
+    });
+
+    it('refuses to restore a review the author has already replaced', async () => {
+      const { admin, author, novel, reviewId } = await seedReview(4);
+      await api().delete(`/api/community/reviews/${reviewId}`).set('Authorization', `Bearer ${admin.token}`);
+      await api()
+        .post(`/api/novels/id/${novel._id}/reviews`)
+        .set('Authorization', `Bearer ${author.token}`)
+        .send({ rating: 2 });
+
+      const res = await api().post(`/api/admin/reviews/${reviewId}/restore`).set('Authorization', `Bearer ${admin.token}`);
+      expect(res.status).toBe(409);
+      expect((await Novel.findById(novel._id)).ratingCount).toBe(1);
+    });
+
+    it('edits and restores a review reply', async () => {
+      const { admin, novel, reviewId } = await seedReview();
+      const replyRes = await api()
+        .post(`/api/community/reviews/${reviewId}/replies`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ content: 'Staff reply' });
+      const replyId = replyRes.body.review.replies[0]._id;
+
+      const edited = await api()
+        .put(`/api/admin/reviews/${reviewId}/replies/${replyId}`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ content: 'Staff reply, revised' });
+      expect(edited.status).toBe(200);
+      expect(edited.body.review.replies[0].content).toBe('Staff reply, revised');
+      expect(edited.body.review.replies[0].editedAt).toBeTruthy();
+
+      await api()
+        .delete(`/api/community/reviews/${reviewId}/replies/${replyId}`)
+        .set('Authorization', `Bearer ${admin.token}`);
+      const publicList = await api().get(`/api/novels/id/${novel._id}/reviews`);
+      expect(publicList.body.reviews[0].replies).toHaveLength(0);
+
+      const adminList = await api().get('/api/admin/reviews').set('Authorization', `Bearer ${admin.token}`);
+      expect(adminList.body.reviews[0].replies).toHaveLength(1);
+      expect(adminList.body.reviews[0].replies[0].deletedAt).toBeTruthy();
+
+      const restored = await api()
+        .post(`/api/admin/reviews/${reviewId}/replies/${replyId}/restore`)
+        .set('Authorization', `Bearer ${admin.token}`);
+      expect(restored.status).toBe(200);
+      const afterRestore = await api().get(`/api/novels/id/${novel._id}/reviews`);
+      expect(afterRestore.body.reviews[0].replies).toHaveLength(1);
+    });
+
+    it('finds reviews by author name and reply content', async () => {
+      const { admin, reviewId } = await seedReview();
+      await api()
+        .post(`/api/community/reviews/${reviewId}/replies`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .send({ content: 'distinctive staff note' });
+
+      const byAuthor = await api().get('/api/admin/reviews?search=reviewauthor').set('Authorization', `Bearer ${admin.token}`);
+      expect(byAuthor.body.reviews).toHaveLength(1);
+
+      const byReply = await api()
+        .get('/api/admin/reviews?search=distinctive')
+        .set('Authorization', `Bearer ${admin.token}`);
+      expect(byReply.body.reviews).toHaveLength(1);
+    });
+
+    it('rejects moderation endpoints for non-admins', async () => {
+      const { reviewId } = await seedReview();
+      const { token } = await createUser();
+      const edit = await api()
+        .put(`/api/admin/reviews/${reviewId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ content: 'nope' });
+      expect(edit.status).toBe(403);
+      const restore = await api().post(`/api/admin/reviews/${reviewId}/restore`).set('Authorization', `Bearer ${token}`);
+      expect(restore.status).toBe(403);
+    });
+  });
 });
