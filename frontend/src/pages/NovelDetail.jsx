@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BookOpen, BookmarkPlus, BookmarkCheck, Eye, List, Star, Play, Search, ArrowUpDown, Clock, Heart, CornerDownRight, Trash2 } from 'lucide-react';
+import { BookOpen, BookmarkPlus, BookmarkCheck, Eye, List, Star, Play, Search, ArrowUpDown, Clock } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import PageTransition from '../components/PageTransition';
@@ -9,6 +9,7 @@ import Spinner from '../components/Spinner';
 import StarRating from '../components/StarRating';
 import CommentCard from '../components/CommentCard';
 import { formatRelativeTime, formatExactDateTime } from '../utils/dateUtils';
+import { ANCHORS, readHashTarget } from '../utils/hashTarget';
 
 const SYNOPSIS_LIMIT = 300;
 
@@ -21,9 +22,23 @@ const truncateAtWord = (text, max) => {
   return `${cut.trimEnd()}…`;
 };
 
+const withUser = (reactions, userId, active) => {
+  const others = (reactions || []).filter((id) => (id._id || id)?.toString() !== userId);
+  return active ? [...others, userId] : others;
+};
+
+// Likes and dislikes are mutually exclusive server side, so both lists are
+// rebuilt from the toggle response.
+const applyReaction = (review, reaction, userId) => ({
+  ...review,
+  likes: withUser(review.likes, userId, reaction.liked),
+  dislikes: withUser(review.dislikes, userId, reaction.disliked),
+});
+
 const NovelDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const { hash } = useLocation();
   const { user, updateUser, isAdmin } = useAuth();
   const [novel, setNovel] = useState(null);
   const [chapters, setChapters] = useState([]);
@@ -36,32 +51,22 @@ const NovelDetail = () => {
   const [showFullSynopsis, setShowFullSynopsis] = useState(false);
   const [chapterQuery, setChapterQuery] = useState('');
   const [sortAsc, setSortAsc] = useState(true);
-  const [replyTarget, setReplyTarget] = useState(null);
-  const [replyContent, setReplyContent] = useState('');
+  const [isReviewFocused, setIsReviewFocused] = useState(false);
 
-  const likeReview = async (reviewId) => {
+  const reactToReview = (action) => async (reviewId) => {
     if (!user) return navigate('/login');
-    const { data } = await client.post(`/community/reviews/${reviewId}/like`);
-    setReviews((prev) =>
-      prev.map((r) =>
-        r._id === reviewId
-          ? {
-              ...r,
-              likes: data.liked
-                ? [...(r.likes || []), user.id]
-                : (r.likes || []).filter((id) => id !== user.id),
-            }
-          : r
-      )
-    );
+    const { data } = await client.post(`/community/reviews/${reviewId}/${action}`);
+    return setReviews((prev) => prev.map((r) => (r._id === reviewId ? applyReaction(r, data, user.id) : r)));
   };
 
-  const postReviewReply = async (reviewId) => {
-    if (!replyContent.trim()) return;
-    const { data } = await client.post(`/community/reviews/${reviewId}/replies`, { content: replyContent });
+  const likeReview = reactToReview('like');
+
+  const dislikeReview = reactToReview('dislike');
+
+  const postReviewReply = async (reviewId, text) => {
+    if (!text.trim()) return;
+    const { data } = await client.post(`/community/reviews/${reviewId}/replies`, { content: text });
     setReviews((prev) => prev.map((r) => (r._id === reviewId ? data.review : r)));
-    setReplyTarget(null);
-    setReplyContent('');
   };
 
   const deleteReview = async (reviewId) => {
@@ -76,11 +81,15 @@ const NovelDetail = () => {
     setReviews((prev) => prev.map((r) => (r._id === reviewId ? data.review : r)));
   };
 
-  const likeReviewReply = async (reviewId, replyId) => {
+  const reactToReviewReply = (action) => async (reviewId, replyId) => {
     if (!user) return navigate('/login');
-    const { data } = await client.post(`/community/reviews/${reviewId}/replies/${replyId}/like`);
-    setReviews((prev) => prev.map((r) => (r._id === reviewId ? data.review : r)));
+    const { data } = await client.post(`/community/reviews/${reviewId}/replies/${replyId}/${action}`);
+    return setReviews((prev) => prev.map((r) => (r._id === reviewId ? data.review : r)));
   };
+
+  const likeReviewReply = reactToReviewReply('like');
+
+  const dislikeReviewReply = reactToReviewReply('dislike');
 
   const inLibrary = user?.library?.some((id) => id === novel?._id);
 
@@ -136,6 +145,7 @@ const NovelDetail = () => {
       const { data } = await client.get(`/novels/id/${novel._id}/reviews`);
       setReviews(data.reviews);
       setUserReview(data.reviews.find((r) => r.user._id === user.id) || null);
+      setIsReviewFocused(false);
     } finally {
       setSubmitting(false);
     }
@@ -161,6 +171,8 @@ const NovelDetail = () => {
     .sort((a, b) => (sortAsc ? a.number - b.number : b.number - a.number));
 
   const continueChapter = progress ? progress.chapterNumber : chapters[0]?.number;
+
+  const reviewTarget = readHashTarget(hash, ANCHORS.REVIEW);
 
   return (
     <PageTransition>
@@ -317,28 +329,71 @@ const NovelDetail = () => {
       <section className="mt-12" aria-label="Reviews">
         <h2 className="mb-4 font-display text-xl font-bold text-silver">Reviews</h2>
         {user ? (
-          <form onSubmit={submitReview} className="mb-6 rounded-xl border border-line bg-night-surface p-4">
-            <div className="mb-3 flex items-center gap-3">
-              <span className="text-sm font-medium text-silver">Your rating</span>
-              <StarRating value={reviewForm.rating} onChange={(rating) => setReviewForm((f) => ({ ...f, rating }))} />
-            </div>
-            <label htmlFor="review-content" className="sr-only">Review text</label>
-            <textarea
-              id="review-content"
-              value={reviewForm.content}
-              onChange={(e) => setReviewForm((f) => ({ ...f, content: e.target.value }))}
-              placeholder="Share your thoughts (optional)"
-              rows={3}
-              className="w-full rounded-lg border border-line bg-night px-3 py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={submitting || !reviewForm.rating}
-              className="mt-3 cursor-pointer rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {submitting ? 'Saving...' : userReview ? 'Update Review' : 'Post Review'}
-            </button>
-          </form>
+          <div className="mb-6 flex gap-3.5 items-start">
+            {/* User Avatar */}
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={user.username}
+                className="h-10 w-10 shrink-0 rounded-full object-cover border border-line shadow-sm"
+              />
+            ) : (
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-crimson/20 text-sm font-bold uppercase text-crimson-soft border border-crimson/30 shadow-sm">
+                {user.username?.slice(0, 2) || '??'}
+              </span>
+            )}
+
+            <form onSubmit={submitReview} className="flex-1 space-y-3">
+              <div className="relative group">
+                <textarea
+                  id="review-content"
+                  value={reviewForm.content}
+                  onChange={(e) => setReviewForm((f) => ({ ...f, content: e.target.value }))}
+                  onFocus={() => setIsReviewFocused(true)}
+                  placeholder="Share your thoughts or review this novel (optional)..."
+                  rows={isReviewFocused || reviewForm.content ? 3 : 1}
+                  className="w-full bg-transparent border-b border-line py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none transition-all duration-200 resize-none"
+                />
+                {/* Smooth border expand animation */}
+                <div className="absolute bottom-0 left-1/2 h-[2px] w-0 bg-crimson transition-all duration-300 group-focus-within:left-0 group-focus-within:w-full" />
+              </div>
+
+              {(isReviewFocused || reviewForm.content.trim() !== '' || reviewForm.rating > 0) && (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-medium text-silver-muted">Your rating:</span>
+                    <StarRating
+                      value={reviewForm.rating}
+                      onChange={(rating) => setReviewForm((f) => ({ ...f, rating }))}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsReviewFocused(false);
+                        if (!userReview) {
+                          setReviewForm({ rating: 0, content: '' });
+                        } else {
+                          setReviewForm({ rating: userReview.rating, content: userReview.content || '' });
+                        }
+                      }}
+                      className="rounded-full px-4 py-1.5 text-xs font-semibold text-silver hover:bg-white/10 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={submitting || !reviewForm.rating}
+                      className="rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white transition-all hover:bg-crimson-soft disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {submitting ? 'Saving...' : userReview ? 'Update Review' : 'Post Review'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </form>
+          </div>
         ) : (
           <p className="mb-6 text-sm text-silver-muted">
             <Link to="/login" className="text-crimson-soft hover:underline">Log in</Link> to leave a review.
@@ -354,13 +409,14 @@ const NovelDetail = () => {
                 item={review}
                 currentUser={user}
                 isAdmin={isAdmin}
+                anchorPrefix={ANCHORS.REVIEW}
+                targetId={reviewTarget}
                 onLike={likeReview}
+                onDislike={dislikeReview}
                 onDelete={deleteReview}
-                onReplySubmit={(reviewId, text) => {
-                  setReplyContent(text);
-                  return postReviewReply(reviewId);
-                }}
+                onReplySubmit={postReviewReply}
                 onLikeReply={likeReviewReply}
+                onDislikeReply={dislikeReviewReply}
                 onDeleteReply={deleteReviewReply}
               />
             ))}

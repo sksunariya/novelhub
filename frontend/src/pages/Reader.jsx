@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Home, List, Settings2, X, MessageSquare, Trash2, Heart, CornerDownRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, List, Settings2, X, MessageSquare } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/Spinner';
@@ -9,6 +9,7 @@ import StarRating from '../components/StarRating';
 import CommentCard from '../components/CommentCard';
 import { stripTextColor } from '../utils/sanitizeContent';
 import { formatRelativeTime, formatExactDateTime } from '../utils/dateUtils';
+import { ANCHORS, readHashTarget } from '../utils/hashTarget';
 
 const SETTINGS_KEY = 'novelhub_reader_settings';
 
@@ -37,6 +38,7 @@ const loadSettings = () => {
 const Reader = () => {
   const { slug, number } = useParams();
   const navigate = useNavigate();
+  const { hash } = useLocation();
   const { user, isAdmin } = useAuth();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -44,9 +46,10 @@ const Reader = () => {
   const [panel, setPanel] = useState('');
   const [chapters, setChapters] = useState([]);
   const [comments, setComments] = useState(null);
-  const [commentText, setCommentText] = useState('');
-  const [replyTarget, setReplyTarget] = useState(null);
-  const [replyContent, setReplyContent] = useState('');
+  const [panelCommentText, setPanelCommentText] = useState('');
+  const [bottomCommentText, setBottomCommentText] = useState('');
+  const [isPanelCommentFocused, setIsPanelCommentFocused] = useState(false);
+  const [isBottomCommentFocused, setIsBottomCommentFocused] = useState(false);
   const [activeTab, setActiveTab] = useState('comments');
   const [userReview, setUserReview] = useState(null);
   const [reviewForm, setReviewForm] = useState({ rating: 0, content: '' });
@@ -61,7 +64,8 @@ const Reader = () => {
     setData(null);
     setError('');
     setComments(null);
-    setCommentText('');
+    setPanelCommentText('');
+    setBottomCommentText('');
     setReviewMsg('');
     window.scrollTo(0, 0);
     client
@@ -105,11 +109,19 @@ const Reader = () => {
     }
   }, [data, loadComments, loadUserReview]);
 
-  const postComment = async (e) => {
+  const postComment = (text, reset) => async (e) => {
     e.preventDefault();
-    if (!commentText.trim()) return;
-    await client.post(`/community/chapters/${data.chapter._id}/comments`, { content: commentText });
-    setCommentText('');
+    if (!text.trim()) return;
+    await client.post(`/community/chapters/${data.chapter._id}/comments`, { content: text });
+    reset();
+    loadComments();
+  };
+
+  const postReply = async (parentId, text) => {
+    await client.post(`/community/chapters/${data.chapter._id}/comments`, {
+      content: text,
+      parentComment: parentId,
+    });
     loadComments();
   };
 
@@ -118,21 +130,15 @@ const Reader = () => {
     loadComments();
   };
 
-  const likeComment = async (id) => {
-    await client.post(`/community/comments/${id}/like`);
-    loadComments();
+  const reactToComment = (action) => async (id) => {
+    if (!user) return navigate('/login');
+    await client.post(`/community/comments/${id}/${action}`);
+    return loadComments();
   };
 
-  const postReply = async (parentCommentId) => {
-    if (!replyContent.trim() || !data) return;
-    await client.post(`/community/chapters/${data.chapter._id}/comments`, {
-      content: replyContent,
-      parentComment: parentCommentId,
-    });
-    setReplyTarget(null);
-    setReplyContent('');
-    loadComments();
-  };
+  const likeComment = reactToComment('like');
+
+  const dislikeComment = reactToComment('dislike');
 
   const submitReview = async (e) => {
     e.preventDefault();
@@ -149,6 +155,10 @@ const Reader = () => {
       setSubmittingReview(false);
     }
   };
+
+  const commentCount = (comments || []).reduce((count, comment) => count + 1 + (comment.replies?.length || 0), 0);
+
+  const commentTarget = readHashTarget(hash, ANCHORS.COMMENT);
 
   const theme = READER_THEMES[settings.theme] || READER_THEMES.dark;
 
@@ -323,24 +333,60 @@ const Reader = () => {
                 {panel === 'comments' && (
                   <div className="space-y-4">
                     {user ? (
-                      <form onSubmit={postComment}>
-                        <label htmlFor="comment-input" className="sr-only">Add a comment</label>
-                        <textarea
-                          id="comment-input"
-                          value={commentText}
-                          onChange={(e) => setCommentText(e.target.value)}
-                          placeholder="Share your thoughts on this chapter..."
-                          rows={3}
-                          className="w-full rounded-lg border border-line bg-night px-3 py-2 text-sm placeholder:text-silver-muted focus:border-crimson focus:outline-none"
-                        />
-                        <button
-                          type="submit"
-                          disabled={!commentText.trim()}
-                          className="mt-2 cursor-pointer rounded-full bg-crimson px-4 py-1.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      <div className="flex gap-2.5 items-start">
+                        {user.avatarUrl ? (
+                          <img
+                            src={user.avatarUrl}
+                            alt={user.username}
+                            className="h-8 w-8 shrink-0 rounded-full object-cover border border-line shadow-sm"
+                          />
+                        ) : (
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-crimson/20 text-xs font-bold uppercase text-crimson-soft border border-crimson/30 shadow-sm">
+                            {user.username?.slice(0, 2) || '??'}
+                          </span>
+                        )}
+                        <form
+                          onSubmit={postComment(panelCommentText, () => {
+                            setPanelCommentText('');
+                            setIsPanelCommentFocused(false);
+                          })}
+                          className="flex-1 space-y-2"
                         >
-                          Post
-                        </button>
-                      </form>
+                          <div className="relative group">
+                            <textarea
+                              id="comment-input"
+                              value={panelCommentText}
+                              onChange={(e) => setPanelCommentText(e.target.value)}
+                              onFocus={() => setIsPanelCommentFocused(true)}
+                              placeholder="Add a comment..."
+                              rows={isPanelCommentFocused || panelCommentText ? 2 : 1}
+                              className="w-full bg-transparent border-b border-line py-2 text-xs text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none transition-all duration-200 resize-none"
+                            />
+                            <div className="absolute bottom-0 left-1/2 h-[1.5px] w-0 bg-crimson transition-all duration-300 group-focus-within:left-0 group-focus-within:w-full" />
+                          </div>
+                          {(isPanelCommentFocused || panelCommentText.trim() !== '') && (
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsPanelCommentFocused(false);
+                                  setPanelCommentText('');
+                                }}
+                                className="rounded-full px-3 py-1 text-[11px] font-semibold text-silver hover:bg-white/10 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                disabled={!panelCommentText.trim()}
+                                className="rounded-full bg-crimson px-3 py-1 text-[11px] font-semibold text-white transition-all hover:bg-crimson-soft disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Comment
+                              </button>
+                            </div>
+                          )}
+                        </form>
+                      </div>
                     ) : (
                       <p className="text-sm text-silver-muted">
                         <Link to="/login" className="text-crimson-soft hover:underline">Log in</Link> to comment.
@@ -351,30 +397,21 @@ const Reader = () => {
                     ) : comments.length === 0 ? (
                       <p className="text-sm text-silver-muted">No comments yet.</p>
                     ) : (
-                      comments
-                        .filter((c) => !c.parentComment)
-                        .map((comment) => (
-                          <CommentCard
-                            key={comment._id}
-                            item={{
-                              ...comment,
-                              replies: comments.filter((r) => (r.parentComment?._id || r.parentComment) === comment._id),
-                            }}
-                            currentUser={user}
-                            isAdmin={isAdmin}
-                            onLike={likeComment}
-                            onDelete={deleteComment}
-                            onReplySubmit={async (parentId, text) => {
-                              await client.post(`/community/chapters/${data.chapter._id}/comments`, {
-                                content: text,
-                                parentComment: parentId,
-                              });
-                              loadComments();
-                            }}
-                            onLikeReply={(_p, replyId) => likeComment(replyId)}
-                            onDeleteReply={(_p, replyId) => deleteComment(replyId)}
-                          />
-                        ))
+                      comments.map((comment) => (
+                        <CommentCard
+                          key={comment._id}
+                          item={comment}
+                          currentUser={user}
+                          isAdmin={isAdmin}
+                          onLike={likeComment}
+                          onDislike={dislikeComment}
+                          onDelete={deleteComment}
+                          onReplySubmit={postReply}
+                          onLikeReply={(_parentId, replyId) => likeComment(replyId)}
+                          onDislikeReply={(_parentId, replyId) => dislikeComment(replyId)}
+                          onDeleteReply={(_parentId, replyId) => deleteComment(replyId)}
+                        />
+                      ))
                     )}
                   </div>
                 )}
@@ -450,7 +487,7 @@ const Reader = () => {
                     activeTab === 'comments' ? 'bg-crimson text-white shadow-glow' : 'border border-line opacity-75 hover:opacity-100'
                   }`}
                 >
-                  Comments ({comments ? comments.length : 0})
+                  Comments ({commentCount})
                 </button>
                 <button
                   type="button"
@@ -468,26 +505,60 @@ const Reader = () => {
               <div className="space-y-4 rounded-2xl border border-line bg-night-surface p-5 shadow-card">
                 <h3 className="font-display text-base font-semibold">Comments for Chapter {data.chapter.number}</h3>
                 {user ? (
-                  <form onSubmit={postComment} className="space-y-2">
-                    <label htmlFor="end-comment-input" className="sr-only">Leave a comment</label>
-                    <textarea
-                      id="end-comment-input"
-                      value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
-                      placeholder={`What did you think of Chapter ${data.chapter.number}?`}
-                      rows={3}
-                      className="w-full rounded-xl border border-line bg-night px-4 py-3 text-sm placeholder:text-silver-muted focus:border-crimson focus:outline-none"
-                    />
-                    <div className="flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={!commentText.trim()}
-                        className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white transition-opacity hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Post Comment
-                      </button>
-                    </div>
-                  </form>
+                  <div className="flex gap-3.5 items-start">
+                    {user.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.username}
+                        className="h-10 w-10 shrink-0 rounded-full object-cover border border-line shadow-sm"
+                      />
+                    ) : (
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-crimson/20 text-sm font-bold uppercase text-crimson-soft border border-crimson/30 shadow-sm">
+                        {user.username?.slice(0, 2) || '??'}
+                      </span>
+                    )}
+                    <form
+                      onSubmit={postComment(bottomCommentText, () => {
+                        setBottomCommentText('');
+                        setIsBottomCommentFocused(false);
+                      })}
+                      className="flex-1 space-y-3"
+                    >
+                      <div className="relative group">
+                        <textarea
+                          id="end-comment-input"
+                          value={bottomCommentText}
+                          onChange={(e) => setBottomCommentText(e.target.value)}
+                          onFocus={() => setIsBottomCommentFocused(true)}
+                          placeholder={`What did you think of Chapter ${data.chapter.number}? Add a public comment...`}
+                          rows={isBottomCommentFocused || bottomCommentText ? 3 : 1}
+                          className="w-full bg-transparent border-b border-line py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none transition-all duration-200 resize-none"
+                        />
+                        <div className="absolute bottom-0 left-1/2 h-[2px] w-0 bg-crimson transition-all duration-300 group-focus-within:left-0 group-focus-within:w-full" />
+                      </div>
+                      {(isBottomCommentFocused || bottomCommentText.trim() !== '') && (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsBottomCommentFocused(false);
+                              setBottomCommentText('');
+                            }}
+                            className="rounded-full px-4 py-1.5 text-xs font-semibold text-silver hover:bg-white/10 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={!bottomCommentText.trim()}
+                            className="rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white transition-all hover:bg-crimson-soft disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Comment
+                          </button>
+                        </div>
+                      )}
+                    </form>
+                  </div>
                 ) : (
                   <p className="text-sm text-silver-muted">
                     <Link to="/login" className="text-crimson-soft hover:underline font-medium">Log in</Link> to post a comment on this chapter.
@@ -500,30 +571,23 @@ const Reader = () => {
                   <p className="py-6 text-center text-sm text-silver-muted">No comments yet. Be the first to share your thoughts!</p>
                 ) : (
                   <div className="space-y-4 pt-2">
-                    {comments
-                      .filter((c) => !c.parentComment)
-                      .map((comment) => (
-                        <CommentCard
-                          key={comment._id}
-                          item={{
-                            ...comment,
-                            replies: comments.filter((r) => (r.parentComment?._id || r.parentComment) === comment._id),
-                          }}
-                          currentUser={user}
-                          isAdmin={isAdmin}
-                          onLike={likeComment}
-                          onDelete={deleteComment}
-                          onReplySubmit={async (parentId, text) => {
-                            await client.post(`/community/chapters/${data.chapter._id}/comments`, {
-                              content: text,
-                              parentComment: parentId,
-                            });
-                            loadComments();
-                          }}
-                          onLikeReply={(_p, replyId) => likeComment(replyId)}
-                          onDeleteReply={(_p, replyId) => deleteComment(replyId)}
-                        />
-                      ))}
+                    {comments.map((comment) => (
+                      <CommentCard
+                        key={comment._id}
+                        item={comment}
+                        currentUser={user}
+                        isAdmin={isAdmin}
+                        anchorPrefix={ANCHORS.COMMENT}
+                        targetId={commentTarget}
+                        onLike={likeComment}
+                        onDislike={dislikeComment}
+                        onDelete={deleteComment}
+                        onReplySubmit={postReply}
+                        onLikeReply={(_parentId, replyId) => likeComment(replyId)}
+                        onDislikeReply={(_parentId, replyId) => dislikeComment(replyId)}
+                        onDeleteReply={(_parentId, replyId) => deleteComment(replyId)}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
