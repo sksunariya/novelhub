@@ -9,7 +9,8 @@ import Spinner from '../components/Spinner';
 import StarRating from '../components/StarRating';
 import CommentCard from '../components/CommentCard';
 import { formatRelativeTime, formatExactDateTime } from '../utils/dateUtils';
-import { ANCHORS, readHashTarget } from '../utils/hashTarget';
+import DeletedItemModal from '../components/DeletedItemModal';
+import { ANCHORS, readHashTarget, isTargetInItems } from '../utils/hashTarget';
 
 const SYNOPSIS_LIMIT = 300;
 
@@ -51,6 +52,8 @@ const NovelDetail = () => {
   const [chapterQuery, setChapterQuery] = useState('');
   const [sortAsc, setSortAsc] = useState(true);
   const [isReviewFocused, setIsReviewFocused] = useState(false);
+  const [showDeletedModal, setShowDeletedModal] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const reactToReview = (action) => async (reviewId) => {
     if (!user) return navigate('/login');
@@ -112,6 +115,7 @@ const NovelDetail = () => {
       ]);
       setChapters(chaptersRes.data.chapters);
       setReviews(reviewsRes.data.reviews);
+      setLoaded(true);
     } catch (error) {
       setNotFound(true);
     }
@@ -120,6 +124,16 @@ const NovelDetail = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  const reviewTarget = readHashTarget(hash, ANCHORS.REVIEW);
+
+  useEffect(() => {
+    if (!loaded || !reviewTarget) return;
+    const exists = isTargetInItems(reviewTarget, reviews);
+    if (!exists) {
+      setShowDeletedModal(true);
+    }
+  }, [loaded, reviewTarget, reviews]);
 
   useEffect(() => {
     if (!user || !novel) return;
@@ -180,8 +194,6 @@ const NovelDetail = () => {
     .sort((a, b) => (sortAsc ? a.number - b.number : b.number - a.number));
 
   const continueChapter = progress ? progress.chapterNumber : chapters[0]?.number;
-
-  const reviewTarget = readHashTarget(hash, ANCHORS.REVIEW);
 
   return (
     <PageTransition>
@@ -430,6 +442,11 @@ const NovelDetail = () => {
           </div>
         )}
       </section>
+      <DeletedItemModal
+        isOpen={showDeletedModal}
+        onClose={() => setShowDeletedModal(false)}
+        message="The review or reply you clicked has been deleted."
+      />
     </PageTransition>
   );
 };

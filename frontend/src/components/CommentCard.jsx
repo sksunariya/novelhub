@@ -103,8 +103,8 @@ const CommentCard = ({
   const liked = checkHasReacted(item.likes, currentUser);
   const disliked = checkHasReacted(item.dislikes, currentUser);
   const isOwner = checkUserMatch(item.user, currentUser) || isAdmin;
-  const targetIsReply = Boolean(targetId) && replies.some((reply) => reply._id === targetId);
-  const targetIsMine = targetId === item._id || targetIsReply;
+  const targetIsReply = Boolean(targetId) && replies.some((reply) => String(reply._id) === String(targetId));
+  const targetIsMine = String(targetId) === String(item._id) || targetIsReply;
 
   useEffect(() => {
     if (replyingToId && textareaRef.current) {

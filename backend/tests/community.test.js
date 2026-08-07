@@ -205,17 +205,17 @@ describe('Community', () => {
       expect(updated.ratingCount).toBe(2);
     });
 
-    it('updates existing review instead of duplicating', async () => {
+    it('creates multiple reviews instead of overwriting', async () => {
       const { token } = await createUser();
       const novel = await createNovel();
       await api().post(`/api/novels/id/${novel._id}/reviews`).set('Authorization', `Bearer ${token}`).send({ rating: 2 });
       await api().post(`/api/novels/id/${novel._id}/reviews`).set('Authorization', `Bearer ${token}`).send({ rating: 5 });
       const list = await api().get(`/api/novels/id/${novel._id}/reviews`);
-      expect(list.body.reviews).toHaveLength(1);
+      expect(list.body.reviews).toHaveLength(2);
       expect(list.body.reviews[0].rating).toBe(5);
       const updated = await Novel.findById(novel._id);
-      expect(updated.ratingAvg).toBe(5);
-      expect(updated.ratingCount).toBe(1);
+      expect(updated.ratingAvg).toBe(3.5);
+      expect(updated.ratingCount).toBe(2);
     });
 
     it('rejects invalid rating', async () => {
@@ -356,16 +356,16 @@ describe('Community', () => {
       expect(chapterList.body.reviews[0].rating).toBe(1);
     });
 
-    it('updates an existing chapter review instead of duplicating', async () => {
+    it('creates multiple chapter reviews instead of overwriting', async () => {
       const { token } = await createUser();
       const novel = await createNovel();
       const chapter = await createChapter(novel);
       await api().post(`/api/community/chapters/${chapter._id}/reviews`).set('Authorization', `Bearer ${token}`).send({ rating: 2 });
       await api().post(`/api/community/chapters/${chapter._id}/reviews`).set('Authorization', `Bearer ${token}`).send({ rating: 4 });
       const list = await api().get(`/api/community/chapters/${chapter._id}/reviews`);
-      expect(list.body.reviews).toHaveLength(1);
+      expect(list.body.reviews).toHaveLength(2);
       expect(list.body.reviews[0].rating).toBe(4);
-      expect((await Chapter.findById(chapter._id)).ratingAvg).toBe(4);
+      expect((await Chapter.findById(chapter._id)).ratingAvg).toBe(3);
     });
 
     it('recalculates the chapter rating when a chapter review is deleted', async () => {

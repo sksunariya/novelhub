@@ -22,7 +22,11 @@ const dispatchNotification = async ({
 }) => {
   if (!recipient) return null;
 
-  const recipientUser = typeof recipient === 'object' && recipient._id ? recipient : await User.findById(recipient);
+  const recipientId = recipient?._id || recipient;
+  const recipientUser =
+    recipient && typeof recipient === 'object' && recipient.email && recipient.notificationPreferences
+      ? recipient
+      : await User.findById(recipientId);
   if (!recipientUser || recipientUser.banned) return null;
 
   const recipientIdStr = recipientUser._id.toString();
@@ -91,14 +95,12 @@ const dispatchNotification = async ({
 
   // Dispatch Email Notification (Asynchronously without blocking)
   if (activeChannels.includes(NOTIFICATION_CHANNELS.EMAIL) && recipientUser.email) {
-    setImmediate(() => {
-      sendNotificationEmail({
-        to: recipientUser.email,
-        title: title || message,
-        message,
-        link,
-      }).catch((err) => console.error('[NotificationService] Email dispatch failed:', err.message));
-    });
+    sendNotificationEmail({
+      to: recipientUser.email,
+      title: title || message,
+      message,
+      link,
+    }).catch((err) => console.error('[NotificationService] Email dispatch failed:', err.message));
   }
 
   return notificationRecord;
