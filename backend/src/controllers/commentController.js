@@ -45,16 +45,19 @@ const createComment = asyncHandler(async (req, res) => {
   if (!chapter) {
     return res.status(404).json({ message: 'Chapter not found' });
   }
+  // A parent from another chapter would graft this reply into a thread the reader
+  // is not looking at, so it is rejected outright.
+  const belongsToChapter = (candidate) => candidate && candidate.chapter.toString() === chapter._id.toString();
   let parent = null;
   if (parentComment) {
     parent = await Comment.findById(parentComment);
-    if (!parent) {
+    if (!belongsToChapter(parent)) {
       return res.status(404).json({ message: 'Parent comment not found' });
     }
     // Threads are two levels deep: replying to a reply attaches to its parent.
     if (parent.parentComment) {
       parent = await Comment.findById(parent.parentComment);
-      if (!parent) {
+      if (!belongsToChapter(parent)) {
         return res.status(404).json({ message: 'Parent comment not found' });
       }
     }

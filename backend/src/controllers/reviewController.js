@@ -1,19 +1,37 @@
 const Review = require('../models/Review');
 const Novel = require('../models/Novel');
+const Chapter = require('../models/Chapter');
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { ROLES, RATING, PUBLIC_USER_FIELDS } = require('../config/constants');
 const { parsePagination } = require('./novelController');
 const { REACTIONS, toggleReaction } = require('../utils/reactions');
 const { notifyReply } = require('../utils/notifications');
 
+const averageOf = (stats) => {
+  const { avg = 0, count = 0 } = stats[0] || {};
+  return { ratingAvg: Math.round(avg * 10) / 10, ratingCount: count };
+};
+
+// Only novel-level reviews (chapter: null) feed the novel's rating; chapter reviews
+// roll up into their own chapter.
 const recalcNovelRating = async (novelId) => {
   const stats = await Review.aggregate([
-    { $match: { novel: novelId, deletedAt: null } },
+    { $match: { novel: novelId, chapter: null, deletedAt: null } },
     { $group: { _id: '$novel', avg: { $avg: '$rating' }, count: { $sum: 1 } } },
   ]);
-  const { avg = 0, count = 0 } = stats[0] || {};
-  await Novel.updateOne({ _id: novelId }, { ratingAvg: Math.round(avg * 10) / 10, ratingCount: count });
+  await Novel.updateOne({ _id: novelId }, averageOf(stats));
 };
+
+const recalcChapterRating = async (chapterId) => {
+  const stats = await Review.aggregate([
+    { $match: { chapter: chapterId, deletedAt: null } },
+    { $group: { _id: '$chapter', avg: { $avg: '$rating' }, count: { $sum: 1 } } },
+  ]);
+  await Chapter.updateOne({ _id: chapterId }, averageOf(stats));
+};
+
+const recalcForReview = (review) =>
+  review.chapter ? recalcChapterRating(review.chapter) : recalcNovelRating(review.novel);
 
 // Replies are subdocuments, so the soft-delete plugin cannot filter them; strip
 // deleted ones before a review leaves the public API.
@@ -29,9 +47,8 @@ const populateReview = async (review) => {
   return review;
 };
 
-const listReviews = asyncHandler(async (req, res) => {
+const sendReviewList = async (req, res, filter) => {
   const { page, limit, skip } = parsePagination(req.query);
-  const filter = { novel: req.params.novelId };
   const [reviews, total] = await Promise.all([
     Review.find(filter)
       .populate('user', PUBLIC_USER_FIELDS)
@@ -42,26 +59,66 @@ const listReviews = asyncHandler(async (req, res) => {
     Review.countDocuments(filter),
   ]);
   res.json({ reviews: reviews.map(publicReview), total, page, pages: Math.ceil(total / limit) });
-});
+};
+
+const listReviews = asyncHandler((req, res) =>
+  sendReviewList(req, res, { novel: req.params.novelId, chapter: null })
+);
+
+const listChapterReviews = asyncHandler((req, res) =>
+  sendReviewList(req, res, { chapter: req.params.chapterId })
+);
+
+const parseRating = (rating) => {
+  const numericRating = Number(rating);
+  return numericRating >= RATING.MIN && numericRating <= RATING.MAX ? numericRating : 0;
+};
+
+const saveReview = async (res, { novelId, chapterId, userId, rating, content }) => {
+  const review = await Review.findOneAndUpdate(
+    { novel: novelId, chapter: chapterId, user: userId },
+    { rating, content: (content || '').trim() },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  await recalcForReview(review);
+  await populateReview(review);
+  res.status(201).json({ review: publicReview(review) });
+};
 
 const upsertReview = asyncHandler(async (req, res) => {
-  const { rating, content } = req.body;
-  const numericRating = Number(rating);
-  if (!numericRating || numericRating < RATING.MIN || numericRating > RATING.MAX) {
+  const rating = parseRating(req.body.rating);
+  if (!rating) {
     return res.status(400).json({ message: `rating must be between ${RATING.MIN} and ${RATING.MAX}` });
   }
   const novel = await Novel.findById(req.params.novelId);
   if (!novel) {
     return res.status(404).json({ message: 'Novel not found' });
   }
-  const review = await Review.findOneAndUpdate(
-    { novel: novel._id, user: req.user._id },
-    { rating: numericRating, content: (content || '').trim() },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-  await recalcNovelRating(novel._id);
-  await populateReview(review);
-  res.status(201).json({ review: publicReview(review) });
+  return saveReview(res, {
+    novelId: novel._id,
+    chapterId: null,
+    userId: req.user._id,
+    rating,
+    content: req.body.content,
+  });
+});
+
+const upsertChapterReview = asyncHandler(async (req, res) => {
+  const rating = parseRating(req.body.rating);
+  if (!rating) {
+    return res.status(400).json({ message: `rating must be between ${RATING.MIN} and ${RATING.MAX}` });
+  }
+  const chapter = await Chapter.findById(req.params.chapterId);
+  if (!chapter) {
+    return res.status(404).json({ message: 'Chapter not found' });
+  }
+  return saveReview(res, {
+    novelId: chapter.novel,
+    chapterId: chapter._id,
+    userId: req.user._id,
+    rating,
+    content: req.body.content,
+  });
 });
 
 const deleteReview = asyncHandler(async (req, res) => {
@@ -73,9 +130,8 @@ const deleteReview = asyncHandler(async (req, res) => {
   if (!isOwner && req.user.role !== ROLES.ADMIN) {
     return res.status(403).json({ message: 'Not allowed' });
   }
-  const novelId = review.novel;
   await review.softDelete();
-  await recalcNovelRating(novelId);
+  await recalcForReview(review);
   res.json({ message: 'Review deleted' });
 });
 
@@ -162,7 +218,9 @@ const toggleReviewReplyDislike = reactToReviewReply(REACTIONS.DISLIKE);
 
 module.exports = {
   listReviews,
+  listChapterReviews,
   upsertReview,
+  upsertChapterReview,
   deleteReview,
   toggleReviewLike,
   toggleReviewDislike,
@@ -171,4 +229,6 @@ module.exports = {
   toggleReviewReplyLike,
   toggleReviewReplyDislike,
   recalcNovelRating,
+  recalcChapterRating,
+  recalcForReview,
 };

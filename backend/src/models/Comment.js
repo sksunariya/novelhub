@@ -18,6 +18,8 @@ const commentSchema = new mongoose.Schema(
 
 commentSchema.index({ chapter: 1, createdAt: -1 });
 commentSchema.index({ parentComment: 1, createdAt: 1 });
+// Serves the reading gate's "has this user commented on this novel" probe.
+commentSchema.index({ novel: 1, user: 1 });
 
 commentSchema.plugin(softDelete);
 

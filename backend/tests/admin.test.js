@@ -124,6 +124,32 @@ describe('Admin', () => {
       fs.unlinkSync(zipPath);
     });
 
+    it('cascades a chapter deletion to its comments and chapter reviews', async () => {
+      const { token: adminToken } = await createAdmin();
+      const { token: userToken } = await createUser();
+      const novel = await createNovel();
+      const chapter = await createChapter(novel);
+      await api()
+        .post(`/api/community/chapters/${chapter._id}/comments`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ content: 'goes with the chapter' });
+      await api()
+        .post(`/api/community/chapters/${chapter._id}/reviews`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ rating: 4 });
+      expect((await Chapter.findById(chapter._id)).ratingCount).toBe(1);
+
+      await api().delete(`/api/admin/chapters/${chapter._id}`).set('Authorization', `Bearer ${adminToken}`);
+
+      const chapterReviews = await api().get(`/api/community/chapters/${chapter._id}/reviews`);
+      expect(chapterReviews.body.reviews).toHaveLength(0);
+      const comments = await api().get(`/api/community/chapters/${chapter._id}/comments`);
+      expect(comments.body.comments).toHaveLength(0);
+      const stored = await Chapter.findOne({ _id: chapter._id }, null, { withDeleted: true });
+      expect(stored.ratingCount).toBe(0);
+      expect(stored.ratingAvg).toBe(0);
+    });
+
     it('updates and deletes a chapter', async () => {
       const { token } = await createAdmin();
       const novel = await createNovel();
@@ -153,6 +179,30 @@ describe('Admin', () => {
         .send({ banned: true, role: 'admin' });
       expect(banned.body.user.banned).toBe(true);
       expect(banned.body.user.role).toBe('admin');
+    });
+
+    it('rebuilds novel and chapter ratings when a user is deleted', async () => {
+      const { token: adminToken } = await createAdmin();
+      const { user, token: userToken } = await createUser();
+      const { token: keeperToken } = await createUser();
+      const novel = await createNovel();
+      const chapter = await createChapter(novel);
+      await api().post(`/api/novels/id/${novel._id}/reviews`).set('Authorization', `Bearer ${userToken}`).send({ rating: 1 });
+      await api().post(`/api/novels/id/${novel._id}/reviews`).set('Authorization', `Bearer ${keeperToken}`).send({ rating: 5 });
+      await api()
+        .post(`/api/community/chapters/${chapter._id}/reviews`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ rating: 2 });
+      expect((await Novel.findById(novel._id)).ratingAvg).toBe(3);
+
+      await api().delete(`/api/admin/users/${user._id}`).set('Authorization', `Bearer ${adminToken}`);
+
+      const updatedNovel = await Novel.findById(novel._id);
+      expect(updatedNovel.ratingAvg).toBe(5);
+      expect(updatedNovel.ratingCount).toBe(1);
+      const updatedChapter = await Chapter.findById(chapter._id);
+      expect(updatedChapter.ratingCount).toBe(0);
+      expect(updatedChapter.ratingAvg).toBe(0);
     });
 
     it('prevents admin from modifying own account', async () => {
@@ -492,6 +542,34 @@ describe('Admin', () => {
         .get('/api/admin/reviews?search=distinctive')
         .set('Authorization', `Bearer ${admin.token}`);
       expect(byReply.body.reviews).toHaveLength(1);
+    });
+
+    it('rejects an edit that changes nothing', async () => {
+      const { admin, reviewId } = await seedReview();
+      const res = await api().put(`/api/admin/reviews/${reviewId}`).set('Authorization', `Bearer ${admin.token}`).send({});
+      expect(res.status).toBe(400);
+    });
+
+    it('keeps novel attribution on records trashed by a novel deletion', async () => {
+      const { token: adminToken } = await createAdmin();
+      const { token: userToken } = await createUser();
+      const novel = await createNovel();
+      const chapter = await createChapter(novel);
+      await api()
+        .post(`/api/community/chapters/${chapter._id}/comments`)
+        .set('Authorization', `Bearer ${userToken}`)
+        .send({ content: 'about to be trashed' });
+      await api().post(`/api/novels/id/${novel._id}/reviews`).set('Authorization', `Bearer ${userToken}`).send({ rating: 4 });
+      await api().delete(`/api/admin/novels/${novel._id}`).set('Authorization', `Bearer ${adminToken}`);
+
+      const comments = await api().get('/api/admin/comments?status=deleted').set('Authorization', `Bearer ${adminToken}`);
+      expect(comments.body.comments).toHaveLength(1);
+      expect(comments.body.comments[0].novel).not.toBeNull();
+      expect(comments.body.comments[0].novel.title).toBe(novel.title);
+      expect(comments.body.comments[0].chapter.number).toBe(chapter.number);
+
+      const reviews = await api().get('/api/admin/reviews?status=deleted').set('Authorization', `Bearer ${adminToken}`);
+      expect(reviews.body.reviews[0].novel.title).toBe(novel.title);
     });
 
     it('rejects moderation endpoints for non-admins', async () => {

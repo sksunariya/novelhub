@@ -1,5 +1,6 @@
 const { api, createUser, createAdmin, createNovel, createChapter } = require('./helpers');
 const Novel = require('../src/models/Novel');
+const Chapter = require('../src/models/Chapter');
 const Notification = require('../src/models/Notification');
 const { NOTIFICATION_TYPES, ROLES } = require('../src/config/constants');
 
@@ -103,6 +104,22 @@ describe('Community', () => {
         parentComment: novel._id.toString(),
       });
       expect(res.status).toBe(404);
+    });
+
+    it('rejects a reply whose parent lives on another chapter', async () => {
+      const { token } = await createUser();
+      const novel = await createNovel();
+      const chapterOne = await createChapter(novel, { number: 1 });
+      const chapterTwo = await createChapter(novel, { number: 2 });
+      const { body } = await postComment(chapterOne._id, token, { content: 'On chapter one' });
+
+      const res = await postComment(chapterTwo._id, token, {
+        content: 'Grafted into the wrong thread',
+        parentComment: body.comment._id,
+      });
+      expect(res.status).toBe(404);
+      const listOne = await api().get(`/api/community/chapters/${chapterOne._id}/comments`);
+      expect(listOne.body.comments[0].replies).toHaveLength(0);
     });
 
     it('allows only owner or admin to delete a comment', async () => {
@@ -310,6 +327,75 @@ describe('Community', () => {
         .delete(`/api/community/reviews/${reviewId}/replies/${replyId}`)
         .set('Authorization', `Bearer ${responderToken}`);
       expect(repeat.status).toBe(404);
+    });
+
+    it('keeps chapter reviews out of the novel rating and list', async () => {
+      const { token } = await createUser();
+      const novel = await createNovel();
+      const chapter = await createChapter(novel);
+      await api().post(`/api/novels/id/${novel._id}/reviews`).set('Authorization', `Bearer ${token}`).send({ rating: 5 });
+      const chapterRes = await api()
+        .post(`/api/community/chapters/${chapter._id}/reviews`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rating: 1, content: 'Weak chapter' });
+      expect(chapterRes.status).toBe(201);
+      expect(chapterRes.body.review.chapter).toBe(chapter._id.toString());
+
+      const updatedNovel = await Novel.findById(novel._id);
+      expect(updatedNovel.ratingAvg).toBe(5);
+      expect(updatedNovel.ratingCount).toBe(1);
+      const updatedChapter = await Chapter.findById(chapter._id);
+      expect(updatedChapter.ratingAvg).toBe(1);
+      expect(updatedChapter.ratingCount).toBe(1);
+
+      const novelList = await api().get(`/api/novels/id/${novel._id}/reviews`);
+      expect(novelList.body.reviews).toHaveLength(1);
+      expect(novelList.body.reviews[0].rating).toBe(5);
+      const chapterList = await api().get(`/api/community/chapters/${chapter._id}/reviews`);
+      expect(chapterList.body.reviews).toHaveLength(1);
+      expect(chapterList.body.reviews[0].rating).toBe(1);
+    });
+
+    it('updates an existing chapter review instead of duplicating', async () => {
+      const { token } = await createUser();
+      const novel = await createNovel();
+      const chapter = await createChapter(novel);
+      await api().post(`/api/community/chapters/${chapter._id}/reviews`).set('Authorization', `Bearer ${token}`).send({ rating: 2 });
+      await api().post(`/api/community/chapters/${chapter._id}/reviews`).set('Authorization', `Bearer ${token}`).send({ rating: 4 });
+      const list = await api().get(`/api/community/chapters/${chapter._id}/reviews`);
+      expect(list.body.reviews).toHaveLength(1);
+      expect(list.body.reviews[0].rating).toBe(4);
+      expect((await Chapter.findById(chapter._id)).ratingAvg).toBe(4);
+    });
+
+    it('recalculates the chapter rating when a chapter review is deleted', async () => {
+      const { token } = await createUser();
+      const novel = await createNovel();
+      const chapter = await createChapter(novel);
+      const { body } = await api()
+        .post(`/api/community/chapters/${chapter._id}/reviews`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rating: 3 });
+      await api().delete(`/api/community/reviews/${body.review._id}`).set('Authorization', `Bearer ${token}`);
+      const updated = await Chapter.findById(chapter._id);
+      expect(updated.ratingAvg).toBe(0);
+      expect(updated.ratingCount).toBe(0);
+    });
+
+    it('rejects a chapter review with an invalid rating or unknown chapter', async () => {
+      const { token } = await createUser();
+      const novel = await createNovel();
+      const chapter = await createChapter(novel);
+      const bad = await api()
+        .post(`/api/community/chapters/${chapter._id}/reviews`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rating: 0 });
+      expect(bad.status).toBe(400);
+      const missing = await api()
+        .post(`/api/community/chapters/${novel._id}/reviews`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ rating: 3 });
+      expect(missing.status).toBe(404);
     });
 
     it('allows only reply owner or admin to delete a review reply', async () => {

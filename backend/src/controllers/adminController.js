@@ -16,12 +16,82 @@ const {
   RATING,
   ADMIN_USER_FIELDS,
   MODERATION_STATUS,
+  GATE_DEFAULTS,
 } = require('../config/constants');
 const { parsePagination } = require('./novelController');
-const { recalcNovelRating } = require('./reviewController');
+const { recalcForReview, recalcNovelRating, recalcChapterRating } = require('./reviewController');
 const storage = require('../services/storage');
 
 const CHAPTER_FILE_EXTENSIONS = ['.txt', '.docx'];
+
+// A nested path missing from an older document has no subdocument to spread.
+const plainSubdoc = (gate) => (gate && typeof gate.toObject === 'function' ? gate.toObject() : gate || {});
+
+const toNumberList = (value) =>
+  String(value)
+    .split(',')
+    .map((entry) => parseInt(entry.trim(), 10))
+    .filter((entry) => Number.isInteger(entry) && entry > 0);
+
+// Malformed JSON from a client is a bad request, not a server fault.
+const parseJsonField = (raw) => {
+  if (typeof raw !== 'string') {
+    return raw;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    return null;
+  }
+};
+
+// Reading-gate config arrives as JSON in a multipart body, so the numeric and
+// list fields need coercing before they reach the schema.
+const parseReadingGate = (raw) => {
+  const gate = parseJsonField(raw);
+  if (!gate || typeof gate !== 'object') {
+    return null;
+  }
+  const parsed = { ...gate };
+  ['loginAfterChapter', 'engagementAfterChapter', 'escalateAfterChapter'].forEach((field) => {
+    if (parsed[field] !== undefined) {
+      parsed[field] = Math.max(parseInt(parsed[field], 10) || 0, 0);
+    }
+  });
+  // The schema floors this at 1, so an empty or junk value falls back to the default.
+  if (parsed.everyChapters !== undefined) {
+    parsed.everyChapters = Math.max(parseInt(parsed.everyChapters, 10) || GATE_DEFAULTS.EVERY_CHAPTERS, 1);
+  }
+  if (parsed.chapterNumbers !== undefined) {
+    parsed.chapterNumbers = Array.isArray(parsed.chapterNumbers)
+      ? parsed.chapterNumbers.map(Number).filter((entry) => Number.isInteger(entry) && entry > 0)
+      : toNumberList(parsed.chapterNumbers);
+  }
+  ['loginEnabled', 'engagementEnabled', 'override'].forEach((field) => {
+    if (parsed[field] !== undefined) {
+      parsed[field] = parsed[field] === 'true' || parsed[field] === true;
+    }
+  });
+  return parsed;
+};
+
+// Cascade soft-deletes hide reviews without going through recalcForReview, so the
+// affected novel and chapter averages have to be rebuilt explicitly.
+const recalcRatingsFor = async (reviews) => {
+  const novels = new Map();
+  const chapters = new Map();
+  reviews.forEach((review) => {
+    if (review.chapter) {
+      chapters.set(review.chapter.toString(), review.chapter);
+    } else {
+      novels.set(review.novel.toString(), review.novel);
+    }
+  });
+  await Promise.all([
+    ...[...novels.values()].map(recalcNovelRating),
+    ...[...chapters.values()].map(recalcChapterRating),
+  ]);
+};
 
 const syncNovelChapterMeta = async (novelId) => {
   const [count, latest] = await Promise.all([
@@ -98,6 +168,10 @@ const createNovel = asyncHandler(async (req, res) => {
   if (!title || !author) {
     return res.status(400).json({ message: 'title and author are required' });
   }
+  const gate = req.body.readingGate ? parseReadingGate(req.body.readingGate) : undefined;
+  if (req.body.readingGate && !gate) {
+    return res.status(400).json({ message: 'readingGate must be valid JSON' });
+  }
   const novel = await Novel.create({
     title,
     author,
@@ -109,6 +183,7 @@ const createNovel = asyncHandler(async (req, res) => {
     published: published !== undefined ? published === 'true' || published === true : true,
     featured: featured === 'true' || featured === true,
     coverUrl: req.file ? await storage.uploadPublic(req.file, 'covers') : coverUrl || '',
+    readingGate: gate,
     createdBy: req.user._id,
   });
   res.status(201).json({ novel });
@@ -137,6 +212,13 @@ const updateNovel = asyncHandler(async (req, res) => {
     await storage.remove(previousCover);
   } else if (coverUrl !== undefined) {
     novel.coverUrl = coverUrl;
+  }
+  if (req.body.readingGate) {
+    const gate = parseReadingGate(req.body.readingGate);
+    if (!gate) {
+      return res.status(400).json({ message: 'readingGate must be valid JSON' });
+    }
+    novel.readingGate = { ...plainSubdoc(novel.readingGate), ...gate };
   }
   await novel.save();
   res.json({ novel });
@@ -297,13 +379,15 @@ const deleteChapter = asyncHandler(async (req, res) => {
   if (!chapter) {
     return res.status(404).json({ message: 'Chapter not found' });
   }
-  // Soft delete the chapter and its comments; the stored source file is kept.
+  // Soft delete the chapter with its comments and chapter reviews; the stored
+  // source file is kept.
   const novelId = chapter.novel;
   await Promise.all([
     Comment.softDeleteMany({ chapter: chapter._id }),
+    Review.softDeleteMany({ chapter: chapter._id }),
     chapter.softDelete(),
   ]);
-  await syncNovelChapterMeta(novelId);
+  await Promise.all([syncNovelChapterMeta(novelId), recalcChapterRating(chapter._id)]);
   res.json({ message: 'Chapter deleted' });
 });
 
@@ -356,15 +440,27 @@ const deleteUser = asyncHandler(async (req, res) => {
   }
   // Soft delete the user and hide their comments/reviews. Reading progress and
   // notifications are left intact so nothing is lost from the database.
+  const reviews = await Review.find({ user: user._id }).select('novel chapter');
   await Promise.all([
     Comment.softDeleteMany({ user: user._id }),
     Review.softDeleteMany({ user: user._id }),
     user.softDelete(),
   ]);
+  await recalcRatingsFor(reviews);
   res.json({ message: 'User deleted' });
 });
 
 const searchRegex = (search) => ({ $regex: search, $options: 'i' });
+
+// Trashed records usually reference trashed novels/chapters/users, and populate is
+// subject to the soft-delete filter, so the moderation views opt out of it to keep
+// their attribution.
+const MODERATION_POPULATE = {
+  user: { path: 'user', select: ADMIN_USER_FIELDS, options: { withDeleted: true } },
+  replyUser: { path: 'replies.user', select: ADMIN_USER_FIELDS, options: { withDeleted: true } },
+  novel: { path: 'novel', select: 'title slug', options: { withDeleted: true } },
+  chapter: { path: 'chapter', select: 'number title', options: { withDeleted: true } },
+};
 
 // An explicit deletedAt condition opts out of the soft-delete read filter, so the
 // same handler can serve the active list and the trash view.
@@ -408,9 +504,9 @@ const listAllComments = asyncHandler(async (req, res) => {
   }
   const [comments, total] = await Promise.all([
     Comment.find(filter)
-      .populate('user', ADMIN_USER_FIELDS)
-      .populate('novel', 'title slug')
-      .populate('chapter', 'number title')
+      .populate(MODERATION_POPULATE.user)
+      .populate(MODERATION_POPULATE.novel)
+      .populate(MODERATION_POPULATE.chapter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
@@ -421,7 +517,7 @@ const listAllComments = asyncHandler(async (req, res) => {
   const replies = await Comment.find({ parentComment: { $in: comments.map((comment) => comment._id) } }, null, {
     withDeleted: true,
   })
-    .populate('user', ADMIN_USER_FIELDS)
+    .populate(MODERATION_POPULATE.user)
     .sort({ createdAt: 1 });
   const repliesByParent = replies.reduce((grouped, reply) => {
     const key = reply.parentComment.toString();
@@ -454,9 +550,10 @@ const listAllReviews = asyncHandler(async (req, res) => {
   }
   const [reviews, total] = await Promise.all([
     Review.find(filter)
-      .populate('user', ADMIN_USER_FIELDS)
-      .populate('replies.user', ADMIN_USER_FIELDS)
-      .populate('novel', 'title slug')
+      .populate(MODERATION_POPULATE.user)
+      .populate(MODERATION_POPULATE.replyUser)
+      .populate(MODERATION_POPULATE.novel)
+      .populate(MODERATION_POPULATE.chapter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
@@ -514,6 +611,9 @@ const restoreComment = asyncHandler(async (req, res) => {
 
 const updateReview = asyncHandler(async (req, res) => {
   const { content, rating } = req.body;
+  if (content === undefined && rating === undefined) {
+    return res.status(400).json({ message: 'content or rating is required' });
+  }
   const review = await findModeratedReview(req.params.id);
   if (!review) {
     return res.status(404).json({ message: 'Review not found' });
@@ -532,7 +632,7 @@ const updateReview = asyncHandler(async (req, res) => {
   review.editedBy = req.user._id;
   await review.save();
   if (rating !== undefined) {
-    await recalcNovelRating(review.novel);
+    await recalcForReview(review);
   }
   await review.populate('user', ADMIN_USER_FIELDS);
   res.json({ review });
@@ -543,14 +643,14 @@ const restoreReview = asyncHandler(async (req, res) => {
   if (!review) {
     return res.status(404).json({ message: 'Review not found' });
   }
-  // Only one active review per user per novel, so a replacement review blocks the restore.
-  const activeReview = await Review.findOne({ novel: review.novel, user: review.user });
+  // Only one active review per user per target, so a replacement review blocks the restore.
+  const activeReview = await Review.findOne({ novel: review.novel, chapter: review.chapter, user: review.user });
   if (activeReview && activeReview._id.toString() !== review._id.toString()) {
-    return res.status(409).json({ message: 'This user already has an active review for that novel' });
+    return res.status(409).json({ message: 'This user already has an active review for that target' });
   }
   review.deletedAt = null;
   await review.save();
-  await recalcNovelRating(review.novel);
+  await recalcForReview(review);
   await review.populate('user', ADMIN_USER_FIELDS);
   res.json({ review });
 });
@@ -630,17 +730,22 @@ const updateSettings = asyncHandler(async (req, res) => {
   } else if (body.faviconUrl !== undefined) {
     settings.faviconUrl = body.faviconUrl;
   }
-  if (body.themeColors) {
-    const colors = typeof body.themeColors === 'string' ? JSON.parse(body.themeColors) : body.themeColors;
-    settings.themeColors = { ...settings.themeColors.toObject(), ...colors };
+  const nestedFields = ['themeColors', 'socialLinks', 'homeSections'];
+  for (const field of nestedFields) {
+    if (body[field]) {
+      const value = parseJsonField(body[field]);
+      if (!value || typeof value !== 'object') {
+        return res.status(400).json({ message: `${field} must be valid JSON` });
+      }
+      settings[field] = { ...plainSubdoc(settings[field]), ...value };
+    }
   }
-  if (body.socialLinks) {
-    const links = typeof body.socialLinks === 'string' ? JSON.parse(body.socialLinks) : body.socialLinks;
-    settings.socialLinks = { ...settings.socialLinks.toObject(), ...links };
-  }
-  if (body.homeSections) {
-    const sections = typeof body.homeSections === 'string' ? JSON.parse(body.homeSections) : body.homeSections;
-    settings.homeSections = { ...settings.homeSections.toObject(), ...sections };
+  if (body.readingGate) {
+    const gate = parseReadingGate(body.readingGate);
+    if (!gate) {
+      return res.status(400).json({ message: 'readingGate must be valid JSON' });
+    }
+    settings.readingGate = { ...plainSubdoc(settings.readingGate), ...gate };
   }
   if (body.allowSignups !== undefined) {
     settings.allowSignups = body.allowSignups === 'true' || body.allowSignups === true;

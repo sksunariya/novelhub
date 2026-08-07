@@ -17,6 +17,7 @@ const getPublicSettings = asyncHandler(async (req, res) => {
       allowSignups: settings.allowSignups,
       requireEmailVerification: settings.requireEmailVerification,
       maintenanceMode: settings.maintenanceMode,
+      readingGate: settings.readingGate,
     },
   });
 });

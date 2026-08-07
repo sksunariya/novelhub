@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { NOVEL_STATUS } = require('../config/constants');
 const softDelete = require('./plugins/softDelete');
+const { buildReadingGateSchema } = require('./schemas/readingGate');
 
 const novelSchema = new mongoose.Schema(
   {
@@ -20,6 +21,11 @@ const novelSchema = new mongoose.Schema(
     ratingCount: { type: Number, default: 0 },
     chapterCount: { type: Number, default: 0 },
     lastChapterAt: { type: Date },
+    // Ignored unless `override` is true, in which case it replaces the site-wide gate.
+    readingGate: {
+      type: buildReadingGateSchema({ override: { type: Boolean, default: false } }),
+      default: () => ({}),
+    },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }

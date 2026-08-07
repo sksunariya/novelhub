@@ -31,6 +31,31 @@ const MODERATION_STATUS = {
   DELETED: 'deleted',
 };
 
+// Actions a reader can be asked to perform before a gated chapter unlocks.
+const GATE_REQUIREMENTS = {
+  NOVEL_COMMENT: 'novelComment',
+  NOVEL_REVIEW: 'novelReview',
+  CHAPTER_COMMENT: 'chapterComment',
+  CHAPTER_REVIEW: 'chapterReview',
+};
+
+// How often the engagement gate asks again past its starting chapter.
+const GATE_RECURRENCE = {
+  ONCE: 'once',
+  EVERY: 'every',
+  CHAPTERS: 'chapters',
+  ALL: 'all',
+};
+
+const GATE_REASONS = {
+  LOGIN: 'login',
+  ENGAGEMENT: 'engagement',
+};
+
+const GATE_DEFAULTS = {
+  EVERY_CHAPTERS: 10,
+};
+
 const PAGINATION = {
   DEFAULT_PAGE: 1,
   DEFAULT_LIMIT: 20,
@@ -64,6 +89,10 @@ module.exports = {
   PUBLIC_USER_FIELDS,
   ADMIN_USER_FIELDS,
   MODERATION_STATUS,
+  GATE_REQUIREMENTS,
+  GATE_RECURRENCE,
+  GATE_REASONS,
+  GATE_DEFAULTS,
   PAGINATION,
   UPLOAD_LIMITS,
   RATING,

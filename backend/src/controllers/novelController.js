@@ -83,7 +83,9 @@ const getNovel = asyncHandler(async (req, res) => {
   if (isNewView) {
     await Novel.updateOne({ _id: novel._id }, { $inc: { views: 1, weeklyViews: 1 } });
   }
-  const userReview = req.user ? await Review.findOne({ novel: novel._id, user: req.user._id }) : null;
+  const userReview = req.user
+    ? await Review.findOne({ novel: novel._id, chapter: null, user: req.user._id })
+    : null;
   res.json({ novel, userReview });
 });
 

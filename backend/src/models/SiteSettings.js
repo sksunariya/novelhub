@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { buildReadingGateSchema } = require('./schemas/readingGate');
 
 const siteSettingsSchema = new mongoose.Schema(
   {
@@ -32,6 +33,7 @@ const siteSettingsSchema = new mongoose.Schema(
     allowSignups: { type: Boolean, default: true },
     requireEmailVerification: { type: Boolean, default: false },
     maintenanceMode: { type: Boolean, default: false },
+    readingGate: { type: buildReadingGateSchema(), default: () => ({}) },
   },
   { timestamps: true }
 );

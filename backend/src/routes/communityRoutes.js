@@ -7,6 +7,8 @@ const {
   toggleCommentDislike,
 } = require('../controllers/commentController');
 const {
+  listChapterReviews,
+  upsertChapterReview,
   deleteReview,
   toggleReviewLike,
   toggleReviewDislike,
@@ -24,6 +26,8 @@ router.post('/chapters/:chapterId/comments', protect, createComment);
 router.delete('/comments/:id', protect, deleteComment);
 router.post('/comments/:id/like', protect, toggleCommentLike);
 router.post('/comments/:id/dislike', protect, toggleCommentDislike);
+router.get('/chapters/:chapterId/reviews', listChapterReviews);
+router.post('/chapters/:chapterId/reviews', protect, upsertChapterReview);
 router.delete('/reviews/:id', protect, deleteReview);
 router.post('/reviews/:id/like', protect, toggleReviewLike);
 router.post('/reviews/:id/dislike', protect, toggleReviewDislike);
