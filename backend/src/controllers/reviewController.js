@@ -235,6 +235,31 @@ const deleteReviewReply = asyncHandler(async (req, res) => {
   res.json({ message: 'Reply deleted', review: publicReview(review) });
 });
 
+const updateReviewReply = asyncHandler(async (req, res) => {
+  const { content } = req.body;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    return res.status(400).json({ message: 'content is required' });
+  }
+  const review = await Review.findById(req.params.id);
+  if (!review) {
+    return res.status(404).json({ message: 'Review not found' });
+  }
+  const reply = findVisibleReply(review, req.params.replyId);
+  if (!reply) {
+    return res.status(404).json({ message: 'Reply not found' });
+  }
+  const isOwner = reply.user.toString() === req.user._id.toString();
+  if (!isOwner && req.user.role !== ROLES.ADMIN) {
+    return res.status(403).json({ message: 'Not allowed' });
+  }
+  reply.content = content.trim();
+  reply.editedAt = new Date();
+  reply.editedBy = req.user._id;
+  await review.save();
+  await populateReview(review);
+  res.json({ review: publicReview(review) });
+});
+
 const reactToReviewReply = (field) =>
   asyncHandler(async (req, res) => {
     const review = await Review.findById(req.params.id);
@@ -265,6 +290,7 @@ module.exports = {
   toggleReviewLike,
   toggleReviewDislike,
   addReviewReply,
+  updateReviewReply,
   deleteReviewReply,
   toggleReviewReplyLike,
   toggleReviewReplyDislike,

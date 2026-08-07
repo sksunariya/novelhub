@@ -16,10 +16,11 @@ const NotificationsAdmin = () => {
   const [targetUser, setTargetUser] = useState(null);
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
-  const [inAppChannel, setInAppChannel] = useState(true);
-  const [emailChannel, setEmailChannel] = useState(true);
+  const [inAppChannel, setInAppChannel] = useState(false);
+  const [emailChannel, setEmailChannel] = useState(false);
   const [dispatching, setDispatching] = useState(false);
   const [statusMsg, setStatusMsg] = useState(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Campaign log history state
   const [campaigns, setCampaigns] = useState(null);
@@ -57,7 +58,7 @@ const NotificationsAdmin = () => {
     return () => clearTimeout(timer);
   }, [targetAudience, targetSearch]);
 
-  const handleDispatch = async (e) => {
+  const handleFormSubmit = (e) => {
     e.preventDefault();
     setStatusMsg(null);
     if (!title.trim() || !message.trim()) {
@@ -72,7 +73,10 @@ const NotificationsAdmin = () => {
       setStatusMsg({ type: 'error', text: 'Please select a specific target user.' });
       return;
     }
+    setShowConfirmModal(true);
+  };
 
+  const executeDispatch = async () => {
     setDispatching(true);
     const channels = [];
     if (inAppChannel) channels.push('in_app');
@@ -98,6 +102,9 @@ const NotificationsAdmin = () => {
       setTargetAudience('all');
       setTargetUser(null);
       setTargetSearch('');
+      setInAppChannel(false);
+      setEmailChannel(false);
+      setShowConfirmModal(false);
 
       // Refresh log
       loadCampaigns();
@@ -117,7 +124,7 @@ const NotificationsAdmin = () => {
         </p>
       </div>
 
-      <form onSubmit={handleDispatch} className="max-w-2xl space-y-4 rounded-xl border border-line bg-night-surface p-6 shadow-card">
+      <form onSubmit={handleFormSubmit} className="max-w-2xl space-y-4 rounded-xl border border-line bg-night-surface p-6 shadow-card">
         <h2 className="font-display text-lg font-bold text-silver">Dispatch New Notification</h2>
 
         <div>
@@ -339,6 +346,95 @@ const NotificationsAdmin = () => {
         )}
         <Pagination page={page} pages={meta.pages} total={meta.total} onChange={setPage} />
       </div>
+
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-lg space-y-5 rounded-2xl border border-line bg-night-raised p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-line pb-3">
+              <h3 className="flex items-center gap-2 font-display text-lg font-bold text-silver">
+                <Send className="h-5 w-5 text-crimson" /> Verify Campaign Details
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="cursor-pointer text-sm text-silver-muted transition-colors hover:text-silver"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="space-y-2 rounded-xl border border-line/60 bg-night-surface p-3.5">
+                <div>
+                  <span className="text-[10px] font-semibold uppercase text-silver-muted">Title:</span>
+                  <p className="text-sm font-bold text-silver">{title}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] font-semibold uppercase text-silver-muted">Message Preview:</span>
+                  <p className="whitespace-pre-wrap text-silver leading-relaxed">{message}</p>
+                </div>
+                {link && (
+                  <div>
+                    <span className="text-[10px] font-semibold uppercase text-silver-muted">Target Link:</span>
+                    <p className="font-mono text-[11px] text-blue-400">{link}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-line/60 bg-night-surface p-3">
+                  <span className="mb-1 block text-[10px] font-semibold uppercase text-silver-muted">Target Audience:</span>
+                  <span className="font-semibold capitalize text-silver">
+                    {targetAudience === 'all' && 'All Users (Broadcast)'}
+                    {targetAudience === 'user' && 'Regular Users Only'}
+                    {targetAudience === 'admin' && 'Admin Staff Only'}
+                    {targetAudience === 'specific' && targetUser && `@${targetUser.username}`}
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-line/60 bg-night-surface p-3">
+                  <span className="mb-1 block text-[10px] font-semibold uppercase text-silver-muted">Selected Channels:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {inAppChannel && (
+                      <span className="rounded-full bg-blue-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-blue-400">
+                        In-App Notification
+                      </span>
+                    )}
+                    {emailChannel && (
+                      <span className="rounded-full bg-purple-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-purple-400">
+                        Email Broadcast
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+              ⚠️ Please double-check your message text and audience targeting before confirming dispatch.
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t border-line pt-4">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="cursor-pointer rounded-full border border-line px-4 py-2 text-xs font-semibold text-silver transition-colors hover:bg-white/10"
+              >
+                Back to Edit
+              </button>
+              <button
+                type="button"
+                onClick={executeDispatch}
+                disabled={dispatching}
+                className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white shadow-glow transition-colors hover:bg-crimson-soft disabled:opacity-50"
+              >
+                <Send className="h-3.5 w-3.5" />
+                {dispatching ? 'Sending...' : 'Confirm & Dispatch'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -76,6 +76,7 @@ const CommentCard = ({
   onReplySubmit,
   onLikeReply,
   onDislikeReply,
+  onEditReply,
   onDeleteReply,
 }) => {
   const [showReplies, setShowReplies] = useState(false);
@@ -89,6 +90,11 @@ const CommentCard = ({
   const [editRating, setEditRating] = useState(item.rating || 0);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState('');
+
+  const [editingReplyId, setEditingReplyId] = useState(null);
+  const [editReplyText, setEditReplyText] = useState('');
+  const [savingReplyEdit, setSavingReplyEdit] = useState(false);
+  const [editReplyError, setEditReplyError] = useState('');
 
   const textareaRef = useRef(null);
   const scrolledTargetRef = useRef('');
@@ -169,6 +175,25 @@ const CommentCard = ({
       setEditError(error.response?.data?.message || 'Failed to save changes');
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const handleSaveReplyEdit = async (event, replyId) => {
+    event.preventDefault();
+    if (!editReplyText.trim() || savingReplyEdit) return;
+    setSavingReplyEdit(true);
+    setEditReplyError('');
+    try {
+      if (onEditReply) {
+        await onEditReply(item._id, replyId, editReplyText);
+      } else if (onEdit) {
+        await onEdit(replyId, { content: editReplyText });
+      }
+      setEditingReplyId(null);
+    } catch (error) {
+      setEditReplyError(error.response?.data?.message || 'Failed to save reply');
+    } finally {
+      setSavingReplyEdit(false);
     }
   };
 
@@ -402,21 +427,69 @@ const CommentCard = ({
                           <EditedMark editedAt={reply.editedAt} />
                         </div>
 
-                        {isReplyOwner && onDeleteReply && (
-                          <button
-                            type="button"
-                            onClick={() => onDeleteReply(item._id, reply._id)}
-                            className="flex cursor-pointer items-center justify-center p-1 text-silver-muted transition-colors hover:text-crimson-soft"
-                            aria-label="Delete reply"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                          </button>
-                        )}
+                        <div className="flex shrink-0 items-center gap-1">
+                          {isReplyOwner && (onEditReply || onEdit) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingReplyId((v) => (v === reply._id ? null : reply._id));
+                                setEditReplyText(reply.content || '');
+                                setEditReplyError('');
+                              }}
+                              className="flex cursor-pointer items-center justify-center p-1 text-silver-muted transition-colors hover:text-silver"
+                              aria-label="Edit reply"
+                            >
+                              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                            </button>
+                          )}
+                          {isReplyOwner && onDeleteReply && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteReply(item._id, reply._id)}
+                              className="flex cursor-pointer items-center justify-center p-1 text-silver-muted transition-colors hover:text-crimson-soft"
+                              aria-label="Delete reply"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
-                      <p className="whitespace-pre-line break-words pt-0.5 text-xs leading-relaxed text-silver">
-                        {renderContent(reply.content)}
-                      </p>
+                      {editingReplyId === reply._id ? (
+                        <form onSubmit={(e) => handleSaveReplyEdit(e, reply._id)} className="mt-2 space-y-2">
+                          {editReplyError && <p className="text-xs text-crimson-soft">{editReplyError}</p>}
+                          <textarea
+                            value={editReplyText}
+                            onChange={(e) => setEditReplyText(e.target.value)}
+                            rows={2}
+                            className="w-full rounded-lg border border-line bg-night px-3 py-1.5 text-xs text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingReplyId(null);
+                                setEditReplyText('');
+                                setEditReplyError('');
+                              }}
+                              className="rounded-full px-3 py-1 text-[10px] font-semibold text-silver hover:bg-white/10 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={savingReplyEdit || !editReplyText.trim()}
+                              className="rounded-full bg-crimson px-3 py-1 text-[10px] font-semibold text-white hover:bg-crimson-soft disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            >
+                              {savingReplyEdit ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <p className="whitespace-pre-line break-words pt-0.5 text-xs leading-relaxed text-silver">
+                          {renderContent(reply.content)}
+                        </p>
+                      )}
 
                       <div className="flex items-center gap-1 pt-1 text-[10px] text-silver-muted">
                         {currentUser && onLikeReply && (

@@ -15,6 +15,7 @@ const {
   toggleReviewLike,
   toggleReviewDislike,
   addReviewReply,
+  updateReviewReply,
   deleteReviewReply,
   toggleReviewReplyLike,
   toggleReviewReplyDislike,
@@ -37,6 +38,7 @@ router.post('/reviews/:id/like', protect, toggleReviewLike);
 router.post('/reviews/:id/dislike', protect, toggleReviewDislike);
 
 router.post('/reviews/:id/replies', protect, addReviewReply);
+router.put('/reviews/:id/replies/:replyId', protect, updateReviewReply);
 router.delete('/reviews/:id/replies/:replyId', protect, deleteReviewReply);
 router.post('/reviews/:id/replies/:replyId/like', protect, toggleReviewReplyLike);
 router.post('/reviews/:id/replies/:replyId/dislike', protect, toggleReviewReplyDislike);

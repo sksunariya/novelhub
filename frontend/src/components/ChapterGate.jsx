@@ -59,7 +59,7 @@ const RatingForm = ({ title, submitLabel, onSubmit }) => {
         value={content}
         onChange={(e) => setContent(e.target.value)}
         rows={2}
-        placeholder="Add a few words (optional)"
+        placeholder="Add a few words..."
         aria-label={title}
         className="w-full resize-none rounded-lg border border-line bg-night-surface px-3 py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none"
       />

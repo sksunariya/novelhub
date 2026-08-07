@@ -80,6 +80,11 @@ const NovelDetail = () => {
     setReviews((prev) => prev.filter((r) => r._id !== reviewId));
   };
 
+  const editReviewReply = async (reviewId, replyId, text) => {
+    const { data } = await client.put(`/community/reviews/${reviewId}/replies/${replyId}`, { content: text });
+    setReviews((prev) => prev.map((r) => (r._id === reviewId ? data.review : r)));
+  };
+
   const deleteReviewReply = async (reviewId, replyId) => {
     const { data } = await client.delete(`/community/reviews/${reviewId}/replies/${replyId}`);
     setReviews((prev) => prev.map((r) => (r._id === reviewId ? data.review : r)));
@@ -354,7 +359,7 @@ const NovelDetail = () => {
                   value={reviewForm.content}
                   onChange={(e) => setReviewForm((f) => ({ ...f, content: e.target.value }))}
                   onFocus={() => setIsReviewFocused(true)}
-                  placeholder="Share your thoughts or review this novel (optional)..."
+                  placeholder="Share your thoughts or review this novel..."
                   rows={isReviewFocused || reviewForm.content ? 3 : 1}
                   className="w-full bg-transparent border-b border-line py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none transition-all duration-200 resize-none"
                 />
@@ -418,6 +423,7 @@ const NovelDetail = () => {
                 onReplySubmit={postReviewReply}
                 onLikeReply={likeReviewReply}
                 onDislikeReply={dislikeReviewReply}
+                onEditReply={editReviewReply}
                 onDeleteReply={deleteReviewReply}
               />
             ))}
