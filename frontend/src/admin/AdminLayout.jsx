@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router-dom';
-import { LayoutDashboard, BookOpen, Users, ShieldAlert, Settings, ArrowLeft } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Users, ShieldAlert, Bell, Settings, ArrowLeft } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 
 const LINKS = [
@@ -7,6 +7,7 @@ const LINKS = [
   { to: '/admin/novels', label: 'Novels', icon: BookOpen },
   { to: '/admin/users', label: 'Users', icon: Users },
   { to: '/admin/moderation', label: 'Moderation', icon: ShieldAlert },
+  { to: '/admin/notifications', label: 'Notifications', icon: Bell },
   { to: '/admin/settings', label: 'Site Settings', icon: Settings },
 ];
 

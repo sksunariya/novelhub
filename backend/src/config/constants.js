@@ -20,6 +20,14 @@ const NOTIFICATION_TYPES = {
   NEW_CHAPTER: 'new_chapter',
   ANNOUNCEMENT: 'announcement',
   REPLY: 'reply',
+  MENTION: 'mention',
+  CAMPAIGN: 'campaign',
+  CUSTOM: 'custom',
+};
+
+const NOTIFICATION_CHANNELS = {
+  IN_APP: 'in_app',
+  EMAIL: 'email',
 };
 
 const PUBLIC_USER_FIELDS = 'username avatarUrl role fullName';
@@ -86,6 +94,7 @@ module.exports = {
   NOVEL_STATUS,
   RANKING_TYPES,
   NOTIFICATION_TYPES,
+  NOTIFICATION_CHANNELS,
   PUBLIC_USER_FIELDS,
   ADMIN_USER_FIELDS,
   MODERATION_STATUS,

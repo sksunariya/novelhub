@@ -28,6 +28,8 @@ const {
   getAdminSettings,
   updateSettings,
   broadcastAnnouncement,
+  dispatchAdminNotification,
+  listCampaigns,
 } = require('../controllers/adminController');
 const { protect, adminOnly } = require('../middlewares/auth');
 const { imageUpload, docUpload } = require('../middlewares/upload');
@@ -78,5 +80,8 @@ router.put(
   updateSettings
 );
 router.post('/announcements', broadcastAnnouncement);
+
+router.post('/notifications/dispatch', dispatchAdminNotification);
+router.get('/notifications/campaigns', listCampaigns);
 
 module.exports = router;

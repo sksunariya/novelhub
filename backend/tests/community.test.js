@@ -180,7 +180,7 @@ describe('Community', () => {
       expect(notifications).toHaveLength(1);
       expect(notifications[0].type).toBe(NOTIFICATION_TYPES.REPLY);
       expect(notifications[0].message).toContain(responder.username);
-      expect(notifications[0].link).toBe(`/novel/${novel.slug}/chapter/${chapter.number}`);
+      expect(notifications[0].link).toMatch(new RegExp(`^/novel/${novel.slug}/chapter/${chapter.number}`));
     });
 
     it('does not notify when replying to your own comment', async () => {
@@ -271,7 +271,7 @@ describe('Community', () => {
       const notifications = await Notification.find({ user: author._id, type: NOTIFICATION_TYPES.REPLY });
       expect(notifications).toHaveLength(1);
       expect(notifications[0].message).toContain(responder.username);
-      expect(notifications[0].link).toBe(`/novel/${novel.slug}`);
+      expect(notifications[0].link).toMatch(new RegExp(`^/novel/${novel.slug}`));
 
       const like = await api()
         .post(`/api/community/reviews/${reviewId}/replies/${replyId}/like`)

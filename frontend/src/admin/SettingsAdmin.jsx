@@ -58,6 +58,11 @@ const SettingsAdmin = () => {
       body.append('allowSignups', form.allowSignups);
       body.append('requireEmailVerification', form.requireEmailVerification);
       body.append('maintenanceMode', form.maintenanceMode);
+      body.append('enableInAppNotifications', form.enableInAppNotifications ?? true);
+      body.append('enableEmailNotifications', form.enableEmailNotifications ?? true);
+      body.append('enableMentionNotifications', form.enableMentionNotifications ?? true);
+      body.append('enableReplyNotifications', form.enableReplyNotifications ?? true);
+      body.append('enableChapterNotifications', form.enableChapterNotifications ?? true);
       if (files.logo) body.append('logo', files.logo);
       if (files.favicon) body.append('favicon', files.favicon);
       const { data } = await client.put('/admin/settings', body);
@@ -225,6 +230,60 @@ const SettingsAdmin = () => {
                 Maintenance mode blocks the site for everyone except admins.
               </p>
             )}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-line bg-night-surface p-5">
+          <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-silver">
+            <Megaphone className="h-4 w-4 text-crimson" aria-hidden="true" /> Global Notification Switches
+          </h2>
+          <p className="mb-3 text-xs text-silver-muted">Enable or disable delivery channels and triggers across the site.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-silver">
+              <input
+                type="checkbox"
+                checked={form.enableInAppNotifications !== false}
+                onChange={(e) => setForm((f) => ({ ...f, enableInAppNotifications: e.target.checked }))}
+                className="accent-[var(--color-primary)]"
+              />
+              Enable In-App Notifications
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-silver">
+              <input
+                type="checkbox"
+                checked={form.enableEmailNotifications !== false}
+                onChange={(e) => setForm((f) => ({ ...f, enableEmailNotifications: e.target.checked }))}
+                className="accent-[var(--color-primary)]"
+              />
+              Enable Email Notifications
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-silver">
+              <input
+                type="checkbox"
+                checked={form.enableMentionNotifications !== false}
+                onChange={(e) => setForm((f) => ({ ...f, enableMentionNotifications: e.target.checked }))}
+                className="accent-[var(--color-primary)]"
+              />
+              Enable Mention Notifications (@username)
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-silver">
+              <input
+                type="checkbox"
+                checked={form.enableReplyNotifications !== false}
+                onChange={(e) => setForm((f) => ({ ...f, enableReplyNotifications: e.target.checked }))}
+                className="accent-[var(--color-primary)]"
+              />
+              Enable Reply Notifications
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-silver">
+              <input
+                type="checkbox"
+                checked={form.enableChapterNotifications !== false}
+                onChange={(e) => setForm((f) => ({ ...f, enableChapterNotifications: e.target.checked }))}
+                className="accent-[var(--color-primary)]"
+              />
+              Enable New Chapter Notifications
+            </label>
           </div>
         </section>
 

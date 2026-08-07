@@ -22,6 +22,7 @@ const serializeUser = (user) => ({
   avatarUrl: user.avatarUrl,
   library: user.library,
   fullName: user.fullName,
+  notificationPreferences: user.notificationPreferences || {},
 });
 
 const signup = asyncHandler(async (req, res) => {
@@ -285,6 +286,12 @@ const updateProfile = asyncHandler(async (req, res) => {
   }
   if (avatarUrl !== undefined) {
     user.avatarUrl = avatarUrl;
+  }
+  if (req.body.notificationPreferences && typeof req.body.notificationPreferences === 'object') {
+    user.notificationPreferences = {
+      ...user.notificationPreferences,
+      ...req.body.notificationPreferences,
+    };
   }
   if (newPassword) {
     if (user.password && (!currentPassword || !(await user.comparePassword(currentPassword)))) {

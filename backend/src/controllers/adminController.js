@@ -7,6 +7,8 @@ const Comment = require('../models/Comment');
 const Review = require('../models/Review');
 const Notification = require('../models/Notification');
 const SiteSettings = require('../models/SiteSettings');
+const Campaign = require('../models/Campaign');
+const { dispatchCampaign } = require('../services/notificationService');
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { uniqueSlug } = require('../utils/slugify');
 const { parseChapterBuffer, titleFromFilename } = require('../utils/parseChapterFile');
@@ -648,11 +650,6 @@ const restoreReview = asyncHandler(async (req, res) => {
   if (!review) {
     return res.status(404).json({ message: 'Review not found' });
   }
-  // Only one active review per user per target, so a replacement review blocks the restore.
-  const activeReview = await Review.findOne({ novel: review.novel, chapter: review.chapter, user: review.user });
-  if (activeReview && activeReview._id.toString() !== review._id.toString()) {
-    return res.status(409).json({ message: 'This user already has an active review for that target' });
-  }
   review.deletedAt = null;
   await review.save();
   await recalcForReview(review);
@@ -761,6 +758,18 @@ const updateSettings = asyncHandler(async (req, res) => {
   if (body.requireEmailVerification !== undefined) {
     settings.requireEmailVerification = body.requireEmailVerification === 'true' || body.requireEmailVerification === true;
   }
+  const boolFields = [
+    'enableInAppNotifications',
+    'enableEmailNotifications',
+    'enableMentionNotifications',
+    'enableReplyNotifications',
+    'enableChapterNotifications',
+  ];
+  boolFields.forEach((field) => {
+    if (body[field] !== undefined) {
+      settings[field] = body[field] === 'true' || body[field] === true;
+    }
+  });
   await settings.save();
   res.json({ settings });
 });
@@ -770,16 +779,15 @@ const broadcastAnnouncement = asyncHandler(async (req, res) => {
   if (!message || !message.trim()) {
     return res.status(400).json({ message: 'message is required' });
   }
-  const users = await User.find({ banned: false }).select('_id');
-  await Notification.insertMany(
-    users.map((user) => ({
-      user: user._id,
-      type: NOTIFICATION_TYPES.ANNOUNCEMENT,
-      message: message.trim(),
-      link: link || '',
-    }))
-  );
-  res.status(201).json({ notifiedCount: users.length });
+  const campaign = await dispatchCampaign({
+    title: 'Announcement',
+    message: message.trim(),
+    link: link || '',
+    targetAudience: 'all',
+    channels: ['in_app'],
+    adminUser: req.user,
+  });
+  res.status(201).json({ notifiedCount: campaign ? campaign.recipientCount : 0 });
 });
 
 const getChapterSource = asyncHandler(async (req, res) => {
@@ -795,6 +803,40 @@ const getChapterSource = asyncHandler(async (req, res) => {
     return res.status(501).json({ message: 'File storage is not configured' });
   }
   res.json({ url, name: chapter.sourceFile.name });
+});
+
+const dispatchAdminNotification = asyncHandler(async (req, res) => {
+  const { title, message, link, targetAudience, targetUserId, channels } = req.body;
+  if (!title || !message) {
+    return res.status(400).json({ message: 'Title and message are required' });
+  }
+  const campaign = await dispatchCampaign({
+    title: title.trim(),
+    message: message.trim(),
+    link: (link || '').trim(),
+    targetAudience: targetAudience || 'all',
+    targetUserId: targetUserId || null,
+    channels: Array.isArray(channels) && channels.length > 0 ? channels : ['in_app'],
+    adminUser: req.user,
+  });
+  if (!campaign) {
+    return res.status(400).json({ message: 'No eligible recipients found' });
+  }
+  res.status(201).json({ campaign, message: 'Notification dispatch initiated successfully' });
+});
+
+const listCampaigns = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = parsePagination(req.query);
+  const [campaigns, total] = await Promise.all([
+    Campaign.find()
+      .populate('createdBy', 'username email fullName')
+      .populate('targetUser', 'username email fullName')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Campaign.countDocuments(),
+  ]);
+  res.json({ campaigns, total, page, pages: Math.ceil(total / limit) });
 });
 
 module.exports = {
@@ -826,4 +868,6 @@ module.exports = {
   getAdminSettings,
   updateSettings,
   broadcastAnnouncement,
+  dispatchAdminNotification,
+  listCampaigns,
 };

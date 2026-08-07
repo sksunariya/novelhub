@@ -43,7 +43,6 @@ const NovelDetail = () => {
   const [novel, setNovel] = useState(null);
   const [chapters, setChapters] = useState([]);
   const [reviews, setReviews] = useState([]);
-  const [userReview, setUserReview] = useState(null);
   const [progress, setProgress] = useState(null);
   const [reviewForm, setReviewForm] = useState({ rating: 0, content: '' });
   const [submitting, setSubmitting] = useState(false);
@@ -69,11 +68,16 @@ const NovelDetail = () => {
     setReviews((prev) => prev.map((r) => (r._id === reviewId ? data.review : r)));
   };
 
+  const editReview = async (reviewId, payload) => {
+    const { data } = await client.put(`/community/reviews/${reviewId}`, payload);
+    setReviews((prev) => prev.map((r) => (r._id === reviewId ? data.review : r)));
+    client.get(`/novels/${slug}`).then(({ data: res }) => setNovel(res.novel)).catch(() => {});
+  };
+
   const deleteReview = async (reviewId) => {
     if (!window.confirm('Delete this review?')) return;
     await client.delete(`/community/reviews/${reviewId}`);
     setReviews((prev) => prev.filter((r) => r._id !== reviewId));
-    if (userReview?._id === reviewId) setUserReview(null);
   };
 
   const deleteReviewReply = async (reviewId, replyId) => {
@@ -97,10 +101,6 @@ const NovelDetail = () => {
     try {
       const { data } = await client.get(`/novels/${slug}`);
       setNovel(data.novel);
-      setUserReview(data.userReview);
-      if (data.userReview) {
-        setReviewForm({ rating: data.userReview.rating, content: data.userReview.content });
-      }
       const [chaptersRes, reviewsRes] = await Promise.all([
         client.get(`/novels/${slug}/chapters`),
         client.get(`/novels/id/${data.novel._id}/reviews`),
@@ -138,13 +138,17 @@ const NovelDetail = () => {
 
   const submitReview = async (e) => {
     e.preventDefault();
-    if (!reviewForm.rating) return;
+    if (!reviewForm.content.trim() && !reviewForm.rating) return;
     setSubmitting(true);
     try {
       await client.post(`/novels/id/${novel._id}/reviews`, reviewForm);
-      const { data } = await client.get(`/novels/id/${novel._id}/reviews`);
-      setReviews(data.reviews);
-      setUserReview(data.reviews.find((r) => r.user._id === user.id) || null);
+      const [reviewsRes, novelRes] = await Promise.all([
+        client.get(`/novels/id/${novel._id}/reviews`),
+        client.get(`/novels/${slug}`),
+      ]);
+      setReviews(reviewsRes.data.reviews);
+      setNovel(novelRes.data.novel);
+      setReviewForm({ rating: 0, content: '' });
       setIsReviewFocused(false);
     } finally {
       setSubmitting(false);
@@ -372,11 +376,7 @@ const NovelDetail = () => {
                       type="button"
                       onClick={() => {
                         setIsReviewFocused(false);
-                        if (!userReview) {
-                          setReviewForm({ rating: 0, content: '' });
-                        } else {
-                          setReviewForm({ rating: userReview.rating, content: userReview.content || '' });
-                        }
+                        setReviewForm({ rating: 0, content: '' });
                       }}
                       className="rounded-full px-4 py-1.5 text-xs font-semibold text-silver hover:bg-white/10 transition-colors"
                     >
@@ -384,10 +384,10 @@ const NovelDetail = () => {
                     </button>
                     <button
                       type="submit"
-                      disabled={submitting || !reviewForm.rating}
+                      disabled={submitting || (!reviewForm.content.trim() && !reviewForm.rating)}
                       className="rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white transition-all hover:bg-crimson-soft disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {submitting ? 'Saving...' : userReview ? 'Update Review' : 'Post Review'}
+                      {submitting ? 'Posting...' : 'Post Comment'}
                     </button>
                   </div>
                 </div>
@@ -413,6 +413,7 @@ const NovelDetail = () => {
                 targetId={reviewTarget}
                 onLike={likeReview}
                 onDislike={dislikeReview}
+                onEdit={editReview}
                 onDelete={deleteReview}
                 onReplySubmit={postReviewReply}
                 onLikeReply={likeReviewReply}

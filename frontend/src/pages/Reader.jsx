@@ -130,7 +130,6 @@ const Reader = () => {
       .then(({ data: res }) => {
         const found = res.reviews?.find((r) => r.user?._id === user.id || r.user === user.id);
         setUserReview(found || null);
-        setReviewForm(found ? { rating: found.rating, content: found.content || '' } : { rating: 0, content: '' });
       })
       .catch(() => {});
   }, [data, user]);
@@ -142,7 +141,6 @@ const Reader = () => {
       .then(({ data: res }) => {
         const found = res.reviews?.find((r) => r.user?._id === user.id || r.user === user.id);
         setChapterReview(found || null);
-        setChapterReviewForm(found ? { rating: found.rating, content: found.content || '' } : { rating: 0, content: '' });
       })
       .catch(() => {});
   }, [data, user]);
@@ -185,6 +183,9 @@ const Reader = () => {
     loadComments();
   };
 
+  const editComment = (id, payload) =>
+    runCommentAction(() => client.put(`/community/comments/${id}`, payload));
+
   const deleteComment = (id) => runCommentAction(() => client.delete(`/community/comments/${id}`));
 
   const reactToComment = (action) => (id) => {
@@ -204,6 +205,7 @@ const Reader = () => {
     try {
       await client.post(`/novels/id/${data.novel.id}/reviews`, reviewForm);
       setReviewMsg('Thank you! Your review has been saved.');
+      setReviewForm({ rating: 0, content: '' });
       loadUserReview();
     } catch (err) {
       setReviewMsg(err.response?.data?.message || 'Failed to submit review');
@@ -220,8 +222,7 @@ const Reader = () => {
     try {
       await client.post(`/community/chapters/${data.chapter._id}/reviews`, chapterReviewForm);
       setChapterReviewMsg('Chapter rating saved.');
-      // Refreshing the chapter refreshes its average, and the resulting `data`
-      // change re-runs the chapter-review loader on its own.
+      setChapterReviewForm({ rating: 0, content: '' });
       await loadChapter();
     } catch (err) {
       setChapterReviewMsg(err.response?.data?.message || 'Failed to save chapter rating');
@@ -488,6 +489,7 @@ const Reader = () => {
                           isAdmin={isAdmin}
                           onLike={likeComment}
                           onDislike={dislikeComment}
+                          onEdit={editComment}
                           onDelete={deleteComment}
                           onReplySubmit={postReply}
                           onLikeReply={(_parentId, replyId) => likeComment(replyId)}
@@ -666,6 +668,7 @@ const Reader = () => {
                         targetId={commentTarget}
                         onLike={likeComment}
                         onDislike={dislikeComment}
+                        onEdit={editComment}
                         onDelete={deleteComment}
                         onReplySubmit={postReply}
                         onLikeReply={(_parentId, replyId) => likeComment(replyId)}
@@ -700,17 +703,13 @@ const Reader = () => {
                       <p className="text-xs font-medium text-crimson-soft">{reviewMsg}</p>
                     )}
                     <div className="flex items-center justify-between">
-                      {userReview ? (
-                        <span className="text-xs text-silver-muted">Current review: {userReview.rating}★</span>
-                      ) : (
-                        <span className="text-xs text-silver-muted">Rate this novel out of 5 stars.</span>
-                      )}
+                      <span className="text-xs text-silver-muted">Rate this novel out of 5 stars.</span>
                       <button
                         type="submit"
                         disabled={submittingReview || !reviewForm.rating}
                         className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white transition-opacity hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {submittingReview ? 'Saving...' : userReview ? 'Update Review' : 'Submit Review'}
+                        {submittingReview ? 'Submitting...' : 'Submit Review'}
                       </button>
                     </div>
                   </form>
@@ -751,15 +750,13 @@ const Reader = () => {
                       />
                       {chapterReviewMsg && <p className="text-xs font-medium text-crimson-soft">{chapterReviewMsg}</p>}
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-silver-muted">
-                          {chapterReview ? `Current rating: ${chapterReview.rating}★` : 'Rate this chapter out of 5 stars.'}
-                        </span>
+                        <span className="text-xs text-silver-muted">Rate this chapter out of 5 stars.</span>
                         <button
                           type="submit"
                           disabled={savingChapterReview || !chapterReviewForm.rating}
                           className="cursor-pointer rounded-full border border-crimson px-5 py-2 text-xs font-semibold text-crimson-soft transition-colors hover:bg-crimson hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {savingChapterReview ? 'Saving...' : chapterReview ? 'Update Chapter Rating' : 'Submit Chapter Rating'}
+                          {savingChapterReview ? 'Saving...' : 'Submit Chapter Rating'}
                         </button>
                       </div>
                     </form>

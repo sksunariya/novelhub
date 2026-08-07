@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ThumbsUp, ThumbsDown, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Trash2, ChevronDown, ChevronUp, Pencil } from 'lucide-react';
 import StarRating from './StarRating';
 import { formatRelativeTime, formatExactDateTime } from '../utils/dateUtils';
 import { anchorId } from '../utils/hashTarget';
@@ -71,6 +71,7 @@ const CommentCard = ({
   targetId,
   onLike,
   onDislike,
+  onEdit,
   onDelete,
   onReplySubmit,
   onLikeReply,
@@ -82,6 +83,12 @@ const CommentCard = ({
   const [replyText, setReplyText] = useState('');
   const [submittingReply, setSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState('');
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(item.content || '');
+  const [editRating, setEditRating] = useState(item.rating || 0);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
 
   const textareaRef = useRef(null);
   const scrolledTargetRef = useRef('');
@@ -101,9 +108,6 @@ const CommentCard = ({
     }
   }, [replyingToId]);
 
-  // A deep-linked reply lives in a collapsed thread, so open it first and scroll
-  // on the render that follows. Runs once per target, leaving the reader free to
-  // collapse the thread again afterwards.
   useEffect(() => {
     if (!anchorPrefix || !targetIsMine || scrolledTargetRef.current === targetId) return;
     if (targetIsReply && !showReplies) {
@@ -132,8 +136,6 @@ const CommentCard = ({
     setReplyError('');
   };
 
-  // Threads are two levels deep, so every reply is submitted against the
-  // top-level item; the @mention records who was being answered.
   const handleSendReply = async (event) => {
     event.preventDefault();
     if (!replyText.trim() || submittingReply) return;
@@ -148,6 +150,25 @@ const CommentCard = ({
       setReplyError(error.response?.data?.message || 'Failed to send reply');
     } finally {
       setSubmittingReply(false);
+    }
+  };
+
+  const handleSaveEdit = async (event) => {
+    event.preventDefault();
+    if (!onEdit || savingEdit) return;
+    if (!editContent.trim() && !editRating) {
+      setEditError('Comment content or rating is required');
+      return;
+    }
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      await onEdit(item._id, { content: editContent, rating: editRating });
+      setIsEditing(false);
+    } catch (error) {
+      setEditError(error.response?.data?.message || 'Failed to save changes');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -223,7 +244,22 @@ const CommentCard = ({
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            {item.rating != null && <StarRating value={item.rating} size="h-3.5 w-3.5" />}
+            {item.rating != null && item.rating > 0 && <StarRating value={item.rating} size="h-3.5 w-3.5" />}
+            {isOwner && onEdit && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditing((v) => !v);
+                  setEditContent(item.content || '');
+                  setEditRating(item.rating || 0);
+                  setEditError('');
+                }}
+                className="flex cursor-pointer items-center justify-center p-1 text-silver-muted transition-colors hover:text-silver"
+                aria-label="Edit comment"
+              >
+                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
             {isOwner && onDelete && (
               <button
                 type="button"
@@ -237,10 +273,49 @@ const CommentCard = ({
           </div>
         </div>
 
-        {item.content && (
-          <p className="whitespace-pre-line break-words pt-0.5 text-sm leading-relaxed text-silver">
-            {renderContent(item.content)}
-          </p>
+        {isEditing ? (
+          <form onSubmit={handleSaveEdit} className="mt-2 space-y-3">
+            {editError && <p className="text-xs text-crimson-soft">{editError}</p>}
+            {item.rating != null && (
+              <div className="flex items-center gap-2 text-xs text-silver-muted">
+                <span>Rating:</span>
+                <StarRating value={editRating} onChange={setEditRating} size="h-4 w-4" />
+              </div>
+            )}
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-line bg-night px-3 py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditing(false);
+                  setEditContent(item.content || '');
+                  setEditRating(item.rating || 0);
+                  setEditError('');
+                }}
+                className="rounded-full px-4 py-1.5 text-xs font-semibold text-silver hover:bg-white/10 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingEdit || (!editContent.trim() && !editRating)}
+                className="rounded-full bg-crimson px-4 py-1.5 text-xs font-semibold text-white hover:bg-crimson-soft disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                {savingEdit ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          item.content && (
+            <p className="whitespace-pre-line break-words pt-0.5 text-sm leading-relaxed text-silver">
+              {renderContent(item.content)}
+            </p>
+          )
         )}
 
         <div className="flex items-center gap-1 pt-1 text-xs text-silver-muted">

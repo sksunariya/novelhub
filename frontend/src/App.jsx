@@ -22,6 +22,7 @@ const NovelsAdmin = lazy(() => import('./admin/NovelsAdmin'));
 const ChaptersAdmin = lazy(() => import('./admin/ChaptersAdmin'));
 const UsersAdmin = lazy(() => import('./admin/UsersAdmin'));
 const ModerationAdmin = lazy(() => import('./admin/ModerationAdmin'));
+const NotificationsAdmin = lazy(() => import('./admin/NotificationsAdmin'));
 const SettingsAdmin = lazy(() => import('./admin/SettingsAdmin'));
 
 const RequireAuth = ({ children }) => {
@@ -123,6 +124,14 @@ const App = () => {
             element={
               <Suspense fallback={<Spinner full />}>
                 <ModerationAdmin />
+              </Suspense>
+            }
+          />
+          <Route
+            path="notifications"
+            element={
+              <Suspense fallback={<Spinner full />}>
+                <NotificationsAdmin />
               </Suspense>
             }
           />

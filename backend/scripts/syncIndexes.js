@@ -1,57 +1,31 @@
-/**
- * One-time migration: sync database indexes with the current schemas.
- *
- * The soft-delete feature changed several unique indexes to *partial* unique
- * indexes (enforced only where deletedAt is null) and added a `deletedAt` index
- * to each soft-deletable model. Mongoose does not replace mismatched indexes on
- * its own, so run this once against each environment after deploying:
- *
- *   node scripts/syncIndexes.js        (or: npm run sync-indexes)
- *
- * Model.syncIndexes() drops indexes that no longer match the schema and builds
- * the ones that are missing. Safe to re-run; it's a no-op once in sync. Prefer a
- * low-traffic window on large collections, since building indexes takes a lock.
- */
 require('dotenv').config();
 const mongoose = require('mongoose');
 const connectDB = require('../src/config/db');
-
-// Models whose indexes changed with soft delete.
-const models = {
-  Novel: require('../src/models/Novel'),
-  Chapter: require('../src/models/Chapter'),
-  Review: require('../src/models/Review'),
-  Comment: require('../src/models/Comment'),
-  User: require('../src/models/User'),
-};
+const Review = require('../src/models/Review');
 
 const run = async () => {
-  if (!process.env.MONGO_URI) {
-    console.error('MONGO_URI is not set. Aborting.');
-    process.exit(1);
-  }
-  await connectDB(process.env.MONGO_URI);
-  console.info(`Syncing indexes on: ${Object.keys(models).join(', ')}\n`);
+  const uri = process.env.MONGO_URI || 'mongodb://localhost:27017/novelhub';
+  console.log('Connecting to MongoDB...');
+  await connectDB(uri);
 
-  for (const [name, Model] of Object.entries(models)) {
-    try {
-      const dropped = await Model.syncIndexes();
-      const indexes = Object.keys(await Model.collection.indexInformation());
-      console.info(`✓ ${name}`);
-      if (dropped.length) console.info(`    dropped stale: ${dropped.join(', ')}`);
-      console.info(`    current: ${indexes.join(', ')}`);
-    } catch (err) {
-      console.error(`✗ ${name}: ${err.message}`);
-    }
+  console.log('Dropping legacy unique review index if present...');
+  try {
+    await Review.collection.dropIndex('novel_1_chapter_1_user_1');
+    console.log('Successfully dropped legacy index "novel_1_chapter_1_user_1".');
+  } catch (err) {
+    console.log('Legacy index "novel_1_chapter_1_user_1" not found or already dropped.');
   }
+
+  console.log('Syncing Review model indexes with MongoDB...');
+  await Review.syncIndexes();
+  console.log('Review model indexes synced successfully.');
 
   await mongoose.disconnect();
-  console.info('\nDone.');
+  console.log('Done!');
   process.exit(0);
 };
 
-run().catch(async (err) => {
-  console.error('Index sync failed:', err.message);
-  await mongoose.disconnect().catch(() => {});
+run().catch((err) => {
+  console.error('Error syncing indexes:', err);
   process.exit(1);
 });

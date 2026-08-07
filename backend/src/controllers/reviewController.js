@@ -5,7 +5,7 @@ const { asyncHandler } = require('../middlewares/errorHandler');
 const { ROLES, RATING, PUBLIC_USER_FIELDS } = require('../config/constants');
 const { parsePagination } = require('./novelController');
 const { REACTIONS, toggleReaction } = require('../utils/reactions');
-const { notifyReply } = require('../utils/notifications');
+const { notifyCommentActivity } = require('../utils/notifications');
 
 const averageOf = (stats) => {
   const { avg = 0, count = 0 } = stats[0] || {};
@@ -16,7 +16,7 @@ const averageOf = (stats) => {
 // roll up into their own chapter.
 const recalcNovelRating = async (novelId) => {
   const stats = await Review.aggregate([
-    { $match: { novel: novelId, chapter: null, deletedAt: null } },
+    { $match: { novel: novelId, chapter: null, deletedAt: null, rating: { $gt: 0 } } },
     { $group: { _id: '$novel', avg: { $avg: '$rating' }, count: { $sum: 1 } } },
   ]);
   await Novel.updateOne({ _id: novelId }, averageOf(stats));
@@ -24,7 +24,7 @@ const recalcNovelRating = async (novelId) => {
 
 const recalcChapterRating = async (chapterId) => {
   const stats = await Review.aggregate([
-    { $match: { chapter: chapterId, deletedAt: null } },
+    { $match: { chapter: chapterId, deletedAt: null, rating: { $gt: 0 } } },
     { $group: { _id: '$chapter', avg: { $avg: '$rating' }, count: { $sum: 1 } } },
   ]);
   await Chapter.updateOne({ _id: chapterId }, averageOf(stats));
@@ -74,21 +74,33 @@ const parseRating = (rating) => {
   return numericRating >= RATING.MIN && numericRating <= RATING.MAX ? numericRating : 0;
 };
 
-const saveReview = async (res, { novelId, chapterId, userId, rating, content }) => {
-  const review = await Review.findOneAndUpdate(
-    { novel: novelId, chapter: chapterId, user: userId },
-    { rating, content: (content || '').trim() },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
+const saveReview = async (res, { novelId, chapterId, reqUser, rating, content }) => {
+  const review = await Review.create({
+    novel: novelId,
+    chapter: chapterId,
+    user: reqUser._id,
+    rating,
+    content: (content || '').trim(),
+  });
   await recalcForReview(review);
   await populateReview(review);
+  const novel = await Novel.findById(novelId).select('slug');
+  const link = novel ? `/novel/${novel.slug}#review-${review._id}` : '';
+  await notifyCommentActivity({
+    parentAuthor: null,
+    actor: reqUser,
+    content: (content || '').trim(),
+    link,
+    commentContext: 'review',
+  });
   res.status(201).json({ review: publicReview(review) });
 };
 
 const upsertReview = asyncHandler(async (req, res) => {
   const rating = parseRating(req.body.rating);
-  if (!rating) {
-    return res.status(400).json({ message: `rating must be between ${RATING.MIN} and ${RATING.MAX}` });
+  const content = (req.body.content || '').trim();
+  if (!rating && !content) {
+    return res.status(400).json({ message: 'Content or rating is required' });
   }
   const novel = await Novel.findById(req.params.novelId);
   if (!novel) {
@@ -97,16 +109,17 @@ const upsertReview = asyncHandler(async (req, res) => {
   return saveReview(res, {
     novelId: novel._id,
     chapterId: null,
-    userId: req.user._id,
+    reqUser: req.user,
     rating,
-    content: req.body.content,
+    content,
   });
 });
 
 const upsertChapterReview = asyncHandler(async (req, res) => {
   const rating = parseRating(req.body.rating);
-  if (!rating) {
-    return res.status(400).json({ message: `rating must be between ${RATING.MIN} and ${RATING.MAX}` });
+  const content = (req.body.content || '').trim();
+  if (!rating && !content) {
+    return res.status(400).json({ message: 'Content or rating is required' });
   }
   const chapter = await Chapter.findById(req.params.chapterId);
   if (!chapter) {
@@ -115,10 +128,34 @@ const upsertChapterReview = asyncHandler(async (req, res) => {
   return saveReview(res, {
     novelId: chapter.novel,
     chapterId: chapter._id,
-    userId: req.user._id,
+    reqUser: req.user,
     rating,
-    content: req.body.content,
+    content,
   });
+});
+
+const updateReview = asyncHandler(async (req, res) => {
+  const review = await Review.findById(req.params.id);
+  if (!review) {
+    return res.status(404).json({ message: 'Review not found' });
+  }
+  const isOwner = review.user.toString() === req.user._id.toString();
+  if (!isOwner && req.user.role !== ROLES.ADMIN) {
+    return res.status(403).json({ message: 'Not allowed' });
+  }
+  const newContent = req.body.content !== undefined ? String(req.body.content || '').trim() : review.content;
+  const newRating = req.body.rating !== undefined ? parseRating(req.body.rating) : review.rating;
+  if (!newContent && !newRating) {
+    return res.status(400).json({ message: 'Content or rating is required' });
+  }
+  review.content = newContent;
+  review.rating = newRating;
+  review.editedAt = new Date();
+  review.editedBy = req.user._id;
+  await review.save();
+  await recalcForReview(review);
+  await populateReview(review);
+  res.json({ review: publicReview(review) });
 });
 
 const deleteReview = asyncHandler(async (req, res) => {
@@ -162,11 +199,13 @@ const addReviewReply = asyncHandler(async (req, res) => {
   review.replies.push({ user: req.user._id, content: content.trim() });
   await review.save();
   const novel = await Novel.findById(review.novel).select('slug');
-  await notifyReply({
-    recipient: review.user,
-    actor: req.user._id,
-    message: `${req.user.username} replied to your review`,
-    link: novel ? `/novel/${novel.slug}` : '',
+  const link = novel ? `/novel/${novel.slug}#review-${review._id}` : '';
+  await notifyCommentActivity({
+    parentAuthor: review.user,
+    actor: req.user,
+    content: content.trim(),
+    link,
+    commentContext: 'review',
   });
   await populateReview(review);
   res.status(201).json({ review: publicReview(review) });
@@ -221,6 +260,7 @@ module.exports = {
   listChapterReviews,
   upsertReview,
   upsertChapterReview,
+  updateReview,
   deleteReview,
   toggleReviewLike,
   toggleReviewDislike,

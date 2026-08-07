@@ -101,4 +101,58 @@ const sendOtpEmail = async ({ to, code, purpose }) => {
   });
 };
 
-module.exports = { isMailerConfigured, sendOtpEmail };
+const notificationHtml = ({ title, message, link }) => {
+  const appUrl = process.env.APP_URL || 'http://localhost:5173';
+  const fullLink = link ? (link.startsWith('http') ? link : `${appUrl}${link}`) : '';
+  return `
+  <div style="margin:0;padding:0;background-color:#0a0507;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0507;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#140a0e;border:1px solid #2c1a20;border-radius:16px;overflow:hidden;">
+            <tr>
+              <td style="padding:28px 32px 8px;text-align:center;">
+                <div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:700;letter-spacing:0.5px;color:#e7e5e4;">${brandName()}</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 32px 0;text-align:center;">
+                <h1 style="margin:12px 0 8px;font-family:Georgia,serif;font-size:20px;font-weight:700;color:#e7e5e4;">${title}</h1>
+                <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#a8a29e;">${message}</p>
+              </td>
+            </tr>
+            ${
+              fullLink
+                ? `
+            <tr>
+              <td style="padding:20px 32px;text-align:center;">
+                <a href="${fullLink}" style="display:inline-block;background-color:#dc2626;color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:600;text-decoration:none;padding:10px 24px;border-radius:9999px;">
+                  View Details
+                </a>
+              </td>
+            </tr>`
+                : ''
+            }
+          </table>
+          <p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#57534e;">&copy; ${brandName()}</p>
+        </td>
+      </tr>
+    </table>
+  </div>`;
+};
+
+const sendNotificationEmail = async ({ to, title, message, link }) => {
+  if (!isMailerConfigured()) {
+    console.info(`[mailer] Notification for ${to}: "${title}" - ${message}`);
+    return;
+  }
+  await getTransport().sendMail({
+    from: process.env.MAIL_FROM || 'Apex NovelHub <no-reply@novelhub.com>',
+    to,
+    subject: title || 'New Notification',
+    text: `${title}\n\n${message}${link ? `\n\nLink: ${link}` : ''}`,
+    html: notificationHtml({ title, message, link }),
+  });
+};
+
+module.exports = { isMailerConfigured, sendOtpEmail, sendNotificationEmail };

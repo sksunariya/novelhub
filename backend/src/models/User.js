@@ -21,6 +21,14 @@ const userSchema = new mongoose.Schema(
     avatarUrl: { type: String, default: '' },
     banned: { type: Boolean, default: false },
     library: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Novel' }],
+    notificationPreferences: {
+      emailMentions: { type: Boolean, default: true },
+      emailReplies: { type: Boolean, default: true },
+      emailChapters: { type: Boolean, default: true },
+      emailAnnouncements: { type: Boolean, default: true },
+      inAppMentions: { type: Boolean, default: true },
+      inAppReplies: { type: Boolean, default: true },
+    },
   },
   { timestamps: true }
 );

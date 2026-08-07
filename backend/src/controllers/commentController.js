@@ -5,7 +5,7 @@ const { asyncHandler } = require('../middlewares/errorHandler');
 const { ROLES, PUBLIC_USER_FIELDS } = require('../config/constants');
 const { parsePagination } = require('./novelController');
 const { REACTIONS, toggleReaction } = require('../utils/reactions');
-const { notifyReply } = require('../utils/notifications');
+const { notifyCommentActivity } = require('../utils/notifications');
 
 // Pagination applies to top-level comments only; every reply of a returned
 // comment ships with it so a thread is never split across pages.
@@ -70,16 +70,37 @@ const createComment = asyncHandler(async (req, res) => {
     content: content.trim(),
   });
   await comment.populate('user', PUBLIC_USER_FIELDS);
-  if (parent) {
-    const novel = await Novel.findById(chapter.novel).select('slug');
-    await notifyReply({
-      recipient: parent.user,
-      actor: req.user._id,
-      message: `${req.user.username} replied to your comment`,
-      link: novel ? `/novel/${novel.slug}/chapter/${chapter.number}` : '',
-    });
-  }
+  const novel = await Novel.findById(chapter.novel).select('slug');
+  const link = novel ? `/novel/${novel.slug}/chapter/${chapter.number}#comment-${comment._id}` : '';
+  await notifyCommentActivity({
+    parentAuthor: parent ? parent.user : null,
+    actor: req.user,
+    content: content.trim(),
+    link,
+    commentContext: 'comment',
+  });
   res.status(201).json({ comment });
+});
+
+const updateComment = asyncHandler(async (req, res) => {
+  const { content } = req.body;
+  if (!content || typeof content !== 'string' || !content.trim()) {
+    return res.status(400).json({ message: 'content is required' });
+  }
+  const comment = await Comment.findById(req.params.id);
+  if (!comment) {
+    return res.status(404).json({ message: 'Comment not found' });
+  }
+  const isOwner = comment.user.toString() === req.user._id.toString();
+  if (!isOwner && req.user.role !== ROLES.ADMIN) {
+    return res.status(403).json({ message: 'Not allowed' });
+  }
+  comment.content = content.trim();
+  comment.editedAt = new Date();
+  comment.editedBy = req.user._id;
+  await comment.save();
+  await comment.populate('user', PUBLIC_USER_FIELDS);
+  res.json({ comment });
 });
 
 const deleteComment = asyncHandler(async (req, res) => {
@@ -111,4 +132,4 @@ const toggleCommentLike = reactToComment(REACTIONS.LIKE);
 
 const toggleCommentDislike = reactToComment(REACTIONS.DISLIKE);
 
-module.exports = { listComments, createComment, deleteComment, toggleCommentLike, toggleCommentDislike };
+module.exports = { listComments, createComment, updateComment, deleteComment, toggleCommentLike, toggleCommentDislike };

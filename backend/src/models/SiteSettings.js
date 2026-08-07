@@ -33,6 +33,11 @@ const siteSettingsSchema = new mongoose.Schema(
     allowSignups: { type: Boolean, default: true },
     requireEmailVerification: { type: Boolean, default: false },
     maintenanceMode: { type: Boolean, default: false },
+    enableInAppNotifications: { type: Boolean, default: true },
+    enableEmailNotifications: { type: Boolean, default: true },
+    enableMentionNotifications: { type: Boolean, default: true },
+    enableReplyNotifications: { type: Boolean, default: true },
+    enableChapterNotifications: { type: Boolean, default: true },
     readingGate: { type: buildReadingGateSchema(), default: () => ({}) },
   },
   { timestamps: true }

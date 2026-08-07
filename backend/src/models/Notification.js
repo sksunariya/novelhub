@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { NOTIFICATION_TYPES } = require('../config/constants');
+const { NOTIFICATION_TYPES, NOTIFICATION_CHANNELS } = require('../config/constants');
 
 const notificationSchema = new mongoose.Schema(
   {
@@ -8,6 +8,8 @@ const notificationSchema = new mongoose.Schema(
     message: { type: String, required: true, maxlength: 500 },
     link: { type: String, default: '' },
     read: { type: Boolean, default: false },
+    channels: [{ type: String, enum: Object.values(NOTIFICATION_CHANNELS) }],
+    metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }
 );
