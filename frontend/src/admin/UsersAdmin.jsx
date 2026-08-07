@@ -3,16 +3,28 @@ import { Ban, ShieldCheck, Shield, Trash2 } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/Spinner';
+import Pagination from '../components/Pagination';
 
 const UsersAdmin = () => {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState(null);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState({ pages: 1, total: 0 });
 
   const load = useCallback(() => {
-    const query = search ? `?search=${encodeURIComponent(search)}` : '';
-    client.get(`/admin/users${query}`).then(({ data }) => setUsers(data.users)).catch(() => setUsers([]));
-  }, [search]);
+    const params = { page };
+    if (search) {
+      params.search = search;
+    }
+    client
+      .get('/admin/users', { params })
+      .then(({ data }) => {
+        setUsers(data.users);
+        setMeta({ pages: data.pages, total: data.total });
+      })
+      .catch(() => setUsers([]));
+  }, [search, page]);
 
   useEffect(() => {
     load();
@@ -36,7 +48,10 @@ const UsersAdmin = () => {
         <input
           type="search"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setPage(1);
+            setSearch(e.target.value);
+          }}
           placeholder="Search by name or email..."
           aria-label="Search users"
           className="w-full rounded-full border border-line bg-night-surface px-4 py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none sm:w-64"
@@ -122,6 +137,7 @@ const UsersAdmin = () => {
           </table>
         </div>
       )}
+      <Pagination page={page} pages={meta.pages} total={meta.total} onChange={setPage} />
     </div>
   );
 };
