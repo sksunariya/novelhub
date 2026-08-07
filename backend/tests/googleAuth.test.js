@@ -38,9 +38,11 @@ describe('POST /api/auth/google', () => {
     expect(res.status).toBe(200);
     expect(res.body.token).toBeDefined();
     expect(res.body.user.email).toBe(GOOGLE_PAYLOAD.email);
+    expect(res.body.user.fullName).toBe(GOOGLE_PAYLOAD.name);
     const user = await User.findOne({ email: GOOGLE_PAYLOAD.email });
     expect(user.googleId).toBe(GOOGLE_PAYLOAD.sub);
     expect(user.avatarUrl).toBe(GOOGLE_PAYLOAD.picture);
+    expect(user.fullName).toBe(GOOGLE_PAYLOAD.name);
   });
 
   it('links google to an existing account with the same email', async () => {
@@ -49,8 +51,10 @@ describe('POST /api/auth/google', () => {
     const res = await api().post('/api/auth/google').send({ credential: 'valid-token' });
     expect(res.status).toBe(200);
     expect(res.body.user.username).toBe(user.username);
+    expect(res.body.user.fullName).toBe(GOOGLE_PAYLOAD.name);
     const updated = await User.findById(user._id);
     expect(updated.googleId).toBe(GOOGLE_PAYLOAD.sub);
+    expect(updated.fullName).toBe(GOOGLE_PAYLOAD.name);
   });
 
   it('logs in a returning google user without duplicating accounts', async () => {

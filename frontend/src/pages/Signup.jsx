@@ -17,7 +17,7 @@ const Signup = () => {
   const { settings } = useSettings();
   const navigate = useNavigate();
   const [phase, setPhase] = useState('form');
-  const [form, setForm] = useState({ username: '', email: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ fullName: '', username: '', email: '', password: '', confirm: '' });
   const [code, setCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -36,6 +36,10 @@ const Signup = () => {
   const submit = async (e) => {
     e.preventDefault();
     setError('');
+    if (!form.fullName.trim()) {
+      setError('Full name is required');
+      return;
+    }
     if (form.password.length < 6) {
       setError('Password must be at least 6 characters');
       return;
@@ -46,7 +50,7 @@ const Signup = () => {
     }
     setLoading(true);
     try {
-      const data = await signup(form.username, form.email, form.password);
+      const data = await signup(form.username, form.email, form.password, form.fullName);
       if (data.pendingVerification) {
         setPhase('otp');
         setCode('');
@@ -120,6 +124,19 @@ const Signup = () => {
                 <h1 className="text-center font-display text-2xl font-bold text-silver">Join the Hub</h1>
                 <p className="mt-1 text-center text-sm text-silver-muted">Create an account to build your library</p>
                 <form onSubmit={submit} className="mt-6 space-y-4">
+                  <div>
+                    <label htmlFor="fullName" className="mb-1.5 block text-sm font-medium text-silver">Full Name</label>
+                    <input
+                      id="fullName"
+                      type="text"
+                      required
+                      autoComplete="name"
+                      value={form.fullName}
+                      onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
+                      className={inputClass}
+                      placeholder="John Doe"
+                    />
+                  </div>
                   <div>
                     <label htmlFor="username" className="mb-1.5 block text-sm font-medium text-silver">Username</label>
                     <input

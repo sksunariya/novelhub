@@ -64,10 +64,12 @@ const UsersAdmin = () => {
                   <tr key={user._id} className="bg-night transition-colors hover:bg-night-surface">
                     <td className="px-4 py-3">
                       <p className="font-medium text-silver">
-                        {user.username}
+                        {user.fullName || user.username}
                         {isSelf && <span className="ml-2 text-xs text-crimson-soft">(you)</span>}
                       </p>
-                      <p className="text-xs text-silver-muted">{user.email}</p>
+                      <p className="text-xs text-silver-muted">
+                        {user.fullName ? `@${user.username} • ${user.email}` : user.email}
+                      </p>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${user.role === 'admin' ? 'bg-crimson/20 text-crimson-soft' : 'bg-night-raised text-silver-muted'}`}>

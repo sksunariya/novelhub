@@ -2,7 +2,7 @@ const { api, createUser, createAdmin } = require('./helpers');
 const SiteSettings = require('../src/models/SiteSettings');
 
 describe('Auth', () => {
-  const signupPayload = { username: 'reader1', email: 'reader1@test.com', password: 'password123' };
+  const signupPayload = { username: 'reader1', email: 'reader1@test.com', password: 'password123', fullName: 'Reader One' };
 
   describe('POST /api/auth/signup', () => {
     it('creates a user and returns a token', async () => {
@@ -74,16 +74,18 @@ describe('Auth', () => {
   });
 
   describe('PUT /api/auth/profile', () => {
-    it('updates username and password', async () => {
+    it('updates username, fullName, and password', async () => {
       const { token } = await createUser({ password: 'password123' });
       const res = await api()
         .put('/api/auth/profile')
         .set('Authorization', `Bearer ${token}`)
-        .send({ username: 'newname', currentPassword: 'password123', newPassword: 'newpass456' });
+        .send({ username: 'newname', fullName: 'New Full Name', currentPassword: 'password123', newPassword: 'newpass456' });
       expect(res.status).toBe(200);
       expect(res.body.user.username).toBe('newname');
+      expect(res.body.user.fullName).toBe('New Full Name');
       const login = await api().post('/api/auth/login').send({ email: res.body.user.email, password: 'newpass456' });
       expect(login.status).toBe(200);
+      expect(login.body.user.fullName).toBe('New Full Name');
     });
 
     it('rejects password change with wrong current password', async () => {

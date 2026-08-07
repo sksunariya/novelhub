@@ -68,7 +68,9 @@ const Dashboard = () => {
             <div className="space-y-3">
               {data.recentUsers.map((user) => (
                 <div key={user._id} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="min-w-0 truncate text-silver">{user.username}</span>
+                  <span className="min-w-0 truncate text-silver" title={user.fullName ? `${user.fullName} (@${user.username})` : user.username}>
+                    {user.fullName || user.username}
+                  </span>
                   <span className="shrink-0 text-xs text-silver-muted">{new Date(user.createdAt).toLocaleDateString()}</span>
                 </div>
               ))}

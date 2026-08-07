@@ -32,8 +32,8 @@ export const AuthProvider = ({ children }) => {
     return data.user;
   }, []);
 
-  const signup = useCallback(async (username, email, password) => {
-    const { data } = await client.post('/auth/signup', { username, email, password });
+  const signup = useCallback(async (username, email, password, fullName) => {
+    const { data } = await client.post('/auth/signup', { username, email, password, fullName });
     if (data.token) {
       setToken(data.token);
       setUser(data.user);

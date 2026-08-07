@@ -122,9 +122,9 @@ const Navbar = () => {
                   aria-expanded={menuOpen}
                 >
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-crimson/20 text-xs font-bold uppercase text-crimson-soft">
-                    {user.username.slice(0, 2)}
+                    {(user.fullName || user.username).slice(0, 2)}
                   </span>
-                  <span className="hidden text-sm font-medium sm:block">{user.username}</span>
+                  <span className="hidden text-sm font-medium sm:block">{user.fullName || user.username}</span>
                 </button>
                 <AnimatePresence>
                   {menuOpen && (

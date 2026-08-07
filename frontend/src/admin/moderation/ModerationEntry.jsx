@@ -21,7 +21,9 @@ const IconButton = ({ icon: Icon, label, onClick, danger }) => (
 
 const AuthorLine = ({ user, createdAt, editedAt, deletedAt }) => (
   <div className="flex flex-wrap items-center gap-2 text-xs text-silver-muted">
-    <span className="font-semibold text-silver">{user?.username || 'Deleted user'}</span>
+    <span className="font-semibold text-silver" title={user?.username ? `@${user.username}` : ''}>
+      {user?.fullName || user?.username || 'Deleted user'}
+    </span>
     {user?.role === ADMIN_ROLE && (
       <span className="rounded-full bg-crimson/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-crimson-soft">
         Staff

@@ -132,7 +132,7 @@ const getStats = asyncHandler(async (req, res) => {
     Comment.countDocuments(),
     Review.countDocuments(),
     Novel.aggregate([{ $group: { _id: null, total: { $sum: '$views' } } }]),
-    User.find().sort({ createdAt: -1 }).limit(5).select('username email createdAt'),
+    User.find().sort({ createdAt: -1 }).limit(5).select('username email createdAt fullName'),
     Novel.find().sort({ views: -1 }).limit(5).select('title slug views ratingAvg chapterCount'),
   ]);
   res.json({
@@ -399,6 +399,7 @@ const listUsers = asyncHandler(async (req, res) => {
     filter.$or = [
       { username: { $regex: search, $options: 'i' } },
       { email: { $regex: search, $options: 'i' } },
+      { fullName: { $regex: search, $options: 'i' } },
     ];
   }
   const [users, total] = await Promise.all([
@@ -477,7 +478,11 @@ const moderationFilter = ({ novel, user, status }) => {
 
 const findAuthorIds = async (search) => {
   const users = await User.find({
-    $or: [{ username: searchRegex(search) }, { email: searchRegex(search) }],
+    $or: [
+      { username: searchRegex(search) },
+      { email: searchRegex(search) },
+      { fullName: searchRegex(search) },
+    ],
   }).select('_id');
   return users.map((user) => user._id);
 };

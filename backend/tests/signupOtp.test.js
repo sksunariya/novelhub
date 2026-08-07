@@ -13,7 +13,7 @@ const User = require('../src/models/User');
 const PendingSignup = require('../src/models/PendingSignup');
 const SiteSettings = require('../src/models/SiteSettings');
 
-const payload = { username: 'otpuser', email: 'otp@test.com', password: 'password123' };
+const payload = { username: 'otpuser', email: 'otp@test.com', password: 'password123', fullName: 'OTP User' };
 const codeFor = (email) => [...mailer.__sent].reverse().find((m) => m.to === email.toLowerCase())?.code;
 const enableVerification = async () => {
   const s = await SiteSettings.getSettings();

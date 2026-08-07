@@ -21,6 +21,7 @@ const serializeUser = (user) => ({
   role: user.role,
   avatarUrl: user.avatarUrl,
   library: user.library,
+  fullName: user.fullName,
 });
 
 const signup = asyncHandler(async (req, res) => {
@@ -28,13 +29,16 @@ const signup = asyncHandler(async (req, res) => {
   if (!settings.allowSignups) {
     return res.status(403).json({ message: 'Signups are currently disabled' });
   }
-  const { username, email, password } = req.body;
-  if (!username || !email || !password) {
-    return res.status(400).json({ message: 'username, email and password are required' });
+  const { username, email, password, fullName } = req.body;
+  if (!username || !email || !password || !fullName) {
+    return res.status(400).json({ message: 'username, email, password and fullName are required' });
+  }
+  if (!fullName.trim()) {
+    return res.status(400).json({ message: 'Full name is required' });
   }
 
   if (!settings.requireEmailVerification) {
-    const user = await User.create({ username, email, password });
+    const user = await User.create({ username, email, password, fullName });
     return res.status(201).json({ token: generateToken(user._id), user: serializeUser(user) });
   }
 
@@ -59,7 +63,7 @@ const signup = asyncHandler(async (req, res) => {
   const codeHash = await hashOtp(code);
   await PendingSignup.findOneAndUpdate(
     { email: normalizedEmail },
-    { email: normalizedEmail, username, passwordHash, codeHash, expiresAt: otpExpiry(), attempts: 0, lastSentAt: new Date() },
+    { email: normalizedEmail, username, passwordHash, codeHash, expiresAt: otpExpiry(), attempts: 0, lastSentAt: new Date(), fullName },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
   await sendOtpEmail({ to: normalizedEmail, code, purpose: 'signup' });
@@ -90,7 +94,7 @@ const verifySignup = asyncHandler(async (req, res) => {
     await PendingSignup.deleteOne({ _id: pending._id });
     return res.status(409).json({ message: 'email or username already exists' });
   }
-  const user = new User({ username: pending.username, email: pending.email });
+  const user = new User({ username: pending.username, email: pending.email, fullName: pending.fullName });
   user.password = pending.passwordHash;
   user.$locals.passwordAlreadyHashed = true;
   await user.save();
@@ -234,11 +238,20 @@ const googleAuth = asyncHandler(async (req, res) => {
     if (user.banned) {
       return res.status(403).json({ message: 'Account is banned' });
     }
+    let modified = false;
     if (!user.googleId) {
       user.googleId = payload.sub;
-      if (!user.avatarUrl && payload.picture) {
-        user.avatarUrl = payload.picture;
-      }
+      modified = true;
+    }
+    if (!user.avatarUrl && payload.picture) {
+      user.avatarUrl = payload.picture;
+      modified = true;
+    }
+    if (!user.fullName && payload.name) {
+      user.fullName = payload.name;
+      modified = true;
+    }
+    if (modified) {
       await user.save();
     }
   } else {
@@ -251,6 +264,7 @@ const googleAuth = asyncHandler(async (req, res) => {
       email,
       googleId: payload.sub,
       avatarUrl: payload.picture || '',
+      fullName: payload.name || '',
     });
   }
   res.json({ token: generateToken(user._id), user: serializeUser(user) });
@@ -261,10 +275,13 @@ const me = asyncHandler(async (req, res) => {
 });
 
 const updateProfile = asyncHandler(async (req, res) => {
-  const { username, avatarUrl, currentPassword, newPassword } = req.body;
+  const { username, fullName, avatarUrl, currentPassword, newPassword } = req.body;
   const user = await User.findById(req.user._id).select('+password');
   if (username) {
     user.username = username;
+  }
+  if (fullName !== undefined) {
+    user.fullName = fullName;
   }
   if (avatarUrl !== undefined) {
     user.avatarUrl = avatarUrl;

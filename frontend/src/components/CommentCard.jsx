@@ -59,7 +59,7 @@ const Avatar = ({ user, size }) =>
     <span
       className={`${size} flex shrink-0 items-center justify-center rounded-full border border-crimson/30 bg-crimson/20 font-bold uppercase text-crimson-soft shadow-sm`}
     >
-      {user?.username?.slice(0, 2) || '??'}
+      {(user?.fullName || user?.username)?.slice(0, 2) || '??'}
     </span>
   );
 
@@ -212,7 +212,9 @@ const CommentCard = ({
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-            <span className="truncate text-sm font-semibold text-blue-400">{item.user?.username || 'Deleted user'}</span>
+            <span className="truncate text-sm font-semibold text-blue-400" title={item.user?.username ? `@${item.user.username}` : ''}>
+              {item.user?.fullName || item.user?.username || 'Deleted user'}
+            </span>
             {item.user?.role === ADMIN_ROLE && <StaffBadge />}
             <span className="text-[11px] text-silver-muted" title={formatExactDateTime(item.createdAt)}>
               {formatRelativeTime(item.createdAt)}
@@ -315,8 +317,8 @@ const CommentCard = ({
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <div className="flex items-center justify-between">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <span className="truncate text-xs font-semibold text-blue-400">
-                            {reply.user?.username || 'Deleted user'}
+                          <span className="truncate text-xs font-semibold text-blue-400" title={reply.user?.username ? `@${reply.user.username}` : ''}>
+                            {reply.user?.fullName || reply.user?.username || 'Deleted user'}
                           </span>
                           {reply.user?.role === ADMIN_ROLE && <StaffBadge />}
                           <span className="text-[10px] text-silver-muted" title={formatExactDateTime(reply.createdAt)}>

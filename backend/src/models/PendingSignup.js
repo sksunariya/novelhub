@@ -4,6 +4,7 @@ const pendingSignupSchema = new mongoose.Schema(
   {
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     username: { type: String, required: true },
+    fullName: { type: String, trim: true },
     passwordHash: { type: String, required: true },
     codeHash: { type: String, required: true },
     expiresAt: { type: Date, required: true },

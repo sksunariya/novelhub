@@ -8,16 +8,20 @@ const inputClass =
 
 const Profile = () => {
   const { user, updateUser } = useAuth();
-  const [account, setAccount] = useState({ username: user.username, currentPassword: '', newPassword: '' });
+  const [account, setAccount] = useState({ username: user.username, fullName: user.fullName || '', currentPassword: '', newPassword: '' });
   const [message, setMessage] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const save = async (e) => {
     e.preventDefault();
     setMessage(null);
+    if (!account.fullName.trim()) {
+      setMessage({ type: 'error', text: 'Full name is required' });
+      return;
+    }
     setSaving(true);
     try {
-      const payload = { username: account.username };
+      const payload = { username: account.username, fullName: account.fullName };
       if (account.newPassword) {
         payload.currentPassword = account.currentPassword;
         payload.newPassword = account.newPassword;
@@ -40,18 +44,31 @@ const Profile = () => {
           <img src={user.avatarUrl} alt="" className="h-16 w-16 rounded-full border border-line object-cover" />
         ) : (
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-crimson/20 font-display text-xl font-bold uppercase text-crimson-soft">
-            {user.username.slice(0, 2)}
+            {(user.fullName || user.username).slice(0, 2)}
           </span>
         )}
         <div>
-          <h1 className="font-display text-2xl font-bold text-silver">{user.username}</h1>
-          <p className="text-sm text-silver-muted">{user.email}</p>
+          <h1 className="font-display text-2xl font-bold text-silver">{user.fullName || user.username}</h1>
+          <p className="text-sm text-silver-muted">
+            {user.fullName ? `@${user.username} • ${user.email}` : user.email}
+          </p>
           {user.role === 'admin' && <p className="text-xs font-medium text-crimson-soft">Administrator</p>}
         </div>
       </div>
 
       <form onSubmit={save} className="max-w-md space-y-4 rounded-xl border border-line bg-night-surface p-6">
         <h2 className="font-display text-lg font-bold text-silver">Account Settings</h2>
+        <div>
+          <label htmlFor="acc-fullName" className="mb-1.5 block text-sm font-medium text-silver">Full Name</label>
+          <input
+            id="acc-fullName"
+            type="text"
+            required
+            value={account.fullName}
+            onChange={(e) => setAccount((a) => ({ ...a, fullName: e.target.value }))}
+            className={inputClass}
+          />
+        </div>
         <div>
           <label htmlFor="acc-username" className="mb-1.5 block text-sm font-medium text-silver">Username</label>
           <input

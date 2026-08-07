@@ -22,9 +22,9 @@ const NOTIFICATION_TYPES = {
   REPLY: 'reply',
 };
 
-const PUBLIC_USER_FIELDS = 'username avatarUrl role';
+const PUBLIC_USER_FIELDS = 'username avatarUrl role fullName';
 
-const ADMIN_USER_FIELDS = 'username email avatarUrl role banned';
+const ADMIN_USER_FIELDS = 'username email avatarUrl role banned fullName';
 
 const MODERATION_STATUS = {
   ACTIVE: 'active',
