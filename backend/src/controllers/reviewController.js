@@ -198,8 +198,24 @@ const addReviewReply = asyncHandler(async (req, res) => {
   }
   review.replies.push({ user: req.user._id, content: content.trim() });
   await review.save();
-  const novel = await Novel.findById(review.novel).select('slug');
-  const link = novel ? `/novel/${novel.slug}#review-${review._id}` : '';
+  const createdReply = review.replies[review.replies.length - 1];
+  let link = '';
+  if (createdReply) {
+    if (review.chapter) {
+      const [novel, chapter] = await Promise.all([
+        Novel.findById(review.novel).select('slug'),
+        Chapter.findById(review.chapter).select('number'),
+      ]);
+      if (novel && chapter) {
+        link = `/novel/${novel.slug}/chapter/${chapter.number}#review-${createdReply._id}`;
+      }
+    } else {
+      const novel = await Novel.findById(review.novel).select('slug');
+      if (novel) {
+        link = `/novel/${novel.slug}#review-${createdReply._id}`;
+      }
+    }
+  }
   await notifyCommentActivity({
     parentAuthor: review.user,
     actor: req.user,

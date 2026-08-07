@@ -10,7 +10,8 @@ import CommentCard from '../components/CommentCard';
 import ChapterGate from '../components/ChapterGate';
 import { stripTextColor } from '../utils/sanitizeContent';
 import { formatRelativeTime, formatExactDateTime } from '../utils/dateUtils';
-import { ANCHORS, readHashTarget } from '../utils/hashTarget';
+import DeletedItemModal from '../components/DeletedItemModal';
+import { ANCHORS, readHashTarget, isTargetInItems } from '../utils/hashTarget';
 
 const SETTINGS_KEY = 'novelhub_reader_settings';
 
@@ -134,15 +135,20 @@ const Reader = () => {
       .catch(() => {});
   }, [data, user]);
 
+  const [chapterReviews, setChapterReviews] = useState(null);
+
   const loadChapterReview = useCallback(() => {
-    if (!data || !user) return;
+    if (!data) return;
     client
       .get(`/community/chapters/${data.chapter._id}/reviews`)
       .then(({ data: res }) => {
-        const found = res.reviews?.find((r) => r.user?._id === user.id || r.user === user.id);
-        setChapterReview(found || null);
+        setChapterReviews(res.reviews || []);
+        if (user) {
+          const found = res.reviews?.find((r) => r.user?._id === user.id || r.user === user.id);
+          setChapterReview(found || null);
+        }
       })
-      .catch(() => {});
+      .catch(() => setChapterReviews([]));
   }, [data, user]);
 
   useEffect(() => {
@@ -233,7 +239,24 @@ const Reader = () => {
 
   const commentCount = (comments || []).reduce((count, comment) => count + 1 + (comment.replies?.length || 0), 0);
 
+  const [showDeletedModal, setShowDeletedModal] = useState(false);
+
   const commentTarget = readHashTarget(hash, ANCHORS.COMMENT);
+  const reviewTarget = readHashTarget(hash, ANCHORS.REVIEW);
+
+  useEffect(() => {
+    if (commentTarget && Array.isArray(comments)) {
+      const exists = isTargetInItems(commentTarget, comments);
+      if (!exists) {
+        setShowDeletedModal(true);
+      }
+    } else if (reviewTarget && Array.isArray(chapterReviews)) {
+      const exists = isTargetInItems(reviewTarget, chapterReviews);
+      if (!exists) {
+        setShowDeletedModal(true);
+      }
+    }
+  }, [commentTarget, reviewTarget, comments, chapterReviews]);
 
   const theme = READER_THEMES[settings.theme] || READER_THEMES.dark;
 
@@ -487,6 +510,8 @@ const Reader = () => {
                           item={comment}
                           currentUser={user}
                           isAdmin={isAdmin}
+                          anchorPrefix={ANCHORS.COMMENT}
+                          targetId={commentTarget}
                           onLike={likeComment}
                           onDislike={dislikeComment}
                           onEdit={editComment}
@@ -494,6 +519,7 @@ const Reader = () => {
                           onReplySubmit={postReply}
                           onLikeReply={(_parentId, replyId) => likeComment(replyId)}
                           onDislikeReply={(_parentId, replyId) => dislikeComment(replyId)}
+                          onEditReply={(_parentId, replyId, text) => editComment(replyId, { content: text })}
                           onDeleteReply={(_parentId, replyId) => deleteComment(replyId)}
                         />
                       ))
@@ -673,6 +699,7 @@ const Reader = () => {
                         onReplySubmit={postReply}
                         onLikeReply={(_parentId, replyId) => likeComment(replyId)}
                         onDislikeReply={(_parentId, replyId) => dislikeComment(replyId)}
+                        onEditReply={(_parentId, replyId, text) => editComment(replyId, { content: text })}
                         onDeleteReply={(_parentId, replyId) => deleteComment(replyId)}
                       />
                     ))}
@@ -771,6 +798,11 @@ const Reader = () => {
           </section>
         </motion.main>
       )}
+      <DeletedItemModal
+        isOpen={showDeletedModal}
+        onClose={() => setShowDeletedModal(false)}
+        message="The comment or reply you clicked has been deleted."
+      />
     </div>
   );
 };
