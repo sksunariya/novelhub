@@ -1,9 +1,10 @@
 import { NavLink, Outlet, Link } from 'react-router-dom';
-import { LayoutDashboard, BookOpen, Users, ShieldAlert, Bell, Settings, ArrowLeft } from 'lucide-react';
+import { LayoutDashboard, Images, BookOpen, Users, ShieldAlert, Bell, Settings, ArrowLeft } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 
 const LINKS = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/admin/carousel', label: 'Hero Carousel', icon: Images },
   { to: '/admin/novels', label: 'Novels', icon: BookOpen },
   { to: '/admin/users', label: 'Users', icon: Users },
   { to: '/admin/moderation', label: 'Moderation', icon: ShieldAlert },

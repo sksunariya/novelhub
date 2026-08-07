@@ -38,6 +38,9 @@ const siteSettingsSchema = new mongoose.Schema(
     enableMentionNotifications: { type: Boolean, default: true },
     enableReplyNotifications: { type: Boolean, default: true },
     enableChapterNotifications: { type: Boolean, default: true },
+    carouselMode: { type: String, enum: ['hybrid', 'custom_only', 'auto_smart'], default: 'hybrid' },
+    carouselAutoPlayInterval: { type: Number, default: 6 },
+    enableCarouselAutoPlay: { type: Boolean, default: true },
     readingGate: { type: buildReadingGateSchema(), default: () => ({}) },
   },
   { timestamps: true }

@@ -18,6 +18,7 @@ import Spinner from './components/Spinner';
 
 const AdminLayout = lazy(() => import('./admin/AdminLayout'));
 const Dashboard = lazy(() => import('./admin/Dashboard'));
+const CarouselAdmin = lazy(() => import('./admin/CarouselAdmin'));
 const NovelsAdmin = lazy(() => import('./admin/NovelsAdmin'));
 const ChaptersAdmin = lazy(() => import('./admin/ChaptersAdmin'));
 const UsersAdmin = lazy(() => import('./admin/UsersAdmin'));
@@ -92,6 +93,14 @@ const App = () => {
             element={
               <Suspense fallback={<Spinner full />}>
                 <Dashboard />
+              </Suspense>
+            }
+          />
+          <Route
+            path="carousel"
+            element={
+              <Suspense fallback={<Spinner full />}>
+                <CarouselAdmin />
               </Suspense>
             }
           />

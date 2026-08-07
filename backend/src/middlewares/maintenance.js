@@ -1,7 +1,7 @@
 const SiteSettings = require('../models/SiteSettings');
 const { ROLES } = require('../config/constants');
 
-const EXEMPT_PREFIXES = ['/auth/login', '/auth/google', '/settings', '/admin'];
+const EXEMPT_PREFIXES = ['/auth/login', '/auth/google', '/settings', '/admin', '/carousel'];
 
 const maintenanceGuard = async (req, res, next) => {
   const settings = await SiteSettings.getSettings();

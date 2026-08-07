@@ -34,6 +34,14 @@ const {
 const { protect, adminOnly } = require('../middlewares/auth');
 const { imageUpload, docUpload } = require('../middlewares/upload');
 
+const {
+  getAdminSlides,
+  createSlide,
+  updateSlide,
+  deleteSlide,
+  reorderSlides,
+} = require('../controllers/carouselController');
+
 const router = express.Router();
 
 router.use(protect, adminOnly);
@@ -41,6 +49,13 @@ router.use(protect, adminOnly);
 router.get('/stats', getStats);
 
 router.post('/uploads/image', imageUpload.single('image'), uploadEditorImage);
+
+// Carousel Admin Routes
+router.get('/carousel', getAdminSlides);
+router.post('/carousel', imageUpload.single('image'), createSlide);
+router.put('/carousel/reorder', reorderSlides);
+router.put('/carousel/:id', imageUpload.single('image'), updateSlide);
+router.delete('/carousel/:id', deleteSlide);
 
 router.get('/novels', listAllNovels);
 router.post('/novels', imageUpload.single('cover'), createNovel);

@@ -6,6 +6,7 @@ const novelRoutes = require('./routes/novelRoutes');
 const communityRoutes = require('./routes/communityRoutes');
 const libraryRoutes = require('./routes/libraryRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
+const carouselRoutes = require('./routes/carouselRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const maintenanceGuard = require('./middlewares/maintenance');
 const requestLogger = require('./middlewares/requestLogger');
@@ -25,6 +26,7 @@ app.use('/api/novels', novelRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/library', libraryRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/carousel', carouselRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.use(notFound);

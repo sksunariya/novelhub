@@ -193,6 +193,7 @@ const dispatchCampaign = async ({
   targetUserId = null,
   channels = [NOTIFICATION_CHANNELS.IN_APP],
   adminUser,
+  type = NOTIFICATION_TYPES.CAMPAIGN,
 }) => {
   let filter = { banned: false, deletedAt: null };
 
@@ -231,7 +232,7 @@ const dispatchCampaign = async ({
             dispatchNotification({
               recipient,
               actor: adminUser,
-              type: NOTIFICATION_TYPES.CAMPAIGN,
+              type: type || NOTIFICATION_TYPES.CAMPAIGN,
               title,
               message,
               link,

@@ -711,12 +711,15 @@ const getAdminSettings = asyncHandler(async (req, res) => {
 const updateSettings = asyncHandler(async (req, res) => {
   const settings = await SiteSettings.getSettings();
   const body = req.body;
-  const stringFields = ['siteName', 'tagline', 'announcement', 'footerText'];
+  const stringFields = ['siteName', 'tagline', 'announcement', 'footerText', 'carouselMode'];
   stringFields.forEach((field) => {
     if (body[field] !== undefined) {
       settings[field] = body[field];
     }
   });
+  if (body.carouselAutoPlayInterval !== undefined) {
+    settings.carouselAutoPlayInterval = Number(body.carouselAutoPlayInterval) || 6;
+  }
   const files = req.files || {};
   if (files.logo && files.logo[0]) {
     const previousLogo = settings.logoUrl;
@@ -764,6 +767,7 @@ const updateSettings = asyncHandler(async (req, res) => {
     'enableMentionNotifications',
     'enableReplyNotifications',
     'enableChapterNotifications',
+    'enableCarouselAutoPlay',
   ];
   boolFields.forEach((field) => {
     if (body[field] !== undefined) {
@@ -786,6 +790,7 @@ const broadcastAnnouncement = asyncHandler(async (req, res) => {
     targetAudience: 'all',
     channels: ['in_app'],
     adminUser: req.user,
+    type: 'announcement',
   });
   res.status(201).json({ notifiedCount: campaign ? campaign.recipientCount : 0 });
 });
