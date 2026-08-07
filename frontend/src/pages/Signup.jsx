@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, MailCheck, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -7,6 +7,7 @@ import { useSettings } from '../context/SettingsContext';
 import PageTransition from '../components/PageTransition';
 import GoogleButton from '../components/GoogleButton';
 import OtpInput from '../components/OtpInput';
+import { REDIRECT_PARAM } from '../utils/readingGate';
 
 const inputClass =
   'w-full rounded-lg border border-line bg-night px-4 py-2.5 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none';
@@ -22,6 +23,9 @@ const Signup = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get(REDIRECT_PARAM) || '/';
+  const redirectQuery = redirectTo === '/' ? '' : `?${REDIRECT_PARAM}=${encodeURIComponent(redirectTo)}`;
 
   useEffect(() => {
     if (cooldown <= 0) return undefined;
@@ -48,7 +52,7 @@ const Signup = () => {
         setCode('');
         setCooldown(60);
       } else {
-        navigate('/');
+        navigate(redirectTo);
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Signup failed');
@@ -62,7 +66,7 @@ const Signup = () => {
     setLoading(true);
     try {
       await verifySignup(form.email, submittedCode.trim());
-      navigate('/');
+      navigate(redirectTo);
     } catch (err) {
       setError(err.response?.data?.message || 'Verification failed');
       setCode('');
@@ -89,7 +93,7 @@ const Signup = () => {
         <div className="mx-auto mt-16 max-w-md rounded-2xl border border-line bg-night-surface p-8 text-center">
           <h1 className="font-display text-xl font-bold text-silver">Signups are closed</h1>
           <p className="mt-2 text-sm text-silver-muted">New registrations are currently disabled by the administrators.</p>
-          <Link to="/login" className="mt-4 inline-block text-sm text-crimson-soft hover:underline">Log in instead</Link>
+          <Link to={`/login${redirectQuery}`} className="mt-4 inline-block text-sm text-crimson-soft hover:underline">Log in instead</Link>
         </div>
       </PageTransition>
     );
@@ -199,7 +203,7 @@ const Signup = () => {
                 <GoogleButton onError={setError} />
                 <p className="mt-5 text-center text-sm text-silver-muted">
                   Already a member?{' '}
-                  <Link to="/login" className="font-medium text-crimson-soft hover:underline">Log in</Link>
+                  <Link to={`/login${redirectQuery}`} className="font-medium text-crimson-soft hover:underline">Log in</Link>
                 </p>
               </motion.div>
             ) : (

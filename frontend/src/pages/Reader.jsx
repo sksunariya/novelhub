@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/Spinner';
 import StarRating from '../components/StarRating';
 import CommentCard from '../components/CommentCard';
+import ChapterGate from '../components/ChapterGate';
 import { stripTextColor } from '../utils/sanitizeContent';
 import { formatRelativeTime, formatExactDateTime } from '../utils/dateUtils';
 import { ANCHORS, readHashTarget } from '../utils/hashTarget';
@@ -42,10 +43,12 @@ const Reader = () => {
   const { user, isAdmin } = useAuth();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [gatePayload, setGatePayload] = useState(null);
   const [settings, setSettings] = useState(loadSettings);
   const [panel, setPanel] = useState('');
   const [chapters, setChapters] = useState([]);
   const [comments, setComments] = useState(null);
+  const [commentError, setCommentError] = useState('');
   const [panelCommentText, setPanelCommentText] = useState('');
   const [bottomCommentText, setBottomCommentText] = useState('');
   const [isPanelCommentFocused, setIsPanelCommentFocused] = useState(false);
@@ -55,24 +58,56 @@ const Reader = () => {
   const [reviewForm, setReviewForm] = useState({ rating: 0, content: '' });
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewMsg, setReviewMsg] = useState('');
+  const [chapterReview, setChapterReview] = useState(null);
+  const [chapterReviewForm, setChapterReviewForm] = useState({ rating: 0, content: '' });
+  const [savingChapterReview, setSavingChapterReview] = useState(false);
+  const [chapterReviewMsg, setChapterReviewMsg] = useState('');
 
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
 
+  // A gated chapter answers 403 with the requirements instead of its content.
+  const loadChapter = useCallback(
+    () =>
+      client
+        .get(`/novels/${slug}/chapters/${number}`)
+        .then((res) => {
+          setData(res.data);
+          setGatePayload(null);
+        })
+        .catch((err) => {
+          if (err.response?.status === 403 && err.response.data?.gate) {
+            setGatePayload(err.response.data);
+            setData(null);
+            return;
+          }
+          setError(err.response?.data?.message || 'Failed to load chapter');
+        }),
+    [slug, number]
+  );
+
+  // Novel-scoped state only needs clearing when the novel itself changes.
+  useEffect(() => {
+    setUserReview(null);
+    setReviewForm({ rating: 0, content: '' });
+    setReviewMsg('');
+  }, [slug]);
+
   useEffect(() => {
     setData(null);
     setError('');
+    setGatePayload(null);
     setComments(null);
+    setCommentError('');
     setPanelCommentText('');
     setBottomCommentText('');
-    setReviewMsg('');
+    setChapterReview(null);
+    setChapterReviewForm({ rating: 0, content: '' });
+    setChapterReviewMsg('');
     window.scrollTo(0, 0);
-    client
-      .get(`/novels/${slug}/chapters/${number}`)
-      .then((res) => setData(res.data))
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load chapter'));
-  }, [slug, number]);
+    loadChapter();
+  }, [slug, number, loadChapter]);
 
   useEffect(() => {
     if (panel === 'chapters' && chapters.length === 0) {
@@ -91,13 +126,23 @@ const Reader = () => {
   const loadUserReview = useCallback(() => {
     if (!data || !user) return;
     client
-      .get(`/novels/id/${data.novel._id}/reviews`)
+      .get(`/novels/id/${data.novel.id}/reviews`)
       .then(({ data: res }) => {
         const found = res.reviews?.find((r) => r.user?._id === user.id || r.user === user.id);
-        if (found) {
-          setUserReview(found);
-          setReviewForm({ rating: found.rating, content: found.content || '' });
-        }
+        setUserReview(found || null);
+        setReviewForm(found ? { rating: found.rating, content: found.content || '' } : { rating: 0, content: '' });
+      })
+      .catch(() => {});
+  }, [data, user]);
+
+  const loadChapterReview = useCallback(() => {
+    if (!data || !user) return;
+    client
+      .get(`/community/chapters/${data.chapter._id}/reviews`)
+      .then(({ data: res }) => {
+        const found = res.reviews?.find((r) => r.user?._id === user.id || r.user === user.id);
+        setChapterReview(found || null);
+        setChapterReviewForm(found ? { rating: found.rating, content: found.content || '' } : { rating: 0, content: '' });
       })
       .catch(() => {});
   }, [data, user]);
@@ -106,17 +151,32 @@ const Reader = () => {
     if (data) {
       loadComments();
       loadUserReview();
+      loadChapterReview();
     }
-  }, [data, loadComments, loadUserReview]);
+  }, [data, loadComments, loadUserReview, loadChapterReview]);
+
+  // Comment actions surface their own failures; a silently dead button reads as a
+  // broken UI, and an expired or banned session is the common cause.
+  const runCommentAction = async (action) => {
+    setCommentError('');
+    try {
+      await action();
+      loadComments();
+    } catch (err) {
+      setCommentError(err.response?.data?.message || 'Something went wrong. Please try again.');
+    }
+  };
 
   const postComment = (text, reset) => async (e) => {
     e.preventDefault();
     if (!text.trim()) return;
-    await client.post(`/community/chapters/${data.chapter._id}/comments`, { content: text });
-    reset();
-    loadComments();
+    await runCommentAction(async () => {
+      await client.post(`/community/chapters/${data.chapter._id}/comments`, { content: text });
+      reset();
+    });
   };
 
+  // Reply errors are rendered by CommentCard, so this one rethrows.
   const postReply = async (parentId, text) => {
     await client.post(`/community/chapters/${data.chapter._id}/comments`, {
       content: text,
@@ -125,15 +185,11 @@ const Reader = () => {
     loadComments();
   };
 
-  const deleteComment = async (id) => {
-    await client.delete(`/community/comments/${id}`);
-    loadComments();
-  };
+  const deleteComment = (id) => runCommentAction(() => client.delete(`/community/comments/${id}`));
 
-  const reactToComment = (action) => async (id) => {
+  const reactToComment = (action) => (id) => {
     if (!user) return navigate('/login');
-    await client.post(`/community/comments/${id}/${action}`);
-    return loadComments();
+    return runCommentAction(() => client.post(`/community/comments/${id}/${action}`));
   };
 
   const likeComment = reactToComment('like');
@@ -146,13 +202,31 @@ const Reader = () => {
     setSubmittingReview(true);
     setReviewMsg('');
     try {
-      await client.post(`/novels/id/${data.novel._id}/reviews`, reviewForm);
+      await client.post(`/novels/id/${data.novel.id}/reviews`, reviewForm);
       setReviewMsg('Thank you! Your review has been saved.');
       loadUserReview();
     } catch (err) {
       setReviewMsg(err.response?.data?.message || 'Failed to submit review');
     } finally {
       setSubmittingReview(false);
+    }
+  };
+
+  const submitChapterReview = async (e) => {
+    e.preventDefault();
+    if (!chapterReviewForm.rating || !data) return;
+    setSavingChapterReview(true);
+    setChapterReviewMsg('');
+    try {
+      await client.post(`/community/chapters/${data.chapter._id}/reviews`, chapterReviewForm);
+      setChapterReviewMsg('Chapter rating saved.');
+      // Refreshing the chapter refreshes its average, and the resulting `data`
+      // change re-runs the chapter-review loader on its own.
+      await loadChapter();
+    } catch (err) {
+      setChapterReviewMsg(err.response?.data?.message || 'Failed to save chapter rating');
+    } finally {
+      setSavingChapterReview(false);
     }
   };
 
@@ -173,6 +247,14 @@ const Reader = () => {
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-night text-silver-muted">
         <p>{error}</p>
         <Link to={`/novel/${slug}`} className="text-crimson-soft hover:underline">Back to novel</Link>
+      </div>
+    );
+  }
+
+  if (gatePayload) {
+    return (
+      <div className="min-h-dvh bg-night">
+        <ChapterGate payload={gatePayload} user={user} onSatisfied={loadChapter} />
       </div>
     );
   }
@@ -392,6 +474,7 @@ const Reader = () => {
                         <Link to="/login" className="text-crimson-soft hover:underline">Log in</Link> to comment.
                       </p>
                     )}
+                    {commentError && <p className="text-xs text-crimson-soft" role="alert">{commentError}</p>}
                     {comments === null ? (
                       <Spinner />
                     ) : comments.length === 0 ? (
@@ -565,6 +648,8 @@ const Reader = () => {
                   </p>
                 )}
 
+                {commentError && <p className="text-sm text-crimson-soft" role="alert">{commentError}</p>}
+
                 {comments === null ? (
                   <Spinner />
                 ) : comments.length === 0 ? (
@@ -634,6 +719,56 @@ const Reader = () => {
                     <Link to="/login" className="text-crimson-soft hover:underline font-medium">Log in</Link> to rate and review this novel.
                   </p>
                 )}
+
+                <div className="mt-5 border-t border-line pt-4">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-display text-base font-semibold">Rate Chapter {data.chapter.number}</h3>
+                    {data.chapter.ratingCount > 0 && (
+                      <span className="text-xs text-silver-muted">
+                        {data.chapter.ratingAvg}★ from {data.chapter.ratingCount}
+                        {data.chapter.ratingCount === 1 ? ' reader' : ' readers'}
+                      </span>
+                    )}
+                  </div>
+                  {user ? (
+                    <form onSubmit={submitChapterReview} className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-medium opacity-80">Your Rating:</span>
+                        <StarRating
+                          value={chapterReviewForm.rating}
+                          onChange={(rating) => setChapterReviewForm((f) => ({ ...f, rating }))}
+                        />
+                      </div>
+                      <label htmlFor="end-chapter-review-input" className="sr-only">Chapter review text</label>
+                      <textarea
+                        id="end-chapter-review-input"
+                        value={chapterReviewForm.content}
+                        onChange={(e) => setChapterReviewForm((f) => ({ ...f, content: e.target.value }))
+                        }
+                        placeholder="What worked in this chapter?"
+                        rows={2}
+                        className="w-full rounded-xl border border-line bg-night px-4 py-3 text-sm placeholder:text-silver-muted focus:border-crimson focus:outline-none"
+                      />
+                      {chapterReviewMsg && <p className="text-xs font-medium text-crimson-soft">{chapterReviewMsg}</p>}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-silver-muted">
+                          {chapterReview ? `Current rating: ${chapterReview.rating}★` : 'Rate this chapter out of 5 stars.'}
+                        </span>
+                        <button
+                          type="submit"
+                          disabled={savingChapterReview || !chapterReviewForm.rating}
+                          className="cursor-pointer rounded-full border border-crimson px-5 py-2 text-xs font-semibold text-crimson-soft transition-colors hover:bg-crimson hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {savingChapterReview ? 'Saving...' : chapterReview ? 'Update Chapter Rating' : 'Submit Chapter Rating'}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <p className="text-sm text-silver-muted">
+                      <Link to="/login" className="text-crimson-soft hover:underline font-medium">Log in</Link> to rate this chapter.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </section>

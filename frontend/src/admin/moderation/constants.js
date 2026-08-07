@@ -11,3 +11,5 @@ export const MODERATION_STATUS = {
 export const ADMIN_ROLE = 'admin';
 
 export const NOVEL_FILTER_LIMIT = 100;
+
+export const SEARCH_DEBOUNCE_MS = 350;

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import PageTransition from '../components/PageTransition';
 import GoogleButton from '../components/GoogleButton';
+import { REDIRECT_PARAM } from '../utils/readingGate';
 
 const Login = () => {
   const { login } = useAuth();
@@ -13,6 +14,9 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get(REDIRECT_PARAM) || '/';
+  const redirectQuery = redirectTo === '/' ? '' : `?${REDIRECT_PARAM}=${encodeURIComponent(redirectTo)}`;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -20,7 +24,7 @@ const Login = () => {
     setLoading(true);
     try {
       await login(form.email, form.password);
-      navigate('/');
+      navigate(redirectTo);
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed');
     } finally {
@@ -98,7 +102,7 @@ const Login = () => {
           <GoogleButton onError={setError} />
           <p className="mt-5 text-center text-sm text-silver-muted">
             No account?{' '}
-            <Link to="/signup" className="font-medium text-crimson-soft hover:underline">
+            <Link to={`/signup${redirectQuery}`} className="font-medium text-crimson-soft hover:underline">
               Sign up
             </Link>
           </p>

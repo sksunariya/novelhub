@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Pencil, Trash2, List, X, Star } from 'lucide-react';
+import { Plus, Pencil, Trash2, List, X, Star, Lock } from 'lucide-react';
 import client from '../api/client';
 import Spinner from '../components/Spinner';
+import Pagination from '../components/Pagination';
+import ReadingGateFields, { DEFAULT_READING_GATE, gatePayload, toGateForm } from './ReadingGateFields';
 
 const EMPTY_FORM = {
   title: '',
@@ -17,22 +19,36 @@ const EMPTY_FORM = {
   featured: false,
 };
 
+const EMPTY_GATE = { ...DEFAULT_READING_GATE, override: false };
+
 const inputClass =
   'w-full rounded-lg border border-line bg-night px-3 py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none';
 
 const NovelsAdmin = () => {
   const [novels, setNovels] = useState(null);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState({ pages: 1, total: 0 });
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [gate, setGate] = useState(EMPTY_GATE);
   const [coverFile, setCoverFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const load = useCallback(() => {
-    const query = search ? `?search=${encodeURIComponent(search)}` : '';
-    client.get(`/admin/novels${query}`).then(({ data }) => setNovels(data.novels)).catch(() => setNovels([]));
-  }, [search]);
+    const params = { page };
+    if (search) {
+      params.search = search;
+    }
+    client
+      .get('/admin/novels', { params })
+      .then(({ data }) => {
+        setNovels(data.novels);
+        setMeta({ pages: data.pages, total: data.total });
+      })
+      .catch(() => setNovels([]));
+  }, [search, page]);
 
   useEffect(() => {
     load();
@@ -40,6 +56,7 @@ const NovelsAdmin = () => {
 
   const openCreate = () => {
     setForm(EMPTY_FORM);
+    setGate(EMPTY_GATE);
     setCoverFile(null);
     setError('');
     setEditing('new');
@@ -57,6 +74,7 @@ const NovelsAdmin = () => {
       published: novel.published,
       featured: novel.featured,
     });
+    setGate({ ...EMPTY_GATE, ...toGateForm(novel.readingGate), override: Boolean(novel.readingGate?.override) });
     setCoverFile(null);
     setError('');
     setEditing(novel);
@@ -69,6 +87,7 @@ const NovelsAdmin = () => {
     try {
       const body = new FormData();
       Object.entries(form).forEach(([key, val]) => body.append(key, val));
+      body.append('readingGate', JSON.stringify(gatePayload(gate)));
       if (coverFile) {
         body.append('cover', coverFile);
       }
@@ -99,7 +118,10 @@ const NovelsAdmin = () => {
         <input
           type="search"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setPage(1);
+            setSearch(e.target.value);
+          }}
           placeholder="Search novels..."
           aria-label="Search novels"
           className="w-full rounded-full border border-line bg-night-surface px-4 py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none sm:w-56"
@@ -187,6 +209,8 @@ const NovelsAdmin = () => {
         </div>
       )}
 
+      <Pagination page={page} pages={meta.pages} total={meta.total} onChange={setPage} />
+
       <AnimatePresence>
         {editing && (
           <motion.div
@@ -263,6 +287,12 @@ const NovelsAdmin = () => {
                     <input type="checkbox" checked={form.featured} onChange={(e) => setForm((f) => ({ ...f, featured: e.target.checked }))} className="accent-[var(--color-primary)]" />
                     Featured
                   </label>
+                </div>
+                <div className="rounded-lg border border-line bg-night/40 p-3">
+                  <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-silver">
+                    <Lock className="h-4 w-4 text-crimson" aria-hidden="true" /> Reading gate
+                  </p>
+                  <ReadingGateFields idPrefix="nv-gate" gate={gate} onChange={(patch) => setGate((g) => ({ ...g, ...patch }))} showOverride />
                 </div>
                 {error && <p className="rounded-lg bg-crimson/15 px-3 py-2 text-sm text-crimson-soft" role="alert">{error}</p>}
                 <div className="flex justify-end gap-2 pt-2">

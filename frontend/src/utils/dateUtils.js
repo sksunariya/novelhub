@@ -23,8 +23,11 @@ export const formatRelativeTime = (dateInput) => {
   const diffInDays = Math.floor(diffInHours / 24);
   if (diffInDays < 30) return `${diffInDays} day${diffInDays === 1 ? '' : 's'} ago`;
 
-  const diffInMonths = Math.floor(diffInDays / 30);
-  if (diffInMonths < 12) return `${diffInMonths} month${diffInMonths === 1 ? '' : 's'} ago`;
+  // Bounded by days, not months, so 360 days cannot fall through to "0 years ago".
+  if (diffInDays < 365) {
+    const diffInMonths = Math.max(Math.floor(diffInDays / 30), 1);
+    return `${diffInMonths} month${diffInMonths === 1 ? '' : 's'} ago`;
+  }
 
   const diffInYears = Math.floor(diffInDays / 365);
   return `${diffInYears} year${diffInYears === 1 ? '' : 's'} ago`;

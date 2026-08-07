@@ -3,6 +3,7 @@ import { Megaphone, Palette, Globe, Image, Send, LayoutGrid } from 'lucide-react
 import client from '../api/client';
 import { useSettings } from '../context/SettingsContext';
 import Spinner from '../components/Spinner';
+import ReadingGateFields, { ReadingGateSection, gatePayload, toGateForm } from './ReadingGateFields';
 
 const inputClass =
   'w-full rounded-lg border border-line bg-night px-3 py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none';
@@ -53,6 +54,7 @@ const SettingsAdmin = () => {
       body.append('themeColors', JSON.stringify(form.themeColors));
       body.append('socialLinks', JSON.stringify(form.socialLinks));
       body.append('homeSections', JSON.stringify(form.homeSections));
+      body.append('readingGate', JSON.stringify(gatePayload(toGateForm(form.readingGate))));
       body.append('allowSignups', form.allowSignups);
       body.append('requireEmailVerification', form.requireEmailVerification);
       body.append('maintenanceMode', form.maintenanceMode);
@@ -225,6 +227,19 @@ const SettingsAdmin = () => {
             )}
           </div>
         </section>
+
+        <ReadingGateSection>
+          <p className="mb-4 text-xs text-silver-muted">
+            Applies to every novel unless a novel overrides it in its own settings.
+          </p>
+          <ReadingGateFields
+            idPrefix="st-gate"
+            gate={toGateForm(form.readingGate)}
+            onChange={(patch) =>
+              setForm((f) => ({ ...f, readingGate: { ...toGateForm(f.readingGate), ...patch } }))
+            }
+          />
+        </ReadingGateSection>
 
         {message && (
           <p className={`rounded-lg px-3 py-2 text-sm ${message.type === 'success' ? 'bg-green-500/15 text-green-400' : 'bg-crimson/15 text-crimson-soft'}`} role="alert">

@@ -6,7 +6,7 @@ import Spinner from '../components/Spinner';
 import Pagination from '../components/Pagination';
 import ModerationEntry from './moderation/ModerationEntry';
 import { ANCHORS, anchorLink } from '../utils/hashTarget';
-import { MODERATION_TABS, MODERATION_STATUS, NOVEL_FILTER_LIMIT } from './moderation/constants';
+import { MODERATION_TABS, MODERATION_STATUS, NOVEL_FILTER_LIMIT, SEARCH_DEBOUNCE_MS } from './moderation/constants';
 
 const TABS = [
   { key: MODERATION_TABS.COMMENTS, label: 'Comments', icon: MessageSquare },
@@ -55,7 +55,10 @@ const commentToEntry = (comment) => {
 };
 
 const reviewToEntry = (review) => {
-  const page = review.novel?.slug ? `/novel/${review.novel.slug}` : null;
+  // A chapter review has no public thread of its own yet, so it links to its chapter
+  // page rather than to an anchor.
+  const novelPage = review.novel?.slug ? `/novel/${review.novel.slug}` : null;
+  const page = review.chapter && novelPage ? `${novelPage}/chapter/${review.chapter.number}` : novelPage;
   return {
     id: review._id,
     user: review.user,
@@ -67,9 +70,13 @@ const reviewToEntry = (review) => {
     likes: review.likes,
     dislikes: review.dislikes,
     canReply: true,
-    context: review.novel?.title || 'Deleted novel',
-    link: page ? anchorLink(page, ANCHORS.REVIEW, review._id) : null,
-    replies: (review.replies || []).map((reply) => toReply(reply, review._id, page, ANCHORS.REVIEW)),
+    context: `${review.novel?.title || 'Deleted novel'}${
+      review.chapter ? ` · Ch. ${review.chapter.number} review` : ' · novel review'
+    }`,
+    link: page && !review.chapter ? anchorLink(page, ANCHORS.REVIEW, review._id) : page,
+    replies: (review.replies || []).map((reply) =>
+      toReply(reply, review._id, review.chapter ? null : page, ANCHORS.REVIEW)
+    ),
   };
 };
 
@@ -77,6 +84,7 @@ const ModerationAdmin = () => {
   const { user: currentUser } = useAuth();
   const [tab, setTab] = useState(MODERATION_TABS.COMMENTS);
   const [status, setStatus] = useState(MODERATION_STATUS.ACTIVE);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [novelId, setNovelId] = useState('');
   const [page, setPage] = useState(1);
@@ -92,6 +100,15 @@ const ModerationAdmin = () => {
       .catch(() => setNovels([]));
   }, []);
 
+  // Typing should not fire a request per keystroke, nor blank the list while typing.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      setSearch(searchInput);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const load = useCallback(async () => {
     setEntries(null);
     const params = { page, status };
@@ -102,6 +119,11 @@ const ModerationAdmin = () => {
       const items = tab === MODERATION_TABS.COMMENTS ? data.comments.map(commentToEntry) : data.reviews.map(reviewToEntry);
       setEntries(items);
       setMeta({ pages: data.pages, total: data.total });
+      setMessage('');
+      // A delete can empty the last page; step back rather than show an empty view.
+      if (!items.length && page > 1 && page > data.pages) {
+        setPage(Math.max(data.pages, 1));
+      }
     } catch (error) {
       setMessage(error.response?.data?.message || 'Failed to load moderation queue');
       setEntries([]);
@@ -215,8 +237,8 @@ const ModerationAdmin = () => {
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-silver-muted" aria-hidden="true" />
           <input
             type="search"
-            value={search}
-            onChange={(e) => changeFilter(setSearch)(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search content or author..."
             aria-label="Search moderation queue"
             className={`${filterClass} w-full pl-10`}

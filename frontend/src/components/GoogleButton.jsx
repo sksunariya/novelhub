@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { REDIRECT_PARAM } from '../utils/readingGate';
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const POLL_INTERVAL_MS = 300;
@@ -9,6 +10,8 @@ const MAX_POLLS = 20;
 const GoogleButton = ({ onError }) => {
   const { googleLogin } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get(REDIRECT_PARAM) || '/';
   const buttonRef = useRef(null);
   const [ready, setReady] = useState(false);
 
@@ -34,7 +37,7 @@ const GoogleButton = ({ onError }) => {
       callback: async (response) => {
         try {
           await googleLogin(response.credential);
-          navigate('/');
+          navigate(redirectTo);
         } catch (err) {
           if (onError) {
             onError(err.response?.data?.message || 'Google sign-in failed');
