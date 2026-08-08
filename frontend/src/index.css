@@ -44,6 +44,20 @@ body {
 .reading-content p {
   margin-bottom: 1.25em;
 }
+.reading-content p:empty,
+.reading-content p:has(> br:only-child),
+.reading-content h1:empty,
+.reading-content h2:empty,
+.reading-content h3:empty,
+.reading-content h4:empty,
+.reading-content h5:empty,
+.reading-content h6:empty,
+.reading-content div:empty {
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+  height: 0;
+}
 .reading-content h1,
 .reading-content h2,
 .reading-content h3 {
