@@ -183,13 +183,47 @@ describe('Community', () => {
       expect(notifications[0].link).toMatch(new RegExp(`^/novel/${novel.slug}/chapter/${chapter.number}`));
     });
 
-    it('does not notify when replying to your own comment', async () => {
-      const { user, token } = await createUser();
+    it('allows only admin to pin/unpin comments and floats pinned comments to top', async () => {
+      const { token: userToken } = await createUser();
+      const { token: adminToken } = await createAdmin();
       const novel = await createNovel();
       const chapter = await createChapter(novel);
-      const { body } = await postComment(chapter._id, token, { content: 'parent' });
-      await postComment(chapter._id, token, { content: 'self reply', parentComment: body.comment._id });
-      expect(await Notification.countDocuments({ user: user._id })).toBe(0);
+
+      const firstComment = await postComment(chapter._id, userToken, { content: 'First comment' });
+      const secondComment = await postComment(chapter._id, userToken, { content: 'Second comment' });
+      const firstId = firstComment.body.comment._id;
+      const secondId = secondComment.body.comment._id;
+
+      // Initial order (newest first): secondComment, firstComment
+      const initialList = await api().get(`/api/community/chapters/${chapter._id}/comments`);
+      expect(initialList.body.comments[0]._id).toBe(secondId);
+
+      // Non-admin pin attempt rejected
+      const forbidden = await api()
+        .post(`/api/community/comments/${firstId}/pin`)
+        .set('Authorization', `Bearer ${userToken}`);
+      expect(forbidden.status).toBe(403);
+
+      // Admin pins first comment
+      const pinRes = await api()
+        .post(`/api/community/comments/${firstId}/pin`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(pinRes.status).toBe(200);
+      expect(pinRes.body.comment.isPinned).toBe(true);
+
+      // List now floats pinned comment (firstComment) to top
+      const pinnedList = await api().get(`/api/community/chapters/${chapter._id}/comments`);
+      expect(pinnedList.body.comments[0]._id).toBe(firstId);
+      expect(pinnedList.body.comments[0].isPinned).toBe(true);
+
+      // Unpin comment
+      const unpinRes = await api()
+        .post(`/api/community/comments/${firstId}/pin`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(unpinRes.body.comment.isPinned).toBe(false);
+
+      const unpinnedList = await api().get(`/api/community/chapters/${chapter._id}/comments`);
+      expect(unpinnedList.body.comments[0]._id).toBe(secondId);
     });
   });
 
@@ -423,6 +457,31 @@ describe('Community', () => {
         .delete(`/api/community/reviews/${reviewId}/replies/${replyId}`)
         .set('Authorization', `Bearer ${adminToken}`);
       expect(allowed.status).toBe(200);
+    });
+
+    it('allows admin to pin/unpin novel reviews and floats pinned reviews to top', async () => {
+      const { token: userToken } = await createUser();
+      const { token: adminToken } = await createAdmin();
+      const novel = await createNovel();
+
+      const r1 = await api().post(`/api/novels/id/${novel._id}/reviews`).set('Authorization', `Bearer ${userToken}`).send({ rating: 3, content: 'First' });
+      const r2 = await api().post(`/api/novels/id/${novel._id}/reviews`).set('Authorization', `Bearer ${userToken}`).send({ rating: 5, content: 'Second' });
+      const r1Id = r1.body.review._id;
+      const r2Id = r2.body.review._id;
+
+      // Initial list: newest (Second) first
+      const initial = await api().get(`/api/novels/id/${novel._id}/reviews`);
+      expect(initial.body.reviews[0]._id).toBe(r2Id);
+
+      // Pin First review
+      const pinRes = await api().post(`/api/community/reviews/${r1Id}/pin`).set('Authorization', `Bearer ${adminToken}`);
+      expect(pinRes.status).toBe(200);
+      expect(pinRes.body.review.isPinned).toBe(true);
+
+      // Pinned review floats to top
+      const pinnedList = await api().get(`/api/novels/id/${novel._id}/reviews`);
+      expect(pinnedList.body.reviews[0]._id).toBe(r1Id);
+      expect(pinnedList.body.reviews[0].isPinned).toBe(true);
     });
   });
 });

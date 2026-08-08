@@ -83,6 +83,18 @@ const NovelDetail = () => {
     setReviews((prev) => prev.filter((r) => r._id !== reviewId));
   };
 
+  const pinReview = async (reviewId) => {
+    const { data } = await client.post(`/community/reviews/${reviewId}/pin`);
+    setReviews((prev) => {
+      const updated = prev.map((r) => (r._id === reviewId ? data.review : r));
+      return [...updated].sort((a, b) => {
+        if (Boolean(a.isPinned) !== Boolean(b.isPinned)) return a.isPinned ? -1 : 1;
+        if (a.isPinned && b.isPinned) return new Date(b.pinnedAt || 0) - new Date(a.pinnedAt || 0);
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+    });
+  };
+
   const editReviewReply = async (reviewId, replyId, text) => {
     const { data } = await client.put(`/community/reviews/${reviewId}/replies/${replyId}`, { content: text });
     setReviews((prev) => prev.map((r) => (r._id === reviewId ? data.review : r)));
@@ -432,6 +444,7 @@ const NovelDetail = () => {
                 onDislike={dislikeReview}
                 onEdit={editReview}
                 onDelete={deleteReview}
+                onPin={pinReview}
                 onReplySubmit={postReviewReply}
                 onLikeReply={likeReviewReply}
                 onDislikeReply={dislikeReviewReply}

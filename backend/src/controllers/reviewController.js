@@ -53,7 +53,7 @@ const sendReviewList = async (req, res, filter) => {
     Review.find(filter)
       .populate('user', PUBLIC_USER_FIELDS)
       .populate('replies.user', PUBLIC_USER_FIELDS)
-      .sort({ createdAt: -1 })
+      .sort({ isPinned: -1, pinnedAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit),
     Review.countDocuments(filter),
@@ -296,6 +296,22 @@ const toggleReviewReplyLike = reactToReviewReply(REACTIONS.LIKE);
 
 const toggleReviewReplyDislike = reactToReviewReply(REACTIONS.DISLIKE);
 
+const toggleReviewPin = asyncHandler(async (req, res) => {
+  if (req.user.role !== ROLES.ADMIN) {
+    return res.status(403).json({ message: 'Not allowed' });
+  }
+  const review = await Review.findById(req.params.id);
+  if (!review) {
+    return res.status(404).json({ message: 'Review not found' });
+  }
+  review.isPinned = !review.isPinned;
+  review.pinnedAt = review.isPinned ? new Date() : null;
+  review.pinnedBy = review.isPinned ? req.user._id : null;
+  await review.save();
+  await populateReview(review);
+  res.json({ review: publicReview(review) });
+});
+
 module.exports = {
   listReviews,
   listChapterReviews,
@@ -305,6 +321,7 @@ module.exports = {
   deleteReview,
   toggleReviewLike,
   toggleReviewDislike,
+  toggleReviewPin,
   addReviewReply,
   updateReviewReply,
   deleteReviewReply,

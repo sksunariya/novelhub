@@ -194,6 +194,8 @@ const Reader = () => {
 
   const deleteComment = (id) => runCommentAction(() => client.delete(`/community/comments/${id}`));
 
+  const pinComment = (id) => runCommentAction(() => client.post(`/community/comments/${id}/pin`));
+
   const reactToComment = (action) => (id) => {
     if (!user) return navigate('/login');
     return runCommentAction(() => client.post(`/community/comments/${id}/${action}`));
@@ -516,6 +518,7 @@ const Reader = () => {
                           onDislike={dislikeComment}
                           onEdit={editComment}
                           onDelete={deleteComment}
+                          onPin={pinComment}
                           onReplySubmit={postReply}
                           onLikeReply={(_parentId, replyId) => likeComment(replyId)}
                           onDislikeReply={(_parentId, replyId) => dislikeComment(replyId)}
@@ -696,6 +699,7 @@ const Reader = () => {
                         onDislike={dislikeComment}
                         onEdit={editComment}
                         onDelete={deleteComment}
+                        onPin={pinComment}
                         onReplySubmit={postReply}
                         onLikeReply={(_parentId, replyId) => likeComment(replyId)}
                         onDislikeReply={(_parentId, replyId) => dislikeComment(replyId)}

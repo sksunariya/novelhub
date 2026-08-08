@@ -28,13 +28,16 @@ const reviewSchema = new mongoose.Schema(
     replies: [reviewReplySchema],
     editedAt: { type: Date, default: null },
     editedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    isPinned: { type: Boolean, default: false },
+    pinnedAt: { type: Date, default: null },
+    pinnedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );
 
 // Non-unique index for fast lookup of novel comments/reviews.
 reviewSchema.index({ novel: 1, chapter: 1, user: 1 });
-reviewSchema.index({ novel: 1, createdAt: -1 });
+reviewSchema.index({ novel: 1, chapter: 1, isPinned: -1, pinnedAt: -1, createdAt: -1 });
 // Serves the reading gate's "has this user reviewed this chapter" probe, which the
 // index above cannot because its prefix is `novel`.
 reviewSchema.index({ chapter: 1, user: 1 });

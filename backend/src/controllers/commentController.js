@@ -13,7 +13,11 @@ const listComments = asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
   const filter = { chapter: req.params.chapterId, parentComment: null };
   const [comments, total] = await Promise.all([
-    Comment.find(filter).populate('user', PUBLIC_USER_FIELDS).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Comment.find(filter)
+      .populate('user', PUBLIC_USER_FIELDS)
+      .sort({ isPinned: -1, pinnedAt: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
     Comment.countDocuments(filter),
   ]);
   const replies = await Comment.find({ parentComment: { $in: comments.map((comment) => comment._id) } })
@@ -134,4 +138,28 @@ const toggleCommentLike = reactToComment(REACTIONS.LIKE);
 
 const toggleCommentDislike = reactToComment(REACTIONS.DISLIKE);
 
-module.exports = { listComments, createComment, updateComment, deleteComment, toggleCommentLike, toggleCommentDislike };
+const toggleCommentPin = asyncHandler(async (req, res) => {
+  if (req.user.role !== ROLES.ADMIN) {
+    return res.status(403).json({ message: 'Not allowed' });
+  }
+  const comment = await Comment.findById(req.params.id);
+  if (!comment) {
+    return res.status(404).json({ message: 'Comment not found' });
+  }
+  comment.isPinned = !comment.isPinned;
+  comment.pinnedAt = comment.isPinned ? new Date() : null;
+  comment.pinnedBy = comment.isPinned ? req.user._id : null;
+  await comment.save();
+  await comment.populate('user', PUBLIC_USER_FIELDS);
+  res.json({ comment });
+});
+
+module.exports = {
+  listComments,
+  createComment,
+  updateComment,
+  deleteComment,
+  toggleCommentLike,
+  toggleCommentDislike,
+  toggleCommentPin,
+};

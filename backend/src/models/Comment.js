@@ -12,11 +12,14 @@ const commentSchema = new mongoose.Schema(
     dislikes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     editedAt: { type: Date, default: null },
     editedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    isPinned: { type: Boolean, default: false },
+    pinnedAt: { type: Date, default: null },
+    pinnedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }
 );
 
-commentSchema.index({ chapter: 1, createdAt: -1 });
+commentSchema.index({ chapter: 1, isPinned: -1, pinnedAt: -1, createdAt: -1 });
 commentSchema.index({ parentComment: 1, createdAt: 1 });
 // Serves the reading gate's "has this user commented on this novel" probe.
 commentSchema.index({ novel: 1, user: 1 });

@@ -44,6 +44,7 @@ const commentToEntry = (comment) => {
     createdAt: comment.createdAt,
     editedAt: comment.editedAt,
     deletedAt: comment.deletedAt,
+    isPinned: comment.isPinned,
     likes: comment.likes,
     dislikes: comment.dislikes,
     chapterId: comment.chapter?._id || null,
@@ -67,6 +68,7 @@ const reviewToEntry = (review) => {
     createdAt: review.createdAt,
     editedAt: review.editedAt,
     deletedAt: review.deletedAt,
+    isPinned: review.isPinned,
     likes: review.likes,
     dislikes: review.dislikes,
     canReply: true,
@@ -182,6 +184,12 @@ const ModerationAdmin = () => {
           ? client.post(`/admin/reviews/${target.parentId}/replies/${target.id}/restore`)
           : client.post(`/admin/reviews/${target.id}/restore`);
       }),
+    onPin: (target) =>
+      run(() =>
+        isComments
+          ? client.post(`/community/comments/${target.id}/pin`)
+          : client.post(`/community/reviews/${target.id}/pin`)
+      ),
     onToggleBan: (author) => {
       if (!window.confirm(`${author.banned ? 'Unban' : 'Ban'} "${author.username}"?`)) return undefined;
       return run(() => client.put(`/admin/users/${author._id}`, { banned: !author.banned }));

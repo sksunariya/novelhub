@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ThumbsUp, ThumbsDown, Trash2, ChevronDown, ChevronUp, Pencil } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Trash2, ChevronDown, ChevronUp, Pencil, Pin } from 'lucide-react';
 import StarRating from './StarRating';
 import { formatRelativeTime, formatExactDateTime } from '../utils/dateUtils';
 import { anchorId } from '../utils/hashTarget';
@@ -41,6 +41,13 @@ const StaffBadge = () => (
   </span>
 );
 
+const PinnedBadge = () => (
+  <span className="flex items-center gap-1 rounded-full bg-crimson/15 px-2 py-0.5 text-[10px] font-bold text-crimson-soft border border-crimson/30">
+    <Pin className="h-3 w-3 fill-crimson text-crimson shrink-0" aria-hidden="true" />
+    <span>Pinned</span>
+  </span>
+);
+
 const EditedMark = ({ editedAt }) =>
   editedAt ? (
     <span className="text-[10px] italic text-silver-muted" title={formatExactDateTime(editedAt)}>
@@ -73,6 +80,7 @@ const CommentCard = ({
   onDislike,
   onEdit,
   onDelete,
+  onPin,
   onReplySubmit,
   onLikeReply,
   onDislikeReply,
@@ -258,6 +266,7 @@ const CommentCard = ({
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+            {item.isPinned && <PinnedBadge />}
             <span className="truncate text-sm font-semibold text-blue-400" title={item.user?.username ? `@${item.user.username}` : ''}>
               {item.user?.fullName || item.user?.username || 'Deleted user'}
             </span>
@@ -270,6 +279,19 @@ const CommentCard = ({
 
           <div className="flex shrink-0 items-center gap-2">
             {item.rating != null && item.rating > 0 && <StarRating value={item.rating} size="h-3.5 w-3.5" />}
+            {isAdmin && onPin && (
+              <button
+                type="button"
+                onClick={() => onPin(item._id)}
+                className={`flex cursor-pointer items-center justify-center p-1 transition-colors ${
+                  item.isPinned ? 'text-crimson-soft hover:text-crimson' : 'text-silver-muted hover:text-silver'
+                }`}
+                title={item.isPinned ? 'Unpin comment' : 'Pin comment'}
+                aria-label={item.isPinned ? 'Unpin comment' : 'Pin comment'}
+              >
+                <Pin className={`h-3.5 w-3.5 ${item.isPinned ? 'fill-crimson text-crimson' : ''}`} aria-hidden="true" />
+              </button>
+            )}
             {isOwner && onEdit && (
               <button
                 type="button"

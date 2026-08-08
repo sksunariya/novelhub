@@ -6,6 +6,7 @@ const {
   deleteComment,
   toggleCommentLike,
   toggleCommentDislike,
+  toggleCommentPin,
 } = require('../controllers/commentController');
 const {
   listChapterReviews,
@@ -14,6 +15,7 @@ const {
   deleteReview,
   toggleReviewLike,
   toggleReviewDislike,
+  toggleReviewPin,
   addReviewReply,
   updateReviewReply,
   deleteReviewReply,
@@ -30,12 +32,14 @@ router.put('/comments/:id', protect, updateComment);
 router.delete('/comments/:id', protect, deleteComment);
 router.post('/comments/:id/like', protect, toggleCommentLike);
 router.post('/comments/:id/dislike', protect, toggleCommentDislike);
+router.post('/comments/:id/pin', protect, toggleCommentPin);
 router.get('/chapters/:chapterId/reviews', listChapterReviews);
 router.post('/chapters/:chapterId/reviews', protect, upsertChapterReview);
 router.put('/reviews/:id', protect, updateReview);
 router.delete('/reviews/:id', protect, deleteReview);
 router.post('/reviews/:id/like', protect, toggleReviewLike);
 router.post('/reviews/:id/dislike', protect, toggleReviewDislike);
+router.post('/reviews/:id/pin', protect, toggleReviewPin);
 
 router.post('/reviews/:id/replies', protect, addReviewReply);
 router.put('/reviews/:id/replies/:replyId', protect, updateReviewReply);

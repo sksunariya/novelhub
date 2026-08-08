@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Ban, CornerDownRight, ExternalLink, Pencil, RotateCcw, ShieldOff, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import { Ban, CornerDownRight, ExternalLink, Pencil, Pin, RotateCcw, ShieldOff, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import StarRating from '../../components/StarRating';
 import { formatRelativeTime, formatExactDateTime } from '../../utils/dateUtils';
@@ -19,8 +19,14 @@ const IconButton = ({ icon: Icon, label, onClick, danger }) => (
   </button>
 );
 
-const AuthorLine = ({ user, createdAt, editedAt, deletedAt }) => (
+const AuthorLine = ({ user, createdAt, editedAt, deletedAt, isPinned }) => (
   <div className="flex flex-wrap items-center gap-2 text-xs text-silver-muted">
+    {isPinned && (
+      <span className="flex items-center gap-1 rounded-full bg-crimson/15 px-2 py-0.5 text-[10px] font-bold text-crimson-soft border border-crimson/30">
+        <Pin className="h-3 w-3 fill-crimson text-crimson shrink-0" aria-hidden="true" />
+        <span>Pinned</span>
+      </span>
+    )}
     <span className="font-semibold text-silver" title={user?.username ? `@${user.username}` : ''}>
       {user?.fullName || user?.username || 'Deleted user'}
     </span>
@@ -172,6 +178,13 @@ const ModerationEntry = ({ entry, currentUserId, actions }) => {
 
   const renderActions = (target, isReply) => (
     <div className="flex shrink-0 items-center gap-0.5">
+      {!isReply && !target.deletedAt && actions.onPin && (
+        <IconButton
+          icon={Pin}
+          label={target.isPinned ? 'Unpin' : 'Pin'}
+          onClick={() => actions.onPin(target)}
+        />
+      )}
       {!target.deletedAt && (
         <IconButton
           icon={Pencil}
@@ -208,6 +221,7 @@ const ModerationEntry = ({ entry, currentUserId, actions }) => {
             createdAt={entry.createdAt}
             editedAt={entry.editedAt}
             deletedAt={entry.deletedAt}
+            isPinned={entry.isPinned}
           />
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             {entry.rating != null && <StarRating value={entry.rating} size="h-3.5 w-3.5" />}
