@@ -7,9 +7,12 @@ const { getViewerKey, registerView } = require('../utils/viewTracking');
 const accessService = require('../services/accessService');
 const { serializeChapterListItem } = require('../utils/serializers');
 
-const parsePagination = (query) => {
+const parsePagination = (query, maxLimit = PAGINATION.MAX_LIMIT) => {
   const page = Math.max(parseInt(query.page, 10) || PAGINATION.DEFAULT_PAGE, 1);
-  const limit = Math.min(Math.max(parseInt(query.limit, 10) || PAGINATION.DEFAULT_LIMIT, 1), PAGINATION.MAX_LIMIT);
+  const limit = Math.min(
+    Math.max(parseInt(query.limit, 10) || PAGINATION.DEFAULT_LIMIT, 1),
+    maxLimit
+  );
   return { page, limit, skip: (page - 1) * limit };
 };
 
@@ -97,8 +100,11 @@ const listChapters = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Novel not found' });
   }
   // Web novels routinely run to thousands of chapters, and each row now carries
-  // access state, so this is paginated. `limit=0` is not offered on purpose.
-  const { page, limit, skip } = parsePagination({ ...req.query, limit: req.query.limit || 200 });
+  // access state. Up to CHAPTER_MAX_LIMIT chapters per query are allowed.
+  const { page, limit, skip } = parsePagination(
+    { ...req.query, limit: req.query.limit || 5000 },
+    PAGINATION.CHAPTER_MAX_LIMIT || 5000
+  );
   const [chapters, total] = await Promise.all([
     Chapter.find({ novel: novel._id, published: true })
       .select('number title views wordCount accessType priceCredits freeAfterDays earlyAccessUntil originalNumber publishedAt createdAt')

@@ -112,7 +112,7 @@ const Reader = () => {
 
   useEffect(() => {
     if (panel === 'chapters' && chapters.length === 0) {
-      client.get(`/novels/${slug}/chapters`).then(({ data: res }) => setChapters(res.chapters)).catch(() => {});
+      client.get(`/novels/${slug}/chapters?limit=5000`).then(({ data: res }) => setChapters(res.chapters)).catch(() => {});
     }
   }, [panel, slug, chapters.length]);
 

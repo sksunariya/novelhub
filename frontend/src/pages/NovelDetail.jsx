@@ -164,7 +164,7 @@ const NovelDetail = () => {
       const { data } = await client.get(`/novels/${slug}`);
       setNovel(data.novel);
       const [chaptersRes, reviewsRes] = await Promise.all([
-        client.get(`/novels/${slug}/chapters`),
+        client.get(`/novels/${slug}/chapters?limit=5000`),
         client.get(`/novels/id/${data.novel._id}/reviews`),
       ]);
       setChapters(chaptersRes.data.chapters);
