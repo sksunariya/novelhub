@@ -158,3 +158,61 @@ describe('settings service', () => {
     });
   });
 });
+
+// A document written before `values` became an array casts into a single
+// keyless subdocument. Reading it looks fine; every save after that dies with
+// "Path `key` is required." — so the settings page loads and saving is
+// permanently broken, pointing at nothing the admin did.
+describe('legacy settings documents', () => {
+  const writeRaw = (values) =>
+    AppSettings.collection.insertOne({ singleton: true, values, version: 1, createdAt: new Date(), updatedAt: new Date() });
+
+  it('recovers settings stored in the old object shape', async () => {
+    await AppSettings.deleteMany({});
+    await writeRaw({ 'credits.perUsd': 250, 'store.enabled': true });
+    settingsService.clearCache();
+
+    // The repair happens on read, so nothing needs running by hand.
+    const doc = await AppSettings.getDoc();
+    expect(doc.validateSync()).toBeUndefined();
+    expect(doc.getValue('credits.perUsd')).toBe(250);
+    expect(doc.getValue('store.enabled')).toBe(true);
+
+    // And the values survive into the service, rather than being dropped.
+    settingsService.clearCache();
+    expect(await settingsService.get('credits.perUsd')).toBe(250);
+  });
+
+  it('lets a save succeed again after the repair', async () => {
+    await AppSettings.deleteMany({});
+    await writeRaw({ 'credits.perUsd': 250 });
+    settingsService.clearCache();
+
+    // This is the exact failure: PATCH /api/admin/config returning
+    // 400 "Path `key` is required."
+    await expect(settingsService.update({ 'store.enabled': true })).resolves.toBeTruthy();
+    settingsService.clearCache();
+    expect(await settingsService.get('store.enabled')).toBe(true);
+    expect(await settingsService.get('credits.perUsd')).toBe(250);
+  });
+
+  it('drops keyless rows rather than letting one block every save', async () => {
+    await AppSettings.deleteMany({});
+    await writeRaw([{ value: 9 }, { key: 'credits.perUsd', value: 150 }]);
+    settingsService.clearCache();
+
+    const doc = await AppSettings.getDoc();
+    expect(doc.validateSync()).toBeUndefined();
+    expect(doc.getValue('credits.perUsd')).toBe(150);
+  });
+
+  it('leaves a healthy document alone', async () => {
+    await AppSettings.deleteMany({});
+    await writeRaw([{ key: 'credits.perUsd', value: 150 }]);
+    settingsService.clearCache();
+
+    const doc = await AppSettings.getDoc();
+    expect(doc.values).toHaveLength(1);
+    expect(doc.getValue('credits.perUsd')).toBe(150);
+  });
+});

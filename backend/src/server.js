@@ -53,9 +53,10 @@ const start = async () => {
   });
 
   // Opt-out for environments that run jobs in a dedicated worker process.
-  if (process.env.SCHEDULER_ENABLED !== 'false') {
-    scheduler.start();
-  }
+  // SCHEDULER DISABLED: Commented out to prevent schedulers from running.
+  // if (process.env.SCHEDULER_ENABLED !== 'false') {
+  //   scheduler.start();
+  // }
 
   ['SIGTERM', 'SIGINT'].forEach((signal) => process.on(signal, () => shutdown(signal)));
 
