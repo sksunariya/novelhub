@@ -222,14 +222,13 @@ const CommentCard = ({
             onChange={(e) => setReplyText(e.target.value)}
             placeholder="Add a reply..."
             rows={2}
-            className="w-full resize-none border-b border-line bg-transparent py-2 text-sm text-silver transition-colors duration-200 placeholder:text-silver-muted focus:border-crimson focus:outline-none"
+            className="w-full resize-none rounded-xl border border-line bg-night p-3 text-sm text-silver placeholder:text-silver-muted/80 focus:border-crimson focus:outline-none focus:ring-1 focus:ring-crimson/40 transition-all duration-200 shadow-inner"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 handleSendReply(e);
               }
             }}
           />
-          <div className="absolute bottom-0 left-1/2 h-[2px] w-0 bg-crimson transition-all duration-300 group-focus-within:left-0 group-focus-within:w-full" />
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <button

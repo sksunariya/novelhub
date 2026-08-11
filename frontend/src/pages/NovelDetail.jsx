@@ -437,17 +437,15 @@ const NovelDetail = () => {
                   onChange={(e) => setReviewForm((f) => ({ ...f, content: e.target.value }))}
                   onFocus={() => setIsReviewFocused(true)}
                   placeholder="Share your thoughts or review this novel..."
-                  rows={isReviewFocused || reviewForm.content ? 3 : 1}
-                  className="w-full bg-transparent border-b border-line py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none transition-all duration-200 resize-none"
+                  rows={3}
+                  className="w-full rounded-xl border border-line bg-night px-4 py-3 text-sm text-silver placeholder:text-silver-muted/80 focus:border-crimson focus:outline-none focus:ring-1 focus:ring-crimson/40 transition-all duration-200 resize-none shadow-inner"
                 />
-                {/* Smooth border expand animation */}
-                <div className="absolute bottom-0 left-1/2 h-[2px] w-0 bg-crimson transition-all duration-300 group-focus-within:left-0 group-focus-within:w-full" />
               </div>
 
               {(isReviewFocused || reviewForm.content.trim() !== '' || reviewForm.rating > 0) && (
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
                   <div className="flex items-center gap-3">
-                    <span className="text-xs font-medium text-silver-muted">Your rating:</span>
+                    <span className="text-xs font-semibold text-silver">Your rating:</span>
                     <StarRating
                       value={reviewForm.rating}
                       onChange={(rating) => setReviewForm((f) => ({ ...f, rating }))}
@@ -467,7 +465,7 @@ const NovelDetail = () => {
                     <button
                       type="submit"
                       disabled={submitting || (!reviewForm.content.trim() && !reviewForm.rating)}
-                      className="rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white transition-all hover:bg-crimson-soft disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white transition-all hover:bg-crimson-soft disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
                     >
                       {submitting ? 'Posting...' : 'Post Comment'}
                     </button>
@@ -477,9 +475,9 @@ const NovelDetail = () => {
             </form>
           </div>
         ) : (
-          <p className="mb-6 text-sm text-silver-muted">
-            <Link to="/login" className="text-crimson-soft hover:underline">Log in</Link> to leave a review.
-          </p>
+          <div className="mb-6 rounded-xl border border-line bg-night-surface p-4 text-sm text-silver">
+            <Link to="/login" className="font-semibold text-crimson-soft hover:underline">Log in</Link> to leave a review or share your thoughts.
+          </div>
         )}
         {reviews.length === 0 ? (
           <p className="text-sm text-silver-muted">No reviews yet. Be the first!</p>
