@@ -165,7 +165,12 @@ const Store = () => {
                     // The SDK is loaded per currency, so switching settlement
                     // currency needs a fresh provider rather than new props.
                     key={`${paypalClientId}:${selected?.chargedIn || 'USD'}`}
-                    options={{ clientId: paypalClientId, currency: selected?.chargedIn || 'USD' }}
+                    options={{
+                      clientId: paypalClientId,
+                      currency: selected?.chargedIn || 'USD',
+                      intent: 'capture',
+                      'enable-funding': 'card,paylater,venmo',
+                    }}
                   >
                     <PayPalButtons
                       style={{ layout: 'vertical', shape: 'pill' }}

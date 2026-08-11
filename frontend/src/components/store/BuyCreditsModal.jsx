@@ -193,7 +193,12 @@ const BuyCreditsModal = ({ open, onClose, shortfall = 0, reason = '', onPurchase
           {paypalClientId ? (
             <PayPalScriptProvider
               key={`${paypalClientId}:${selected?.chargedIn || 'USD'}`}
-              options={{ clientId: paypalClientId, currency: selected?.chargedIn || 'USD' }}
+              options={{
+                clientId: paypalClientId,
+                currency: selected?.chargedIn || 'USD',
+                intent: 'capture',
+                'enable-funding': 'card,paylater,venmo',
+              }}
             >
               <PayPalButtons
                 style={{ layout: 'vertical', shape: 'pill' }}
