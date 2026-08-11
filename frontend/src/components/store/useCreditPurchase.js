@@ -85,6 +85,10 @@ export const useCreditPurchase = ({ onPurchased, enabled = true } = {}) => {
    * nothing this function sends can influence what the buyer is charged.
    */
   const startOrder = async () => {
+    if (!selected) {
+      setStatus({ state: 'error', message: 'Please select a credit pack first.' });
+      throw new Error('No pack selected');
+    }
     const order = await createOrder({ packId: selected.id, currency });
     orderIdRef.current = order.orderId;
     setStatus({ state: 'paying' });

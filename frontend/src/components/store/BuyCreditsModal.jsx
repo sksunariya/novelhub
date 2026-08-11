@@ -34,17 +34,19 @@ const BuyCreditsModal = ({ open, onClose, shortfall = 0, reason = '', onPurchase
 
   const { config, packs, currency, selected, status, setSelected, paypalClientId } = purchase;
 
-  // Pre-select the cheapest pack that actually covers the shortfall. Choosing
-  // for the reader here is a kindness, not a dark pattern: it is the smallest
-  // pack that solves the problem, not the largest.
+  // Pre-select the cheapest pack that actually covers the shortfall, or the first
+  // pack if no shortfall is specified.
   useEffect(() => {
     if (!open || preselected.current || !packs.length) return;
     preselected.current = true;
-    if (!shortfall) return;
-    const sufficient = packs
-      .filter((pack) => pack.totalCredits >= shortfall)
-      .sort((a, b) => a.priceUsdCents - b.priceUsdCents);
-    setSelected(sufficient[0] || packs[packs.length - 1]);
+    if (shortfall > 0) {
+      const sufficient = packs
+        .filter((pack) => pack.totalCredits >= shortfall)
+        .sort((a, b) => a.priceUsdCents - b.priceUsdCents);
+      setSelected(sufficient[0] || packs[packs.length - 1]);
+    } else {
+      setSelected(packs[0]);
+    }
   }, [open, packs, shortfall, setSelected]);
 
   // Reopening must show packs, not the last purchase. The component stays
@@ -52,6 +54,7 @@ const BuyCreditsModal = ({ open, onClose, shortfall = 0, reason = '', onPurchase
   // "Credits added" screen every subsequent time they open the dialog.
   useEffect(() => {
     if (open) {
+      preselected.current = false;
       if (status.state === 'done' || status.state === 'error') purchase.reset();
       return;
     }
