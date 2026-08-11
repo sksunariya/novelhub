@@ -141,7 +141,8 @@ const notificationHtml = ({ title, message, link }) => {
   </div>`;
 };
 
-const sendNotificationEmail = async ({ to, title, message, link }) => {
+/** Actually deliver a notification email. Called by the queue, not directly. */
+const deliverNotificationEmail = async ({ to, title, message, link }) => {
   if (!isMailerConfigured()) {
     console.info(`[mailer] Notification for ${to}: "${title}" - ${message}`);
     return;
@@ -155,4 +156,19 @@ const sendNotificationEmail = async ({ to, title, message, link }) => {
   });
 };
 
-module.exports = { isMailerConfigured, sendOtpEmail, sendNotificationEmail };
+// Notification mail goes through the queue so a campaign cannot open hundreds
+// of concurrent SMTP connections. OTP and password-reset mail deliberately does
+// not — those are interactive and must not sit behind a bulk send.
+const emailQueue = require('../services/emailQueue');
+emailQueue.setSender(deliverNotificationEmail);
+
+const sendNotificationEmail = async (payload) => {
+  emailQueue.enqueue(payload);
+};
+
+module.exports = {
+  isMailerConfigured,
+  sendOtpEmail,
+  sendNotificationEmail,
+  deliverNotificationEmail,
+};

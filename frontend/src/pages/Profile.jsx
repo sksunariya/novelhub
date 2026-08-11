@@ -2,6 +2,7 @@ import { useState } from 'react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import PageTransition from '../components/PageTransition';
+import WalletPanel from '../components/credits/WalletPanel';
 
 const inputClass =
   'w-full rounded-lg border border-line bg-night px-4 py-2.5 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none';
@@ -67,6 +68,11 @@ const Profile = () => {
           </p>
           {user.role === 'admin' && <p className="text-xs font-medium text-crimson-soft">Administrator</p>}
         </div>
+      </div>
+
+      {/* Renders nothing when monetization is off. */}
+      <div className="mb-6 max-w-md">
+        <WalletPanel />
       </div>
 
       <form onSubmit={save} className="max-w-md space-y-6 rounded-xl border border-line bg-night-surface p-6">

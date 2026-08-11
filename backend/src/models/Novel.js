@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { NOVEL_STATUS } = require('../config/constants');
 const softDelete = require('./plugins/softDelete');
 const { buildReadingGateSchema } = require('./schemas/readingGate');
+const { buildMonetizationSchema } = require('./schemas/monetization');
 
 const novelSchema = new mongoose.Schema(
   {
@@ -26,6 +27,20 @@ const novelSchema = new mongoose.Schema(
       type: buildReadingGateSchema({ override: { type: Boolean, default: false } }),
       default: () => ({}),
     },
+    // Ignored unless `override` is true, in which case it replaces the
+    // site-wide monetization defaults for this novel.
+    monetization: {
+      type: buildMonetizationSchema({ override: { type: Boolean, default: false } }),
+      default: () => ({}),
+    },
+    // Optional link to an account, for revenue share. `author` above stays the
+    // display string so nothing existing breaks.
+    authorUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // Canonical author for earnings grouping. `author` above stays the display
+    // string so nothing existing breaks and novels can be linked gradually.
+    authorRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Author', default: null },
+    // Earnings are admin-only. $inc updates still work without selecting it.
+    revenueLifetimeUsdMicros: { type: Number, default: 0, select: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }

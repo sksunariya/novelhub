@@ -119,7 +119,7 @@ const Reader = () => {
   const loadComments = useCallback(() => {
     if (!data) return;
     client
-      .get(`/community/chapters/${data.chapter._id}/comments`)
+      .get(`/community/chapters/${data.chapter.id}/comments`)
       .then(({ data: res }) => setComments(res.comments))
       .catch(() => setComments([]));
   }, [data]);
@@ -140,7 +140,7 @@ const Reader = () => {
   const loadChapterReview = useCallback(() => {
     if (!data) return;
     client
-      .get(`/community/chapters/${data.chapter._id}/reviews`)
+      .get(`/community/chapters/${data.chapter.id}/reviews`)
       .then(({ data: res }) => {
         setChapterReviews(res.reviews || []);
         if (user) {
@@ -175,14 +175,14 @@ const Reader = () => {
     e.preventDefault();
     if (!text.trim()) return;
     await runCommentAction(async () => {
-      await client.post(`/community/chapters/${data.chapter._id}/comments`, { content: text });
+      await client.post(`/community/chapters/${data.chapter.id}/comments`, { content: text });
       reset();
     });
   };
 
   // Reply errors are rendered by CommentCard, so this one rethrows.
   const postReply = async (parentId, text) => {
-    await client.post(`/community/chapters/${data.chapter._id}/comments`, {
+    await client.post(`/community/chapters/${data.chapter.id}/comments`, {
       content: text,
       parentComment: parentId,
     });
@@ -228,7 +228,7 @@ const Reader = () => {
     setSavingChapterReview(true);
     setChapterReviewMsg('');
     try {
-      await client.post(`/community/chapters/${data.chapter._id}/reviews`, chapterReviewForm);
+      await client.post(`/community/chapters/${data.chapter.id}/reviews`, chapterReviewForm);
       setChapterReviewMsg('Chapter rating saved.');
       setChapterReviewForm({ rating: 0, content: '' });
       await loadChapter();
@@ -421,7 +421,7 @@ const Reader = () => {
                   <div className="space-y-1">
                     {chapters.map((chapter) => (
                       <button
-                        key={chapter._id}
+                        key={chapter.id}
                         type="button"
                         onClick={() => {
                           setPanel('');

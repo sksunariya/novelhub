@@ -1,18 +1,58 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BookOpen, BookmarkPlus, BookmarkCheck, Eye, List, Star, Play, Search, ArrowUpDown, Clock } from 'lucide-react';
+import { BookOpen, BookmarkPlus, BookmarkCheck, Eye, List, Star, Play, Search, ArrowUpDown, Clock, Lock, Check } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import PageTransition from '../components/PageTransition';
 import Spinner from '../components/Spinner';
 import StarRating from '../components/StarRating';
 import CommentCard from '../components/CommentCard';
+import CreditAmount from '../components/credits/CreditAmount';
 import { formatRelativeTime, formatExactDateTime } from '../utils/dateUtils';
 import DeletedItemModal from '../components/DeletedItemModal';
 import { ANCHORS, readHashTarget, isTargetInItems } from '../utils/hashTarget';
 
 const SYNOPSIS_LIMIT = 300;
+
+/**
+ * Whether a chapter costs anything, shown before the reader clicks in.
+ *
+ * The list has always known this — the API sends `locked`, `owned` and
+ * `priceCredits` — it just never showed it, so a reader met the paywall only
+ * after committing to a chapter. Nothing renders for an ordinary free chapter;
+ * a badge on every row would be noise.
+ */
+const ChapterAccessTag = ({ chapter }) => {
+  if (chapter.owned) {
+    return (
+      <span className="shrink-0 text-xs text-emerald-400" title="You own this chapter">
+        <Check className="h-3.5 w-3.5" aria-hidden="true" />
+        <span className="sr-only">Unlocked</span>
+      </span>
+    );
+  }
+
+  if (!chapter.locked) return null;
+
+  if (chapter.availableAt) {
+    return (
+      <span
+        className="shrink-0 rounded-full bg-night-raised px-2 py-0.5 text-[11px] text-silver-muted"
+        title={`Available ${formatExactDateTime(chapter.availableAt)}`}
+      >
+        Coming soon
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex shrink-0 items-center gap-1 rounded-full bg-crimson/15 px-2 py-0.5 text-[11px] text-crimson-soft">
+      <Lock className="h-3 w-3" aria-hidden="true" />
+      <CreditAmount value={chapter.priceCredits} showIcon={false} showLabel={false} />
+    </span>
+  );
+};
 
 // Trim to at most `max` chars, preferring the last word boundary, and append an ellipsis.
 const truncateAtWord = (text, max) => {
@@ -43,6 +83,8 @@ const NovelDetail = () => {
   const { user, updateUser, isAdmin } = useAuth();
   const [novel, setNovel] = useState(null);
   const [chapters, setChapters] = useState([]);
+  const [chapterMeta, setChapterMeta] = useState({ total: 0, pages: 1 });
+  const [loadingMore, setLoadingMore] = useState(false);
   const [reviews, setReviews] = useState([]);
   const [progress, setProgress] = useState(null);
   const [reviewForm, setReviewForm] = useState({ rating: 0, content: '' });
@@ -126,6 +168,12 @@ const NovelDetail = () => {
         client.get(`/novels/id/${data.novel._id}/reviews`),
       ]);
       setChapters(chaptersRes.data.chapters);
+      // The endpoint is paginated now. Without this, a long novel silently
+      // stops at the first page and looks like it just ends.
+      setChapterMeta({
+        total: chaptersRes.data.total ?? chaptersRes.data.chapters.length,
+        pages: chaptersRes.data.pages ?? 1,
+      });
       setReviews(reviewsRes.data.reviews);
       setLoaded(true);
     } catch (error) {
@@ -300,7 +348,11 @@ const NovelDetail = () => {
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-line pb-4">
             <div>
               <h2 className="font-display text-xl font-bold text-silver">Chapters</h2>
-              <p className="text-xs text-silver-muted">{chapters.length} chapter{chapters.length === 1 ? '' : 's'} available</p>
+              <p className="text-xs text-silver-muted">
+                {chapterMeta.total || chapters.length} chapter
+                {(chapterMeta.total || chapters.length) === 1 ? '' : 's'} available
+                {chapters.length < chapterMeta.total && ` · showing ${chapters.length}`}
+              </p>
             </div>
             {chapters.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
@@ -336,13 +388,14 @@ const NovelDetail = () => {
               <div className="grid gap-2 sm:grid-cols-2">
                 {filteredChapters.map((chapter) => (
                   <Link
-                    key={chapter._id}
+                    key={chapter.id}
                     to={`/novel/${slug}/chapter/${chapter.number}`}
                     className="group flex flex-col justify-center gap-1.5 min-w-0 overflow-hidden rounded-lg border border-line bg-night px-4 py-3 text-sm transition-colors duration-150 hover:border-crimson/50 hover:bg-night-raised"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="shrink-0 font-semibold text-crimson-soft">#{chapter.number}</span>
                       <span className="truncate font-medium text-silver group-hover:text-white transition-colors">{chapter.title}</span>
+                      <ChapterAccessTag chapter={chapter} />
                     </div>
                     <div
                       className="flex items-center gap-1.5 min-w-0 text-xs text-silver-muted"

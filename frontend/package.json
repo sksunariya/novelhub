@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@paypal/react-paypal-js": "^8.7.0",
     "@tiptap/extension-character-count": "^2.6.6",
     "@tiptap/extension-color": "^2.6.6",
     "@tiptap/extension-font-family": "^2.6.6",

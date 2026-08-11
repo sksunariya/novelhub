@@ -11,6 +11,7 @@ import {
   requirementLabel,
   unmetRequirements,
 } from '../utils/readingGate';
+import UnlockPanel from './credits/UnlockPanel';
 
 const RequirementRow = ({ requirement }) => (
   <li className="flex items-center gap-2 text-sm">
@@ -120,7 +121,10 @@ const ChapterGate = ({ payload, user, onSatisfied }) => {
   const { gate, novel, chapter, prev, message } = payload;
   const unmet = unmetRequirements(gate.requirements);
   const checkpoint = gate.checkpoint;
-  const needsLogin = gate.reason === GATE_REASONS.LOGIN || !user;
+  // The paywall and early-access windows are their own branch — the login and
+  // engagement flows below are untouched.
+  const isPaywall = gate.reason === GATE_REASONS.CREDITS || gate.reason === GATE_REASONS.EARLY_ACCESS;
+  const needsLogin = !isPaywall && (gate.reason === GATE_REASONS.LOGIN || !user);
   const redirect = `${REDIRECT_PARAM}=${encodeURIComponent(`/novel/${novel.slug}/chapter/${chapter.number}`)}`;
 
   // A novel-scoped comment counts wherever it is posted, so when there is no
@@ -161,7 +165,15 @@ const ChapterGate = ({ payload, user, onSatisfied }) => {
 
         <p className="mt-4 text-sm text-silver-muted">{message}</p>
 
-        {needsLogin ? (
+        {isPaywall ? (
+          <UnlockPanel
+            gate={gate}
+            novel={novel}
+            chapter={chapter}
+            user={user}
+            onUnlocked={onSatisfied}
+          />
+        ) : needsLogin ? (
           <div className="mt-5 space-y-3">
             <p className="text-sm text-silver">Log in to keep reading — you will come straight back to this chapter.</p>
             <div className="flex flex-wrap gap-2">

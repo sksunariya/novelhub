@@ -17,6 +17,8 @@ export const GATE_RECURRENCE = {
 export const GATE_REASONS = {
   LOGIN: 'login',
   ENGAGEMENT: 'engagement',
+  CREDITS: 'credits',
+  EARLY_ACCESS: 'early_access',
 };
 
 export const REQUIREMENT_OPTIONS = [

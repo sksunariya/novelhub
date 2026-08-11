@@ -16,6 +16,11 @@ import Notifications from './pages/Notifications';
 import { useAuth } from './context/AuthContext';
 import Spinner from './components/Spinner';
 
+// Lazy: the PayPal SDK wrapper should not be in the bundle a reader downloads
+// just to read a chapter.
+const Store = lazy(() => import('./pages/Store'));
+const Subscribe = lazy(() => import('./pages/Subscribe'));
+
 const AdminLayout = lazy(() => import('./admin/AdminLayout'));
 const Dashboard = lazy(() => import('./admin/Dashboard'));
 const CarouselAdmin = lazy(() => import('./admin/CarouselAdmin'));
@@ -25,6 +30,13 @@ const UsersAdmin = lazy(() => import('./admin/UsersAdmin'));
 const ModerationAdmin = lazy(() => import('./admin/ModerationAdmin'));
 const NotificationsAdmin = lazy(() => import('./admin/NotificationsAdmin'));
 const SettingsAdmin = lazy(() => import('./admin/SettingsAdmin'));
+const ConfigPage = lazy(() => import('./admin/settings/ConfigPage'));
+const JobsAdmin = lazy(() => import('./admin/JobsAdmin'));
+const PacksAdmin = lazy(() => import('./admin/PacksAdmin'));
+const PlansAdmin = lazy(() => import('./admin/PlansAdmin'));
+const CurrenciesAdmin = lazy(() => import('./admin/CurrenciesAdmin'));
+const GrantsAdmin = lazy(() => import('./admin/GrantsAdmin'));
+const AnalyticsAdmin = lazy(() => import('./admin/AnalyticsAdmin'));
 
 const RequireAuth = ({ children }) => {
   const { user, loading } = useAuth();
@@ -52,6 +64,24 @@ const App = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          {/* Browsable signed out, so a reader can see prices before committing. */}
+          <Route
+            path="/store"
+            element={
+              <Suspense fallback={<Spinner />}>
+                <Store />
+              </Suspense>
+            }
+          />
+          {/* Also browsable signed out — the plan picker is the pitch. */}
+          <Route
+            path="/subscribe"
+            element={
+              <Suspense fallback={<Spinner />}>
+                <Subscribe />
+              </Suspense>
+            }
+          />
           <Route
             path="/profile"
             element={
@@ -149,6 +179,64 @@ const App = () => {
             element={
               <Suspense fallback={<Spinner full />}>
                 <SettingsAdmin />
+              </Suspense>
+            }
+          />
+          {/* Registry-driven configuration. Separate from the legacy site
+              settings page so neither has to be rewritten to ship the other. */}
+          <Route
+            path="config"
+            element={
+              <Suspense fallback={<Spinner full />}>
+                <ConfigPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="jobs"
+            element={
+              <Suspense fallback={<Spinner full />}>
+                <JobsAdmin />
+              </Suspense>
+            }
+          />
+          <Route
+            path="packs"
+            element={
+              <Suspense fallback={<Spinner full />}>
+                <PacksAdmin />
+              </Suspense>
+            }
+          />
+          <Route
+            path="plans"
+            element={
+              <Suspense fallback={<Spinner full />}>
+                <PlansAdmin />
+              </Suspense>
+            }
+          />
+          <Route
+            path="currencies"
+            element={
+              <Suspense fallback={<Spinner full />}>
+                <CurrenciesAdmin />
+              </Suspense>
+            }
+          />
+          <Route
+            path="grants"
+            element={
+              <Suspense fallback={<Spinner full />}>
+                <GrantsAdmin />
+              </Suspense>
+            }
+          />
+          <Route
+            path="analytics"
+            element={
+              <Suspense fallback={<Spinner full />}>
+                <AnalyticsAdmin />
               </Suspense>
             }
           />

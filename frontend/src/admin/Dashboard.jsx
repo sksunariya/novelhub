@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Users, BookOpen, FileText, MessageSquare, Star, Eye } from 'lucide-react';
 import client from '../api/client';
 import Spinner from '../components/Spinner';
+import PaymentReadiness from './PaymentReadiness';
 
 const STAT_CARDS = [
   { key: 'users', label: 'Users', icon: Users },
@@ -26,6 +27,8 @@ const Dashboard = () => {
   return (
     <div>
       <h1 className="mb-6 font-display text-2xl font-bold text-silver">Dashboard</h1>
+      {/* Renders nothing once payments are fully set up. */}
+      <PaymentReadiness />
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {STAT_CARDS.map((card, index) => (
           <motion.div

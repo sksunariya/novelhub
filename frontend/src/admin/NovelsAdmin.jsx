@@ -6,6 +6,11 @@ import client from '../api/client';
 import Spinner from '../components/Spinner';
 import Pagination from '../components/Pagination';
 import ReadingGateFields, { DEFAULT_READING_GATE, gatePayload, toGateForm } from './ReadingGateFields';
+import MonetizationFields, {
+  EMPTY_MONETIZATION,
+  monetizationPayload,
+  toMonetizationForm,
+} from './MonetizationFields';
 
 const EMPTY_FORM = {
   title: '',
@@ -32,6 +37,7 @@ const NovelsAdmin = () => {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [gate, setGate] = useState(EMPTY_GATE);
+  const [money, setMoney] = useState(EMPTY_MONETIZATION);
   const [coverFile, setCoverFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -57,6 +63,7 @@ const NovelsAdmin = () => {
   const openCreate = () => {
     setForm(EMPTY_FORM);
     setGate(EMPTY_GATE);
+    setMoney(EMPTY_MONETIZATION);
     setCoverFile(null);
     setError('');
     setEditing('new');
@@ -75,6 +82,7 @@ const NovelsAdmin = () => {
       featured: novel.featured,
     });
     setGate({ ...EMPTY_GATE, ...toGateForm(novel.readingGate), override: Boolean(novel.readingGate?.override) });
+    setMoney(toMonetizationForm(novel.monetization));
     setCoverFile(null);
     setError('');
     setEditing(novel);
@@ -88,6 +96,7 @@ const NovelsAdmin = () => {
       const body = new FormData();
       Object.entries(form).forEach(([key, val]) => body.append(key, val));
       body.append('readingGate', JSON.stringify(gatePayload(gate)));
+      body.append('monetization', JSON.stringify(monetizationPayload(money)));
       if (coverFile) {
         body.append('cover', coverFile);
       }
@@ -293,6 +302,7 @@ const NovelsAdmin = () => {
                     <Lock className="h-4 w-4 text-crimson" aria-hidden="true" /> Reading gate
                   </p>
                   <ReadingGateFields idPrefix="nv-gate" gate={gate} onChange={(patch) => setGate((g) => ({ ...g, ...patch }))} showOverride />
+                  <MonetizationFields value={money} onChange={setMoney} />
                 </div>
                 {error && <p className="rounded-lg bg-crimson/15 px-3 py-2 text-sm text-crimson-soft" role="alert">{error}</p>}
                 <div className="flex justify-end gap-2 pt-2">

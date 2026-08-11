@@ -5,6 +5,7 @@ import { Search, Bell, Menu, X, User, LogOut, Shield, Library } from 'lucide-rea
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import client from '../api/client';
+import CreditBalance from './credits/CreditBalance';
 
 const NAV_LINKS = [
   { to: '/', label: 'Home' },
@@ -101,6 +102,8 @@ const Navbar = () => {
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2 md:ml-0">
           {user ? (
             <>
+              {/* Renders nothing unless monetization is on. */}
+              <CreditBalance compact />
               <Link
                 to="/notifications"
                 className="relative flex h-11 w-11 items-center justify-center rounded-full text-silver-muted transition-colors hover:text-silver"

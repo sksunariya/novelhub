@@ -2,27 +2,37 @@ const AdmZip = require('adm-zip');
 const path = require('path');
 const Novel = require('../models/Novel');
 const Chapter = require('../models/Chapter');
+const ChapterAccess = require('../models/ChapterAccess');
 const User = require('../models/User');
 const Comment = require('../models/Comment');
 const Review = require('../models/Review');
 const Notification = require('../models/Notification');
 const SiteSettings = require('../models/SiteSettings');
 const Campaign = require('../models/Campaign');
-const { dispatchCampaign } = require('../services/notificationService');
+const { dispatchCampaign, dispatchNotification } = require('../services/notificationService');
+const {
+  guardChapterDeletion,
+  guardNovelDeletion,
+  guardUserDeletion,
+} = require('../services/contentGuardService');
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { uniqueSlug } = require('../utils/slugify');
 const { parseChapterBuffer, titleFromFilename } = require('../utils/parseChapterFile');
 const {
   NOTIFICATION_TYPES,
+  NOTIFICATION_CHANNELS,
   ROLES,
   RATING,
   ADMIN_USER_FIELDS,
   MODERATION_STATUS,
   GATE_DEFAULTS,
+  CHAPTER_ACCESS_TYPES,
 } = require('../config/constants');
 const { parsePagination } = require('./novelController');
 const { recalcForReview, recalcNovelRating, recalcChapterRating } = require('./reviewController');
 const storage = require('../services/storage');
+const accessService = require('../services/accessService');
+const { readChapterPricing } = require('../utils/chapterPricing');
 
 const CHAPTER_FILE_EXTENSIONS = ['.txt', '.docx'];
 
@@ -49,6 +59,48 @@ const parseJsonField = (raw) => {
 
 // Reading-gate config arrives as JSON in a multipart body, so the numeric and
 // list fields need coercing before they reach the schema.
+/**
+ * Per-novel monetization override.
+ *
+ * Only takes effect when `override` is true — that switch is what separates
+ * "this novel is priced differently" from "this novel happens to have default
+ * values saved", and without it every novel ever opened in the editor would
+ * silently pin itself to whatever the global defaults were that day.
+ *
+ * `revenueShare` is deliberately not accepted here: it is commercially
+ * sensitive, `select: false` on the model, and belongs to a different screen.
+ */
+const parseNovelMonetization = (raw) => {
+  const input = parseJsonField(raw);
+  if (!input || typeof input !== 'object') return { error: 'monetization must be valid JSON' };
+
+  const value = {};
+  if (input.override !== undefined) value.override = input.override === true || input.override === 'true';
+  if (input.monetized !== undefined) value.monetized = input.monetized === true || input.monetized === 'true';
+
+  for (const field of ['freeChapterCount', 'defaultChapterPriceCredits', 'freeAfterDays', 'rentalHours']) {
+    if (input[field] === undefined) continue;
+    const number = Number(input[field]);
+    if (!Number.isInteger(number) || number < 0) {
+      return { error: `${field} must be a whole number of 0 or more` };
+    }
+    value[field] = number;
+  }
+
+  if (input.accessMode !== undefined) {
+    if (!['inherit', 'permanent', 'rental'].includes(input.accessMode)) {
+      return { error: 'accessMode must be inherit, permanent or rental' };
+    }
+    value.accessMode = input.accessMode;
+  }
+
+  if (value.accessMode === 'rental' && !(value.rentalHours > 0)) {
+    return { error: 'A rental needs a rental length in hours' };
+  }
+
+  return { value };
+};
+
 const parseReadingGate = (raw) => {
   const gate = parseJsonField(raw);
   if (!gate || typeof gate !== 'object') {
@@ -103,19 +155,46 @@ const syncNovelChapterMeta = async (novelId) => {
   await Novel.updateOne({ _id: novelId }, { chapterCount: count, lastChapterAt: latest ? latest.createdAt : null });
 };
 
+/**
+ * Tell readers who have this novel in their library about new chapters.
+ *
+ * Routed through dispatchNotification rather than writing Notification rows
+ * directly. The old insertMany bypassed the global enableChapterNotifications
+ * toggle, every per-user preference, the banned check and email entirely —
+ * which made the notification users receive most often the only one no setting
+ * could control.
+ */
 const notifyLibraryUsers = async (novel, chapters) => {
-  const users = await User.find({ library: novel._id }).select('_id');
+  const users = await User.find({ library: novel._id, banned: false })
+    .select('_id email username notificationPreferences banned');
   if (!users.length) {
     return;
   }
+  const title = `New chapter${chapters.length === 1 ? '' : 's'} of ${novel.title}`;
   const message =
     chapters.length === 1
       ? `New chapter of ${novel.title}: Chapter ${chapters[0].number} - ${chapters[0].title}`
       : `${chapters.length} new chapters of ${novel.title}`;
   const link = `/novel/${novel.slug}`;
-  await Notification.insertMany(
-    users.map((user) => ({ user: user._id, type: NOTIFICATION_TYPES.NEW_CHAPTER, message, link }))
-  );
+
+  // Batched so a novel with a large library does not fan out all at once;
+  // email delivery is throttled further by the queue behind dispatchNotification.
+  const BATCH = 250;
+  for (let i = 0; i < users.length; i += BATCH) {
+    await Promise.all(
+      users.slice(i, i + BATCH).map((user) =>
+        dispatchNotification({
+          recipient: user,
+          type: NOTIFICATION_TYPES.NEW_CHAPTER,
+          title,
+          message,
+          link,
+          channels: [NOTIFICATION_CHANNELS.IN_APP, NOTIFICATION_CHANNELS.EMAIL],
+          metadata: { novelId: novel._id, chapterCount: chapters.length },
+        }).catch((error) => console.error('[notifyLibraryUsers]', error.message))
+      )
+    );
+  }
 };
 
 const uploadEditorImage = asyncHandler(async (req, res) => {
@@ -222,6 +301,11 @@ const updateNovel = asyncHandler(async (req, res) => {
     }
     novel.readingGate = { ...plainSubdoc(novel.readingGate), ...gate };
   }
+  if (req.body.monetization) {
+    const parsed = parseNovelMonetization(req.body.monetization);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    novel.monetization = { ...plainSubdoc(novel.monetization), ...parsed.value };
+  }
   await novel.save();
   res.json({ novel });
 });
@@ -231,6 +315,7 @@ const deleteNovel = asyncHandler(async (req, res) => {
   if (!novel) {
     return res.status(404).json({ message: 'Novel not found' });
   }
+  const guard = await guardNovelDeletion(novel._id, { force: req.query.force === 'true' });
   // Soft delete: mark the novel and its chapters/comments/reviews as deleted.
   // Nothing is removed — stored files, reading progress and library references
   // are all preserved; soft-deleted records are just hidden from reads.
@@ -240,14 +325,44 @@ const deleteNovel = asyncHandler(async (req, res) => {
     Review.softDeleteMany({ novel: novel._id }),
     novel.softDelete(),
   ]);
-  res.json({ message: 'Novel deleted' });
+  res.json({ message: 'Novel deleted', purchaseGuard: guard });
 });
 
 const listNovelChapters = asyncHandler(async (req, res) => {
   const chapters = await Chapter.find({ novel: req.params.id })
-    .select('number title views published createdAt updatedAt')
+    // Pricing is included so the admin list can show what each chapter costs
+    // without a request per row. `freeAfterDays`, `originalNumber`, `wordCount`
+    // and `publishedAt` are all read by the price resolver below — omitting
+    // them would make the effective price shown here quietly wrong for timed
+    // releases and renumbered chapters.
+    .select(
+      'number title views published createdAt updatedAt accessType priceCredits ' +
+        'earlyAccessUntil freeAfterDays originalNumber wordCount publishedAt'
+    )
     .sort({ number: 1 });
-  res.json({ chapters });
+
+  // What the reader would actually be charged, which is not the same as the
+  // stored value: a chapter with no override still has an effective price from
+  // the novel or global defaults. Showing only the override would make a
+  // fully-priced novel look free.
+  const novel = await Novel.findById(req.params.id);
+  let effective = new Map();
+  if (novel) {
+    const resolved = await accessService.resolveNovelChapters({ novel, chapters, user: null });
+    effective = new Map(
+      resolved.map((row) => [
+        String(row.chapter._id),
+        { priceCredits: row.priceCredits, free: Boolean(row.free), reason: row.reason },
+      ])
+    );
+  }
+
+  res.json({
+    chapters: chapters.map((chapter) => ({
+      ...chapter.toObject(),
+      effective: effective.get(String(chapter._id)) || null,
+    })),
+  });
 });
 
 const getChapter = asyncHandler(async (req, res) => {
@@ -263,6 +378,23 @@ const nextChapterNumber = async (novelId) => {
   return last ? last.number + 1 : 1;
 };
 
+const applyChapterPricing = (chapter, body) => {
+  const { updates, errors } = readChapterPricing(body);
+  if (errors.length) return errors;
+
+  // The parser only sees the payload, so it cannot catch a price of 0 sent
+  // without an accessType against a chapter already marked paid — which would
+  // silently give away a chapter that is supposed to cost something. Checking
+  // the merged result closes that.
+  const merged = { accessType: chapter.accessType, priceCredits: chapter.priceCredits, ...updates };
+  if (merged.accessType === CHAPTER_ACCESS_TYPES.PAID && merged.priceCredits === 0) {
+    return ['A paid chapter cannot cost 0 credits — set access to Free instead'];
+  }
+
+  Object.assign(chapter, updates);
+  return null;
+};
+
 const createChapter = asyncHandler(async (req, res) => {
   const novel = await Novel.findById(req.params.id);
   if (!novel) {
@@ -272,12 +404,16 @@ const createChapter = asyncHandler(async (req, res) => {
   if (!title || !content) {
     return res.status(400).json({ message: 'title and content are required' });
   }
+  const { updates: pricing, errors } = readChapterPricing(req.body);
+  if (errors.length) return res.status(400).json({ message: errors[0], errors });
+
   const chapter = await Chapter.create({
     novel: novel._id,
     number: number ? Number(number) : await nextChapterNumber(novel._id),
     title,
     content,
     published: published !== undefined ? published === 'true' || published === true : true,
+    ...pricing,
   });
   await syncNovelChapterMeta(novel._id);
   if (chapter.published) {
@@ -298,6 +434,9 @@ const uploadChapterFile = asyncHandler(async (req, res) => {
   if (!content) {
     return res.status(400).json({ message: 'File is empty or could not be parsed' });
   }
+  const { updates: pricing, errors } = readChapterPricing(req.body);
+  if (errors.length) return res.status(400).json({ message: errors[0], errors });
+
   // Archive the original upload privately so it can be re-downloaded later.
   const sourceFile = await storage.uploadPrivate(req.file, 'chapter-sources');
   const chapter = await Chapter.create({
@@ -306,6 +445,7 @@ const uploadChapterFile = asyncHandler(async (req, res) => {
     title: req.body.title || titleFromFilename(req.file.originalname),
     content,
     sourceFile: sourceFile || undefined,
+    ...pricing,
   });
   await syncNovelChapterMeta(novel._id);
   await notifyLibraryUsers(novel, [chapter]);
@@ -329,6 +469,8 @@ const bulkUploadChapters = asyncHandler(async (req, res) => {
   if (!entries.length) {
     return res.status(400).json({ message: 'No .txt or .docx files found in zip' });
   }
+  const { updates: bulkPricing, errors } = readChapterPricing(req.body);
+  if (errors.length) return res.status(400).json({ message: errors[0], errors });
   // Archive the uploaded zip privately once; each chapter records the archive key.
   const archive = await storage.uploadPrivate(req.file, 'chapter-sources');
   let number = await nextChapterNumber(novel._id);
@@ -347,6 +489,9 @@ const bulkUploadChapters = asyncHandler(async (req, res) => {
         title: titleFromFilename(entry.entryName),
         content,
         sourceFile: archive ? { ...archive, name: entry.entryName } : undefined,
+        // Uploading 200 chapters and then pricing them one by one is not a
+        // workflow, so the whole batch takes the pricing sent with the zip.
+        ...bulkPricing,
       });
       created.push(chapter);
       number += 1;
@@ -371,9 +516,60 @@ const updateChapter = asyncHandler(async (req, res) => {
   if (content) chapter.content = content;
   if (number !== undefined) chapter.number = Number(number);
   if (published !== undefined) chapter.published = published === 'true' || published === true;
+
+  const pricingErrors = applyChapterPricing(chapter, req.body);
+  if (pricingErrors) return res.status(400).json({ message: pricingErrors[0], errors: pricingErrors });
+
   await chapter.save();
   await syncNovelChapterMeta(chapter.novel);
   res.json({ chapter });
+});
+
+/**
+ * PUT /api/admin/novels/:id/chapters/pricing
+ *
+ * Re-price many chapters at once. Pricing a long novel one chapter at a time
+ * is not a workflow anyone will actually follow, and the alternative — a
+ * global default — cannot express "first 20 free, the rest 10 credits".
+ *
+ * Accepts either an explicit list of chapter ids or a `from`/`to` number range,
+ * because both are natural ways to think about it.
+ */
+const bulkPriceChapters = asyncHandler(async (req, res) => {
+  const novel = await Novel.findById(req.params.id);
+  if (!novel) return res.status(404).json({ message: 'Novel not found' });
+
+  const { updates, errors } = readChapterPricing(req.body);
+  if (errors.length) return res.status(400).json({ message: errors[0], errors });
+  if (!Object.keys(updates).length) {
+    return res.status(400).json({ message: 'Nothing to change — send accessType and/or priceCredits' });
+  }
+
+  const filter = { novel: novel._id };
+  const { chapterIds, from, to } = req.body;
+
+  if (Array.isArray(chapterIds) && chapterIds.length) {
+    filter._id = { $in: chapterIds };
+  } else if (from !== undefined || to !== undefined) {
+    filter.number = {};
+    if (from !== undefined) filter.number.$gte = Number(from);
+    if (to !== undefined) filter.number.$lte = Number(to);
+  }
+
+  // Chapters people already bought are not re-priced retroactively in any way
+  // that matters — they keep their access — but the admin should know the
+  // change affects a novel with sales.
+  const [result, sold] = await Promise.all([
+    Chapter.updateMany(filter, { $set: updates }),
+    ChapterAccess.countDocuments({ novel: novel._id, creditsSpent: { $gt: 0 } }),
+  ]);
+
+  res.json({
+    matched: result.matchedCount ?? result.n ?? 0,
+    updated: result.modifiedCount ?? result.nModified ?? 0,
+    applied: updates,
+    existingPurchases: sold,
+  });
 });
 
 const deleteChapter = asyncHandler(async (req, res) => {
@@ -381,6 +577,9 @@ const deleteChapter = asyncHandler(async (req, res) => {
   if (!chapter) {
     return res.status(404).json({ message: 'Chapter not found' });
   }
+  // Refuse or refund before destroying access people paid for. `force=true`
+  // is the admin confirming the impact preview.
+  const guard = await guardChapterDeletion([chapter._id], { force: req.query.force === 'true' });
   // Soft delete the chapter with its comments and chapter reviews; the stored
   // source file is kept.
   const novelId = chapter.novel;
@@ -390,7 +589,7 @@ const deleteChapter = asyncHandler(async (req, res) => {
     chapter.softDelete(),
   ]);
   await Promise.all([syncNovelChapterMeta(novelId), recalcChapterRating(chapter._id)]);
-  res.json({ message: 'Chapter deleted' });
+  res.json({ message: 'Chapter deleted', purchaseGuard: guard });
 });
 
 const listUsers = asyncHandler(async (req, res) => {
@@ -441,16 +640,24 @@ const deleteUser = asyncHandler(async (req, res) => {
   if (user._id.toString() === req.user._id.toString()) {
     return res.status(400).json({ message: 'Cannot delete your own account' });
   }
+  // Financial records must survive an erasure request, so a user who has
+  // transacted is anonymized rather than removed. The guard decides.
+  const guard = await guardUserDeletion(user, { force: req.query.force === 'true' });
+
   // Soft delete the user and hide their comments/reviews. Reading progress and
   // notifications are left intact so nothing is lost from the database.
   const reviews = await Review.find({ user: user._id }).select('novel chapter');
   await Promise.all([
     Comment.softDeleteMany({ user: user._id }),
     Review.softDeleteMany({ user: user._id }),
-    user.softDelete(),
+    // anonymizeUser already set deletedAt; do not re-save a stale document over it.
+    guard.action === 'anonymized' ? Promise.resolve() : user.softDelete(),
   ]);
   await recalcRatingsFor(reviews);
-  res.json({ message: 'User deleted' });
+  res.json({
+    message: guard.action === 'anonymized' ? 'User anonymized, financial records retained' : 'User deleted',
+    transactionGuard: guard,
+  });
 });
 
 const searchRegex = (search) => ({ $regex: search, $options: 'i' });
@@ -858,6 +1065,7 @@ module.exports = {
   uploadChapterFile,
   bulkUploadChapters,
   updateChapter,
+  bulkPriceChapters,
   deleteChapter,
   listUsers,
   updateUser,

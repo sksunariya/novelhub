@@ -49,7 +49,16 @@ const siteSettingsSchema = new mongoose.Schema(
 siteSettingsSchema.statics.getSettings = async function () {
   let settings = await this.findOne({ singleton: true });
   if (!settings) {
-    settings = await this.create({ singleton: true });
+    try {
+      settings = await this.create({ singleton: true });
+    } catch (error) {
+      // Concurrent first access: several requests can all find nothing and all
+      // try to create. The unique index rejects every loser, which then reads
+      // the winner's document instead of throwing a duplicate-key error up
+      // through an unrelated request.
+      if (error.code !== 11000) throw error;
+      settings = await this.findOne({ singleton: true });
+    }
   }
   return settings;
 };

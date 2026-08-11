@@ -12,6 +12,7 @@ const {
   createChapter,
   uploadChapterFile,
   bulkUploadChapters,
+  bulkPriceChapters,
   updateChapter,
   deleteChapter,
   listUsers,
@@ -31,6 +32,28 @@ const {
   dispatchAdminNotification,
   listCampaigns,
 } = require('../controllers/adminController');
+const {
+  getRegistry,
+  getConfig,
+  updateConfig,
+  resetConfig,
+  searchConfig,
+  getAuditLog,
+  previewImpact,
+} = require('../controllers/configController');
+const { getJobs, triggerJob, getJobRuns } = require('../controllers/jobsController');
+const {
+  getNovelLeaderboard,
+  getNovelPerformance,
+  getFunnel,
+  getEconomy,
+  getAuthorEarnings,
+  getAuthorBreakdown,
+  exportAuthorEarnings,
+  rebuildRollups,
+} = require('../controllers/analyticsController');
+const { replayWebhook } = require('../controllers/webhookController');
+const monetizationAdminRoutes = require('./monetizationAdminRoutes');
 const { protect, adminOnly } = require('../middlewares/auth');
 const { imageUpload, docUpload } = require('../middlewares/upload');
 
@@ -66,6 +89,9 @@ router.get('/novels/:id/chapters', listNovelChapters);
 router.post('/novels/:id/chapters', createChapter);
 router.post('/novels/:id/chapters/upload', docUpload.single('file'), uploadChapterFile);
 router.post('/novels/:id/chapters/bulk', docUpload.single('file'), bulkUploadChapters);
+// Static segment, so it must precede nothing here but is kept adjacent to the
+// other chapter collection routes for readability.
+router.put('/novels/:id/chapters/pricing', bulkPriceChapters);
 router.get('/chapters/:id', getChapter);
 router.get('/chapters/:id/source', getChapterSource);
 router.put('/chapters/:id', updateChapter);
@@ -98,5 +124,38 @@ router.post('/announcements', broadcastAnnouncement);
 
 router.post('/notifications/dispatch', dispatchAdminNotification);
 router.get('/notifications/campaigns', listCampaigns);
+
+// Registry-backed configuration. Static paths precede the collection route so
+// "registry"/"search" are never read as a section name.
+router.get('/config/registry', getRegistry);
+router.get('/config/search', searchConfig);
+router.get('/config/audit', getAuditLog);
+router.post('/config/reset', resetConfig);
+router.post('/config/preview-impact', previewImpact);
+router.get('/config', getConfig);
+router.patch('/config', updateConfig);
+
+// System → Jobs
+router.get('/jobs/runs', getJobRuns);
+router.get('/jobs', getJobs);
+router.post('/jobs/:name/run', triggerJob);
+
+// System → Webhooks
+router.post('/webhooks/:id/replay', replayWebhook);
+
+// Monetization catalogue: packs, currencies, pricing rules, wallets, orders,
+// templates and grant campaigns.
+router.use('/monetization', monetizationAdminRoutes);
+
+// Analytics
+router.get('/analytics/novels/:id', getNovelPerformance);
+router.get('/analytics/novels', getNovelLeaderboard);
+router.get('/analytics/funnel', getFunnel);
+router.get('/analytics/economy', getEconomy);
+// Static path before :id so "authors.csv" is not read as an author id.
+router.get('/analytics/authors.csv', exportAuthorEarnings);
+router.get('/analytics/authors/:id', getAuthorBreakdown);
+router.get('/analytics/authors', getAuthorEarnings);
+router.post('/analytics/rebuild', rebuildRollups);
 
 module.exports = router;
