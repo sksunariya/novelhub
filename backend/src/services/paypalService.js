@@ -72,7 +72,27 @@ const request = async (method, path, body = null, extraHeaders = {}) => {
   const text = await response.text();
   const payload = text ? JSON.parse(text) : {};
   if (!response.ok) {
-    throw paypalError(payload.message || `PayPal ${method} ${path} failed (${response.status})`, 502, payload);
+    // PayPal's `message` is generic ("Request is not well-formed…"); the
+    // actionable part is in `details`, which names the offending field. Losing
+    // it turns a one-line fix into a guessing game, so it is logged and folded
+    // into the thrown message.
+    const detail = (payload.details || [])
+      .map((entry) => [entry.field, entry.issue, entry.description].filter(Boolean).join(' '))
+      .join('; ');
+    console.error(
+      `[paypal] ${method} ${path} -> ${response.status}`,
+      payload.name || '',
+      payload.message || '',
+      detail ? `\n  details: ${detail}` : '',
+      payload.debug_id ? `\n  debug_id: ${payload.debug_id}` : ''
+    );
+    throw paypalError(
+      [payload.message || `PayPal ${method} ${path} failed (${response.status})`, detail]
+        .filter(Boolean)
+        .join(' — '),
+      502,
+      payload
+    );
   }
   return payload;
 };
@@ -84,11 +104,13 @@ const request = async (method, path, body = null, extraHeaders = {}) => {
  * NOT set `invoice_id`: PayPal enforces it as globally unique per merchant, so a
  * retried creation would fail with DUPLICATE_INVOICE_ID.
  */
+const isAbsoluteUrl = (value) => typeof value === 'string' && /^https?:\/\/\S+$/.test(value);
+
 const createOrder = async ({ order, description, returnUrl, cancelUrl }) => {
   const { brandName } = await credentials();
   const amount = formatForPaypal(order.chargeAmountMinor, order.chargeCurrency);
 
-  return request('POST', '/v2/checkout/orders', {
+  const body = {
     intent: 'CAPTURE',
     purchase_units: [
       {
@@ -97,7 +119,17 @@ const createOrder = async ({ order, description, returnUrl, cancelUrl }) => {
         amount: { currency_code: order.chargeCurrency, value: amount },
       },
     ],
-    payment_source: {
+  };
+
+  // `experience_context` is only sent when both URLs are real absolute URLs.
+  //
+  // Live PayPal rejects the block outright when return_url/cancel_url are
+  // missing — "Request is not well-formed, syntactically incorrect, or
+  // violates schema" — while sandbox accepts it happily. That difference is
+  // why this passes locally and fails in production. The block is optional for
+  // the JS SDK flow, so omitting it is safe; sending it half-populated is not.
+  if (isAbsoluteUrl(returnUrl) && isAbsoluteUrl(cancelUrl)) {
+    body.payment_source = {
       paypal: {
         experience_context: {
           brand_name: (brandName || 'NovelHub').slice(0, 127),
@@ -107,8 +139,10 @@ const createOrder = async ({ order, description, returnUrl, cancelUrl }) => {
           cancel_url: cancelUrl,
         },
       },
-    },
-  });
+    };
+  }
+
+  return request('POST', '/v2/checkout/orders', body);
 };
 
 const captureOrder = (paypalOrderId) =>

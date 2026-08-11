@@ -80,6 +80,42 @@ beforeEach(async () => {
 
 const auth = (req) => req.set('Authorization', `Bearer ${token}`);
 
+// PayPal's live API rejects an order whose experience block is present without
+// return_url/cancel_url — sandbox accepts it, which is why this only ever
+// showed up in production.
+describe('paypal order payload', () => {
+  const buildPayload = async (headers = {}) => {
+    let request = auth(api().post('/api/store/orders'));
+    Object.entries(headers).forEach(([name, value]) => {
+      request = request.set(name, value);
+    });
+    await request.send({ packId: pack._id }).expect(201);
+    return paypalService.createOrder.mock.calls.at(-1)[0];
+  };
+
+  it('sends absolute return and cancel URLs derived from the origin', async () => {
+    const args = await buildPayload({ Origin: 'https://apexnovelhub.com' });
+    expect(args.returnUrl).toBe('https://apexnovelhub.com/store?paypal=return');
+    expect(args.cancelUrl).toBe('https://apexnovelhub.com/store?paypal=cancel');
+  });
+
+  it('does not depend on the client sending them', async () => {
+    // The store page never has; the server must fill them in regardless.
+    const args = await buildPayload({ Origin: 'https://apexnovelhub.com' });
+    expect(args.returnUrl).toMatch(/^https:\/\//);
+  });
+
+  it('falls back to CLIENT_URL when there is no Origin header', async () => {
+    process.env.CLIENT_URL = 'https://fallback.example';
+    try {
+      const args = await buildPayload();
+      expect(args.returnUrl).toBe('https://fallback.example/store?paypal=return');
+    } finally {
+      delete process.env.CLIENT_URL;
+    }
+  });
+});
+
 // Surfaces the server's message on failure. A bare .expect(201) reports only
 // the status code, which turns any setup problem into an unreadable failure.
 const placeOrder = async () => {

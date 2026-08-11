@@ -65,9 +65,27 @@ const getPacks = asyncHandler(async (req, res) => {
   res.json(result);
 });
 
+/**
+ * Where PayPal should send the buyer back to.
+ *
+ * Derived server-side rather than trusted from the request body: the client
+ * has never sent these, and PayPal's live API rejects the whole order when the
+ * experience block is present without them. Falls back to CLIENT_URL so a
+ * request with no Origin header still produces something valid.
+ */
+const returnUrls = (req) => {
+  const origin = req.headers.origin || '';
+  const base = (/^https?:\/\//.test(origin) ? origin : process.env.CLIENT_URL || '').replace(/\/+$/, '');
+  if (!base) return {};
+  return { returnUrl: `${base}/store?paypal=return`, cancelUrl: `${base}/store?paypal=cancel` };
+};
+
 // POST /api/store/orders
 const createOrder = asyncHandler(async (req, res) => {
-  const { packId, currency, returnUrl, cancelUrl } = req.body || {};
+  const { packId, currency } = req.body || {};
+  const fallback = returnUrls(req);
+  const returnUrl = req.body?.returnUrl || fallback.returnUrl;
+  const cancelUrl = req.body?.cancelUrl || fallback.cancelUrl;
   if (!packId) return res.status(400).json({ message: 'packId is required' });
 
   const { order, paypalOrder } = await orderService.createOrder({
