@@ -52,6 +52,9 @@ export const adjustWallet = (userId, payload) =>
 export const getGrants = (params = {}) => client.get(m('/grants'), { params }).then((r) => r.data);
 export const previewAudience = (audience) => client.post(m('/grants/preview'), { audience }).then((r) => r.data);
 export const createGrant = (payload) => client.post(m('/grants'), payload).then((r) => r.data);
+export const searchGrantUsers = (q, limit = 10) =>
+  client.get(m('/grants/user-search'), { params: { q, limit } }).then((r) => r.data);
+export const quickSendCredits = (payload) => client.post(m('/grants/quick-send'), payload).then((r) => r.data);
 export const dryRunGrant = (id) => client.post(m(`/grants/${id}/dry-run`)).then((r) => r.data);
 export const executeGrant = (id) => client.post(m(`/grants/${id}/execute`)).then((r) => r.data);
 

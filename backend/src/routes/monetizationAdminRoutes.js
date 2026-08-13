@@ -58,6 +58,8 @@ router.put('/templates/:key/:channel', m.updateTemplate);
 router.get('/grants', g.listCampaigns);
 router.post('/grants', g.createCampaign);
 router.post('/grants/preview', g.previewAudience);
+router.get('/grants/user-search', g.searchUsers);
+router.post('/grants/quick-send', g.quickSend);
 router.get('/grants/:id', g.getCampaign);
 router.put('/grants/:id', g.updateCampaign);
 router.delete('/grants/:id', g.deleteCampaign);

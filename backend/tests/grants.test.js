@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { api, createUser, createAdmin, createNovel, createChapter } = require('./helpers');
 const settingsService = require('../src/services/settingsService');
 const creditService = require('../src/services/creditService');
@@ -396,6 +397,131 @@ describe('admin grant routes', () => {
       .post('/api/admin/monetization/grants/preview')
       .set('Authorization', `Bearer ${token}`)
       .send({ audience: { mode: 'all' } })
+      .expect(403);
+  });
+});
+
+describe('user search for the specific-user picker', () => {
+  it('matches on username and email and carries the balance', async () => {
+    const { user } = await createUser({ username: 'lanternkeeper', email: 'lantern@test.com' });
+    await creditService.credit({ user, amount: 40, idempotencyKey: 'seed-lantern' });
+
+    const byName = await auth(api().get('/api/admin/monetization/grants/user-search?q=lantern')).expect(200);
+    expect(byName.body.users).toHaveLength(1);
+    expect(byName.body.users[0]).toMatchObject({ username: 'lanternkeeper', balance: 40 });
+
+    const byEmail = await auth(api().get('/api/admin/monetization/grants/user-search?q=lantern@test')).expect(200);
+    expect(byEmail.body.users[0].id).toBe(String(user._id));
+  });
+
+  it('reports a zero balance for a user with no wallet yet', async () => {
+    await createUser({ username: 'freshreader' });
+    const res = await auth(api().get('/api/admin/monetization/grants/user-search?q=freshreader')).expect(200);
+    expect(res.body.users[0].balance).toBe(0);
+  });
+
+  it('leaves out banned users', async () => {
+    await createUser({ username: 'troublemaker', banned: true });
+    const res = await auth(api().get('/api/admin/monetization/grants/user-search?q=troublemaker')).expect(200);
+    expect(res.body.users).toHaveLength(0);
+  });
+
+  it('stays quiet on a one-character term', async () => {
+    await seedUsers(3);
+    const res = await auth(api().get('/api/admin/monetization/grants/user-search?q=u')).expect(200);
+    expect(res.body.users).toHaveLength(0);
+  });
+
+  it('does not choke on regex metacharacters', async () => {
+    await createUser({ username: 'plainname' });
+    const res = await auth(api().get('/api/admin/monetization/grants/user-search?q=a%2B%2B(')).expect(200);
+    expect(res.body.users).toHaveLength(0);
+  });
+});
+
+describe('quick send', () => {
+  const quickSend = (payload) =>
+    auth(api().post('/api/admin/monetization/grants/quick-send')).send(payload);
+
+  it('pays one named user in a single call', async () => {
+    const users = await seedUsers(3);
+    const res = await quickSend({ userIds: [users[1]._id], amount: 250, reason: 'Outage goodwill' }).expect(200);
+
+    expect(res.body.stats).toMatchObject({ granted: 1, creditsIssued: 250 });
+    expect((await Wallet.findOne({ user: users[1]._id })).balance).toBe(250);
+    // Everyone else is untouched — the whole point of the specific mode.
+    expect(await Wallet.findOne({ user: users[0]._id })).toBeNull();
+  });
+
+  it('pays several named users', async () => {
+    const users = await seedUsers(4);
+    const res = await quickSend({ userIds: [users[0]._id, users[3]._id], amount: 50 }).expect(200);
+    expect(res.body.stats).toMatchObject({ granted: 2, creditsIssued: 100 });
+  });
+
+  it('leaves a reversible campaign behind', async () => {
+    const users = await seedUsers(2);
+    const res = await quickSend({ userIds: [users[0]._id], amount: 75, reason: 'Thanks' }).expect(200);
+
+    const campaign = await GrantCampaign.findById(res.body.campaign._id);
+    expect(campaign.status).toBe('completed');
+    expect(campaign.audience.mode).toBe('specific');
+
+    const reversal = await grantService.reverse(campaign, { actor: admin });
+    expect(reversal.credits).toBe(75);
+    expect((await Wallet.findOne({ user: users[0]._id })).balance).toBe(0);
+  });
+
+  it('notifies the recipient when asked', async () => {
+    const users = await seedUsers(1);
+    await quickSend({ userIds: [users[0]._id], amount: 10, notify: true }).expect(200);
+    expect(await Notification.countDocuments({ user: users[0]._id })).toBeGreaterThan(0);
+  });
+
+  it('stays silent when notify is off', async () => {
+    const users = await seedUsers(1);
+    await quickSend({ userIds: [users[0]._id], amount: 10, notify: false }).expect(200);
+    expect(await Notification.countDocuments({ user: users[0]._id })).toBe(0);
+  });
+
+  it('rejects an empty selection', async () => {
+    await quickSend({ userIds: [], amount: 100 }).expect(400);
+  });
+
+  it('rejects a non-positive amount', async () => {
+    const users = await seedUsers(1);
+    await quickSend({ userIds: [users[0]._id], amount: 0 }).expect(400);
+    await quickSend({ userIds: [users[0]._id], amount: -5 }).expect(400);
+  });
+
+  it('refuses to pay a subset when an id is stale', async () => {
+    const users = await seedUsers(2);
+    const ghost = new mongoose.Types.ObjectId();
+    await quickSend({ userIds: [users[0]._id, ghost], amount: 100 }).expect(400);
+    // Nobody is paid, rather than one of the two.
+    expect(await Wallet.findOne({ user: users[0]._id })).toBeNull();
+  });
+
+  it('refuses a banned recipient', async () => {
+    const { user } = await createUser({ banned: true });
+    await quickSend({ userIds: [user._id], amount: 100 }).expect(400);
+  });
+
+  it('is still bound by the per-campaign ceiling', async () => {
+    const users = await seedUsers(1);
+    await settingsService.update({ 'grants.maxCreditsPerCampaign': 100 });
+    settingsService.clearCache();
+    const res = await quickSend({ userIds: [users[0]._id], amount: 5000 });
+    expect(res.status).toBe(403);
+    expect(await Wallet.findOne({ user: users[0]._id })).toBeNull();
+  });
+
+  it('requires an admin', async () => {
+    const { user, token } = await createUser();
+    await api()
+      .post('/api/admin/monetization/grants/quick-send')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userIds: [user._id], amount: 100 })
       .expect(403);
   });
 });

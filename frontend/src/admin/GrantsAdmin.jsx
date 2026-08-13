@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Gift, Users, PlayCircle, FlaskConical, AlertTriangle } from 'lucide-react';
+import { Gift, Users, PlayCircle, FlaskConical, AlertTriangle, Send } from 'lucide-react';
 import {
-  getGrants, previewAudience, createGrant, dryRunGrant, executeGrant,
+  getGrants, previewAudience, createGrant, dryRunGrant, executeGrant, quickSendCredits,
 } from '../api/adminConfig';
 import { formatRelativeTime } from '../utils/dateUtils';
 import Spinner from '../components/Spinner';
+import UserPicker from './UserPicker';
 
 const field = 'w-full rounded-lg border border-line bg-night px-3 py-2 text-sm text-silver focus:border-crimson focus:outline-none';
 
 const MODES = [
   { value: 'all', label: 'Everyone' },
   { value: 'role', label: 'By role' },
+  { value: 'specific', label: 'Specific users' },
   { value: 'query', label: 'Match a rule' },
 ];
 
@@ -28,6 +30,10 @@ const GrantsAdmin = () => {
   const [busy, setBusy] = useState('');
   const [flash, setFlash] = useState('');
   const [dryRun, setDryRun] = useState(null);
+  const [quick, setQuick] = useState(null);
+  // The picker keeps whole user objects for its chips; the campaign rule only
+  // stores ids, so the two are held separately and joined on save.
+  const [picked, setPicked] = useState([]);
   const debounce = useRef(null);
 
   const load = useCallback(async () => {
@@ -57,7 +63,9 @@ const GrantsAdmin = () => {
     return () => clearTimeout(debounce.current);
   }, [draft]);
 
-  const start = () =>
+  const start = () => {
+    setQuick(null);
+    setPicked([]);
     setDraft({
       name: '',
       amount: 100,
@@ -66,9 +74,21 @@ const GrantsAdmin = () => {
       audience: { mode: 'all' },
       notify: { enabled: true, channels: ['in_app'] },
     });
+  };
+
+  const startQuick = () => {
+    setDraft(null);
+    setPicked([]);
+    setQuick({ amount: 100, reason: '', expiryDays: 0, notify: true });
+  };
 
   const setAudienceRule = (changes) =>
     setDraft((prev) => ({ ...prev, audience: { ...prev.audience, ...changes } }));
+
+  const pickUsers = (users) => {
+    setPicked(users);
+    setAudienceRule({ userIds: users.map((user) => user.id) });
+  };
 
   const setQuery = (changes) =>
     setAudienceRule({ query: { ...(draft.audience.query || {}), ...changes } });
@@ -78,11 +98,39 @@ const GrantsAdmin = () => {
     try {
       const { campaign } = await createGrant(draft);
       setDraft(null);
+      setPicked([]);
       setDryRun(null);
       setFlash(`Created "${campaign.name}". Dry run it before executing.`);
       await load();
     } catch (error) {
       setFlash(error.response?.data?.message || 'Could not create the campaign');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  // Quick send skips the two-step dance, so the confirm carries the exact
+  // numbers — this pays out the moment it is accepted.
+  const sendQuick = async () => {
+    const total = quick.amount * picked.length;
+    const who = picked.length === 1 ? picked[0].username : `${picked.length} users`;
+    if (!window.confirm(`Send ${quick.amount} credits to ${who} (${total} total) now?`)) return;
+
+    setBusy('quick');
+    try {
+      const result = await quickSendCredits({
+        userIds: picked.map((user) => user.id),
+        amount: quick.amount,
+        reason: quick.reason,
+        expiryDays: quick.expiryDays,
+        notify: quick.notify,
+      });
+      setQuick(null);
+      setPicked([]);
+      setFlash(`Sent ${result.stats.creditsIssued.toLocaleString()} credits to ${result.stats.granted} user${result.stats.granted === 1 ? '' : 's'}.`);
+      await load();
+    } catch (error) {
+      setFlash(error.response?.data?.message || 'Could not send the credits');
     } finally {
       setBusy('');
     }
@@ -126,19 +174,122 @@ const GrantsAdmin = () => {
           <h1 className="font-display text-2xl font-bold text-silver">Free credit grants</h1>
           <p className="text-xs text-silver-muted">Give credits to everyone, a segment, or specific readers.</p>
         </div>
-        {!draft && (
-          <button
-            type="button"
-            onClick={start}
-            className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white hover:bg-crimson-soft"
-          >
-            <Gift className="h-4 w-4" aria-hidden="true" /> New campaign
-          </button>
+        {!draft && !quick && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={startQuick}
+              className="flex cursor-pointer items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-semibold text-silver-muted hover:text-silver"
+            >
+              <Send className="h-4 w-4" aria-hidden="true" /> Send to a user
+            </button>
+            <button
+              type="button"
+              onClick={start}
+              className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white hover:bg-crimson-soft"
+            >
+              <Gift className="h-4 w-4" aria-hidden="true" /> New campaign
+            </button>
+          </div>
         )}
       </div>
 
       {flash && (
         <p className="mb-4 rounded-lg border border-line bg-night-surface p-3 text-sm text-silver">{flash}</p>
+      )}
+
+      {quick && (
+        <div className="mb-6 rounded-xl border border-crimson/40 bg-night-surface p-4">
+          <p className="mb-1 text-sm font-semibold text-silver">Send credits to specific users</p>
+          <p className="mb-3 text-xs text-silver-muted">
+            Pays out immediately. It is still recorded as a campaign, so it can be reversed.
+          </p>
+
+          <UserPicker value={picked} onChange={setPicked} />
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <label className="text-sm">
+              <span className="mb-1 block text-silver-muted">Credits each</span>
+              <input
+                type="number"
+                min="1"
+                className={field}
+                value={quick.amount}
+                onChange={(event) => setQuick({ ...quick, amount: Number(event.target.value) })}
+              />
+            </label>
+            <label className="text-sm sm:col-span-2">
+              <span className="mb-1 block text-silver-muted">Reason</span>
+              <input
+                className={field}
+                value={quick.reason}
+                placeholder="Compensation for the outage"
+                onChange={(event) => setQuick({ ...quick, reason: event.target.value })}
+              />
+              <span className="mt-1 block text-[11px] text-silver-muted">
+                Shown to the recipient and kept on the ledger.
+              </span>
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-silver-muted">Expire after (days)</span>
+              <input
+                type="number"
+                min="0"
+                className={field}
+                value={quick.expiryDays}
+                onChange={(event) => setQuick({ ...quick, expiryDays: Number(event.target.value) })}
+              />
+            </label>
+            <label className="flex items-end gap-2 text-sm text-silver-muted">
+              <input
+                type="checkbox"
+                checked={quick.notify}
+                onChange={(event) => setQuick({ ...quick, notify: event.target.checked })}
+              />
+              Notify them
+            </label>
+          </div>
+
+          {picked.length > 0 && quick.amount > 0 && (
+            <p className="mt-3 rounded-lg bg-night p-3 text-sm text-silver">
+              {picked.length === 1 ? (
+                <>
+                  <span className="font-semibold">{picked[0].username}</span> goes from{' '}
+                  {picked[0].balance.toLocaleString()} to{' '}
+                  {(picked[0].balance + quick.amount).toLocaleString()} credits.
+                </>
+              ) : (
+                <>
+                  {picked.length} users ·{' '}
+                  <span className="font-semibold">{(quick.amount * picked.length).toLocaleString()}</span>{' '}
+                  credits in total.
+                </>
+              )}
+            </p>
+          )}
+
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              onClick={sendQuick}
+              disabled={busy === 'quick' || !picked.length || !(quick.amount > 0)}
+              className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-soft disabled:opacity-50"
+            >
+              <Send className="h-4 w-4" aria-hidden="true" />
+              {busy === 'quick' ? 'Sending...' : 'Send credits'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setQuick(null);
+                setPicked([]);
+              }}
+              className="cursor-pointer rounded-full border border-line px-4 py-2 text-sm text-silver-muted hover:text-silver"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {draft && (
@@ -216,7 +367,15 @@ const GrantsAdmin = () => {
                 <button
                   key={mode.value}
                   type="button"
-                  onClick={() => setAudienceRule({ mode: mode.value })}
+                  onClick={() => {
+                    // Leaving stale userIds on a rule that no longer reads them
+                    // would resurface them if the admin switched back.
+                    if (mode.value !== 'specific') setPicked([]);
+                    setAudienceRule({
+                      mode: mode.value,
+                      userIds: mode.value === 'specific' ? picked.map((user) => user.id) : [],
+                    });
+                  }}
                   className={`rounded-full border px-3 py-1 text-xs transition-colors ${
                     draft.audience.mode === mode.value
                       ? 'border-crimson bg-crimson/15 text-crimson-soft'
@@ -237,6 +396,12 @@ const GrantsAdmin = () => {
                 <option value="user">Readers</option>
                 <option value="admin">Admins</option>
               </select>
+            )}
+
+            {draft.audience.mode === 'specific' && (
+              <div className="mt-3 max-w-md">
+                <UserPicker value={picked} onChange={pickUsers} />
+              </div>
             )}
 
             {draft.audience.mode === 'query' && (

@@ -1,5 +1,8 @@
+const mongoose = require('mongoose');
 const GrantCampaign = require('../models/GrantCampaign');
 const AdminAuditLog = require('../models/AdminAuditLog');
+const User = require('../models/User');
+const Wallet = require('../models/Wallet');
 const grantService = require('../services/grantService');
 const audienceResolver = require('../services/audienceResolver');
 const { asyncHandler } = require('../middlewares/errorHandler');
@@ -100,6 +103,117 @@ const previewAudience = asyncHandler(async (req, res) => {
   res.json(await grantService.previewAudience(audience));
 });
 
+/**
+ * GET /api/admin/monetization/grants/user-search?q=
+ *
+ * Feeds the "specific users" picker. Deliberately its own endpoint rather than
+ * reusing /admin/users: that one returns whole user documents for the user
+ * table, and this runs on every keystroke. Balance rides along because the one
+ * thing an admin wants to see before gifting credits is what someone already
+ * has.
+ */
+const searchUsers = asyncHandler(async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const limit = Math.min(Number(req.query.limit) || 10, 25);
+  if (q.length < 2) return res.json({ users: [] });
+
+  // Escaped: an admin typing "a+b" should search for it, not blow up the regex.
+  const safe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const rx = { $regex: safe, $options: 'i' };
+
+  // Banned and deleted users are excluded here for the same reason the audience
+  // resolver drops them — offering someone the picker cannot actually pay is
+  // worse than not listing them.
+  const users = await User.find({
+    banned: false,
+    $or: [{ username: rx }, { email: rx }, { fullName: rx }],
+  })
+    .select('username email fullName avatar')
+    .sort({ username: 1 })
+    .limit(limit)
+    .lean();
+
+  const wallets = await Wallet.find({ user: { $in: users.map((u) => u._id) } })
+    .select('user balance')
+    .lean();
+  const balances = new Map(wallets.map((w) => [String(w.user), w.balance]));
+
+  res.json({
+    users: users.map((user) => ({
+      id: user._id,
+      username: user.username,
+      email: user.email,
+      fullName: user.fullName,
+      avatar: user.avatar,
+      balance: balances.get(String(user._id)) || 0,
+    })),
+  });
+});
+
+/**
+ * POST /api/admin/monetization/grants/quick-send
+ *
+ * One-off gift to named users: create, dry run and execute in a single call.
+ *
+ * The dry run is not skipped — it is what makes `grants.maxCreditsPerCampaign`
+ * and the approval threshold apply here exactly as they do to a full campaign.
+ * A shortcut that bypassed those guards would be a hole in them.
+ */
+const quickSend = asyncHandler(async (req, res) => {
+  const { userIds, amount, reason, expiryDays = 0, notify = true } = req.body || {};
+
+  const ids = (Array.isArray(userIds) ? userIds : []).filter((id) =>
+    mongoose.Types.ObjectId.isValid(String(id))
+  );
+  if (!ids.length) return res.status(400).json({ message: 'Pick at least one user' });
+
+  const credits = Number(amount);
+  if (!Number.isFinite(credits) || credits <= 0) {
+    return res.status(400).json({ message: 'amount must be a positive number of credits' });
+  }
+
+  // A rejected id is almost always a stale picker entry, and silently paying a
+  // subset of who the admin selected is the wrong failure.
+  const found = await User.find({ _id: { $in: ids }, banned: false }).select('_id username').lean();
+  if (found.length !== ids.length) {
+    return res.status(400).json({
+      message: 'Some selected users no longer exist or are banned',
+      resolved: found.length,
+      requested: ids.length,
+    });
+  }
+
+  const label =
+    String(reason || '').trim() ||
+    (found.length === 1 ? `Credits for ${found[0].username}` : `Credits for ${found.length} users`);
+
+  const campaign = await GrantCampaign.create({
+    name: label,
+    internalNote: 'Sent from the quick-send panel',
+    amount: credits,
+    amountMode: 'fixed',
+    audience: { mode: 'specific', userIds: ids },
+    expiryDays: Number(expiryDays) || 0,
+    notify: { enabled: notify !== false, channels: ['in_app'], message: String(reason || '').trim() },
+    status: 'draft',
+    createdBy: req.user._id,
+  });
+
+  await audit(req, 'grant.create', campaign, [{ key: 'quickSend', before: null, after: label }]);
+
+  try {
+    const preview = await grantService.dryRun(campaign);
+    const stats = await grantService.execute(campaign, { actor: req.user });
+    await audit(req, 'grant.execute', campaign, [], JSON.stringify(stats));
+    return res.json({ campaign, preview, stats });
+  } catch (error) {
+    // The campaign row stays as a draft so the failure is visible and the admin
+    // can approve or retry it from the campaign list rather than losing the work.
+    if (error.status) return res.status(error.status).json({ message: error.message, campaignId: campaign._id });
+    throw error;
+  }
+});
+
 // POST /api/admin/monetization/grants/:id/dry-run
 const dryRun = asyncHandler(async (req, res) => {
   const campaign = await load(req.params.id);
@@ -159,6 +273,8 @@ module.exports = {
   updateCampaign,
   deleteCampaign,
   previewAudience,
+  searchUsers,
+  quickSend,
   dryRun,
   execute,
   approve,
