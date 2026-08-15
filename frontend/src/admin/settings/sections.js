@@ -54,12 +54,34 @@ export const SETTING_TABS = [
     ],
   },
   {
+    id: 'reading',
+    label: 'Reading',
+    groups: [
+      { section: 'platform.community', title: 'Chapter comments and reviews' },
+      { section: 'platform.notifications', title: 'Notifications' },
+      { section: 'platform.reader', title: 'Reader experience' },
+    ],
+  },
+  // The community system: user-created spaces, posts, voting, moderation.
+  // General-purpose — a space is about anything, not only novels.
+  {
     id: 'community',
     label: 'Community',
     groups: [
-      { section: 'platform.community', title: 'Comments and reviews' },
-      { section: 'platform.notifications', title: 'Notifications' },
-      { section: 'platform.reader', title: 'Reader experience' },
+      { section: 'spaces.core', title: 'Core' },
+      { section: 'spaces.creation', title: 'Space creation' },
+      { section: 'spaces.posting', title: 'Posting and comments' },
+      { section: 'spaces.media', title: 'Media and uploads' },
+      { section: 'spaces.voting', title: 'Voting' },
+      { section: 'spaces.ranking', title: 'Ranking and sorting' },
+      { section: 'spaces.moderation', title: 'Moderation and safety' },
+      { section: 'spaces.feed', title: 'Feeds' },
+      { section: 'spaces.karma', title: 'Karma' },
+      { section: 'spaces.links', title: 'Linked content' },
+      { section: 'spaces.analytics', title: 'Analytics and retention' },
+      { section: 'spaces.safety', title: 'Safety and jurisdiction' },
+      { section: 'spaces.privacy', title: 'Privacy and retention' },
+      { section: 'spaces.scale', title: 'Scale and performance' },
     ],
   },
   {

@@ -54,6 +54,7 @@ const {
 } = require('../controllers/analyticsController');
 const { replayWebhook } = require('../controllers/webhookController');
 const monetizationAdminRoutes = require('./monetizationAdminRoutes');
+const adminCommunityRoutes = require('./adminCommunityRoutes');
 const { protect, adminOnly } = require('../middlewares/auth');
 const { imageUpload, docUpload } = require('../middlewares/upload');
 
@@ -68,6 +69,10 @@ const {
 const router = express.Router();
 
 router.use(protect, adminOnly);
+
+// The community admin surface. Everything a moderator can do, without the
+// membership requirement, plus lifecycle and oversight nobody else has.
+router.use('/community', adminCommunityRoutes);
 
 router.get('/stats', getStats);
 

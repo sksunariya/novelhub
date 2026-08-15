@@ -39,7 +39,7 @@ export const SettingsProvider = ({ children }) => {
   const refresh = useCallback(async () => {
     try {
       const { data } = await client.get('/settings');
-      setSettings(data.settings);
+      setSettings({ ...data.settings, ...(data.config || {}) });
       applyTheme(data.settings);
     } catch (error) {
       setSettings({});

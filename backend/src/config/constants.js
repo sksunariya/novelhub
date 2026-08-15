@@ -3,6 +3,23 @@ const ROLES = {
   ADMIN: 'admin',
 };
 
+// Capabilities granted on top of a role, held as an array on the user.
+//
+// Deliberately NOT extra values in ROLES. `role` is single-valued, so a
+// `safety_admin` role would mean the person reviewing child-safety reports
+// could not also be an admin — which in a small team is everyone, including
+// the owner. An array lets one account hold `admin` plus `child_safety`
+// without either weakening the other.
+//
+// CHILD_SAFETY gates the restricted escalation queue. The point is to keep
+// that material away from community moderators and from admins who have no
+// business seeing it — not to lock the owner out of their own system.
+const ELEVATED_PERMISSIONS = {
+  CHILD_SAFETY: 'child_safety',
+  LEGAL: 'legal', // DMCA counter-notices, law enforcement requests
+  SECURITY: 'security', // audit log export, session revocation
+};
+
 const NOVEL_STATUS = {
   ONGOING: 'ongoing',
   COMPLETED: 'completed',
@@ -280,12 +297,154 @@ const TRENDING_WINDOW_DAYS = 7;
 const VIEW_TARGET_TYPES = {
   NOVEL: 'novel',
   CHAPTER: 'chapter',
+  POST: 'post',
 };
+
+// --- Community ("spaces") ------------------------------------------------
+// A space is a user-created community about anything. Nothing here assumes
+// novels; the platform catalogue is reached through the optional, generic
+// link-type registry in config/linkTypes.js.
+
+const SPACE_VISIBILITY = {
+  PUBLIC: 'public',
+  RESTRICTED: 'restricted', // anyone reads, approved members post
+  PRIVATE: 'private', // members only
+};
+
+const SPACE_JOIN_POLICY = {
+  OPEN: 'open',
+  REQUEST: 'request',
+  INVITE: 'invite',
+};
+
+// Lifecycle. `pending` exists for the admin approval queue; `quarantined` is
+// the proportionate step before the blunter `banned`.
+const SPACE_STATUS = {
+  PENDING: 'pending',
+  ACTIVE: 'active',
+  ARCHIVED: 'archived',
+  QUARANTINED: 'quarantined',
+  BANNED: 'banned',
+  REJECTED: 'rejected',
+};
+
+const SPACE_MEMBER_ROLES = {
+  MEMBER: 'member',
+  MODERATOR: 'moderator',
+  OWNER: 'owner',
+};
+
+const SPACE_MEMBER_STATUS = {
+  ACTIVE: 'active',
+  PENDING: 'pending',
+  BANNED: 'banned',
+  MUTED: 'muted',
+};
+
+// Granular moderator permissions. A flair moderator who cannot ban people is
+// the whole point — a single role enum forces every mod to be all-powerful.
+const MOD_PERMISSIONS = {
+  MANAGE_POSTS: 'managePosts',
+  MANAGE_MEMBERS: 'manageMembers',
+  MANAGE_SETTINGS: 'manageSettings',
+  MANAGE_FLAIR: 'manageFlair',
+  MANAGE_RULES: 'manageRules',
+  MANAGE_MODS: 'manageMods',
+};
+
+const POST_TYPES = {
+  TEXT: 'text',
+  IMAGE: 'image',
+  LINK: 'link',
+  POLL: 'poll',
+};
+
+// `removed` is a moderation state and stays queryable by mods; `deletedAt`
+// (softDelete plugin) is the author removing their own content. Different
+// events, both recoverable.
+const POST_STATUS = {
+  PUBLISHED: 'published',
+  PENDING: 'pending',
+  REMOVED: 'removed',
+  HIDDEN: 'hidden',
+};
+
+const VOTE_TARGET_TYPES = {
+  POST: 'post',
+  COMMENT: 'comment',
+};
+
+const POST_SORTS = {
+  HOT: 'hot',
+  NEW: 'new',
+  TOP: 'top',
+  RISING: 'rising',
+  CONTROVERSIAL: 'controversial',
+};
+
+const COMMENT_SORTS = {
+  BEST: 'best',
+  TOP: 'top',
+  NEW: 'new',
+  OLD: 'old',
+  CONTROVERSIAL: 'controversial',
+};
+
+const TOP_TIMEFRAMES = {
+  HOUR: 'hour',
+  DAY: 'day',
+  WEEK: 'week',
+  MONTH: 'month',
+  YEAR: 'year',
+  ALL: 'all',
+};
+
+const REPORT_TARGET_TYPES = {
+  POST: 'post',
+  COMMENT: 'comment',
+  SPACE: 'space',
+  USER: 'user',
+};
+
+const REPORT_STATUS = {
+  OPEN: 'open',
+  ACTIONED: 'actioned',
+  DISMISSED: 'dismissed',
+  ESCALATED: 'escalated',
+};
+
+const REPORT_SOURCES = {
+  USER: 'user',
+  AUTOMOD: 'automod',
+  BANNED_WORD: 'banned_word',
+  THRESHOLD: 'threshold',
+};
+
+// Per-user override of the global space-creation gate. Lets an admin grant
+// creation rights to one trusted user while the global mode is admin_only, or
+// revoke them from one abuser without tightening the gate on everyone.
+const SPACE_CREATION_POLICY = {
+  DEFAULT: 'default',
+  ALWAYS: 'always',
+  NEVER: 'never',
+};
+
+const SPACE_CREATION_MODES = {
+  OPEN: 'open',
+  KARMA_GATED: 'karma_gated',
+  APPROVAL: 'approval',
+  ADMIN_ONLY: 'admin_only',
+};
+
+// Reddit's hot formula epoch. Fixed constant, not a tunable — the gravity
+// divisor is what admins adjust.
+const HOT_SCORE_EPOCH_SECONDS = 1134028003;
 
 const VIEW_DEDUP_WINDOW_SECONDS = 30 * 60;
 
 module.exports = {
   ROLES,
+  ELEVATED_PERMISSIONS,
   NOVEL_STATUS,
   RANKING_TYPES,
   NOTIFICATION_TYPES,
@@ -323,4 +482,23 @@ module.exports = {
   TRENDING_WINDOW_DAYS,
   VIEW_TARGET_TYPES,
   VIEW_DEDUP_WINDOW_SECONDS,
+  // Community
+  SPACE_VISIBILITY,
+  SPACE_JOIN_POLICY,
+  SPACE_STATUS,
+  SPACE_MEMBER_ROLES,
+  SPACE_MEMBER_STATUS,
+  MOD_PERMISSIONS,
+  POST_TYPES,
+  POST_STATUS,
+  VOTE_TARGET_TYPES,
+  POST_SORTS,
+  COMMENT_SORTS,
+  TOP_TIMEFRAMES,
+  REPORT_TARGET_TYPES,
+  REPORT_STATUS,
+  REPORT_SOURCES,
+  SPACE_CREATION_POLICY,
+  SPACE_CREATION_MODES,
+  HOT_SCORE_EPOCH_SECONDS,
 };

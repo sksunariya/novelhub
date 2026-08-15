@@ -7,10 +7,20 @@
 const { TYPES } = require('./settings/types');
 const platform = require('./settings/platform');
 const monetization = require('./settings/monetization');
+const spaces = require('./settings/spaces');
 
-const SECTIONS = { ...platform.SECTIONS, ...monetization.SECTIONS };
+// Grouped by module rather than flat-spread. The short names collide across
+// modules — platform.RANKING vs spaces.RANKING, monetization.ANALYTICS vs
+// spaces.ANALYTICS — and a flat merge silently drops one of each pair.
+// `sections()` below still returns the flat list of section identifiers, which
+// is what every consumer actually wants.
+const SECTIONS = {
+  platform: platform.SECTIONS,
+  monetization: monetization.SECTIONS,
+  spaces: spaces.SECTIONS,
+};
 
-const DECLARATIONS = [...platform.settings, ...monetization.settings];
+const DECLARATIONS = [...platform.settings, ...monetization.settings, ...spaces.settings];
 
 // Fail fast at require time on a malformed declaration — a typo here would
 // otherwise surface as a silently unsaveable field in the admin portal.
@@ -89,6 +99,9 @@ const describe = (def) => ({
   requiresConfirmation: Boolean(def.requiresConfirmation),
   impact: def.impact || null,
   dependsOn: def.dependsOn || null,
+  // Whether a community space owner may override this for their own space.
+  // Site admins can force any key on any space regardless of this flag.
+  spaceOverridable: Boolean(def.spaceOverridable),
 });
 
 // Backs the admin portal's settings search. Matching on label, help and key is

@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const app = require('./app');
 const connectDB = require('./config/db');
 const scheduler = require('./services/schedulerService');
+const counterService = require('./services/counterService');
+const jobDispatcher = require('./services/jobDispatcher');
 
 const PORT = process.env.PORT || 5000;
 const SHUTDOWN_TIMEOUT_MS = 20000;
@@ -36,6 +38,15 @@ const shutdown = async (signal) => {
     }
     await scheduler.stop();
     console.info('[server] scheduler drained');
+
+    // Background jobs accepted before the shutdown signal must finish, and
+    // batched counters must reach the database. Both drain BEFORE the
+    // connection closes — reversing the order silently discards the work.
+    const jobs = await jobDispatcher.drain(5000);
+    console.info(`[server] jobs drained (${jobs.drained ? 'clean' : `${jobs.inFlight} abandoned`})`);
+    const counters = await counterService.shutdown();
+    if (counters.flushed) console.info(`[server] flushed ${counters.flushed} counter updates`);
+
     await mongoose.disconnect();
     console.info('[server] database disconnected');
     clearTimeout(forceExit);

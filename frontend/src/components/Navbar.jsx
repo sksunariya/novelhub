@@ -11,7 +11,15 @@ const NAV_LINKS = [
   { to: '/', label: 'Home' },
   { to: '/browse', label: 'Browse' },
   { to: '/rankings', label: 'Rankings' },
+  // Shown only when the community is enabled AND spaces.entryPoint is 'nav'.
+  // Both come from the public settings projection, so launching or hiding it is
+  // an admin toggle rather than a deploy.
+  { to: '/community', label: 'Community', when: (s) => s['spaces.enabled'] && s['spaces.entryPoint'] === 'nav' },
 ];
+
+/** Links whose `when` predicate passes against the current public settings. */
+const visibleLinks = (settings) =>
+  NAV_LINKS.filter((link) => !link.when || link.when(settings || {}));
 
 const Navbar = () => {
   const { user, logout, isAdmin } = useAuth();
@@ -78,7 +86,7 @@ const Navbar = () => {
         </Link>
 
         <div className="hidden items-center gap-1 md:flex">
-          {NAV_LINKS.map((link) => (
+          {visibleLinks(settings).map((link) => (
             <NavLink key={link.to} to={link.to} className={linkClass} end={link.to === '/'}>
               {link.label}
             </NavLink>
@@ -212,7 +220,7 @@ const Navbar = () => {
                   className="mb-2 w-full rounded-full border border-line bg-night-surface px-4 py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none"
                 />
               </form>
-              {NAV_LINKS.map((link) => (
+              {visibleLinks(settings).map((link) => (
                 <NavLink
                   key={link.to}
                   to={link.to}

@@ -139,11 +139,84 @@ const removeKey = async (key) => {
   }
 };
 
+/**
+ * Upload a buffer to an EXPLICIT key.
+ *
+ * `uploadPublic` generates a random flat name, which is right for a one-off
+ * cover image. Community media needs a deliberate, inspectable layout instead —
+ * see services/community/mediaKeys.js — so the caller owns the key and this
+ * just writes it.
+ *
+ * `visibility: 'private'` targets the private prefix, which has no public read
+ * policy. Quarantined material goes there and is only ever reachable through a
+ * presigned URL issued to a safety reviewer.
+ */
+const uploadBuffer = async ({ buffer, key, contentType, visibility = 'public', cacheControl = null, metadata = null }) => {
+  const prefix = visibility === 'private' ? PRIVATE_PREFIX : PUBLIC_PREFIX;
+  const fullKey = `${prefix}/${key}`;
+
+  if (!s3Enabled) {
+    // Local fallback mirrors the same layout so a developer sees the real
+    // structure on disk. Private objects are refused rather than written
+    // somewhere world-readable.
+    if (visibility === 'private') return null;
+    const target = path.join(LOCAL_DIR, key);
+    await fsp.mkdir(path.dirname(target), { recursive: true });
+    await fsp.writeFile(target, buffer);
+    return { key: fullKey, url: `/uploads/${key}`, bytes: buffer.length, local: true };
+  }
+
+  await client.send(
+    new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: fullKey,
+      Body: buffer,
+      ContentType: contentType,
+      // Immutable: every key contains a content hash or a unique id, so a URL
+      // never points at different bytes and can be cached forever.
+      ...(cacheControl ? { CacheControl: cacheControl } : {}),
+      // Belt and braces against a file whose bytes are HTML being sniffed and
+      // executed from the bucket's own origin.
+      ContentDisposition: visibility === 'private' ? 'attachment' : undefined,
+      ...(metadata ? { Metadata: metadata } : {}),
+      ...(USE_ACL && visibility === 'public' ? { ACL: 'public-read' } : {}),
+    })
+  );
+
+  return {
+    key: fullKey,
+    url: visibility === 'private' ? null : publicUrlForKey(fullKey),
+    bytes: buffer.length,
+    local: false,
+  };
+};
+
+/** Delete many keys in one call. Used when a space or post is purged. */
+const removeKeys = async (keys = []) => {
+  if (!s3Enabled || !keys.length) return { deleted: 0 };
+  let deleted = 0;
+  for (const key of keys) {
+    try {
+      await client.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+      deleted += 1;
+    } catch (err) {
+      console.error('storage.removeKeys failed for', key, err.message);
+    }
+  }
+  return { deleted };
+};
+
 module.exports = {
   isEnabled: () => s3Enabled,
   uploadPublic,
   uploadPrivate,
+  uploadBuffer,
   getSignedDownloadUrl,
   remove,
   removeKey,
+  removeKeys,
+  publicUrlForKey,
+  keyFromUrl,
+  PUBLIC_PREFIX,
+  PRIVATE_PREFIX,
 };

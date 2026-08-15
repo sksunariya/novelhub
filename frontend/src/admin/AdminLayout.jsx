@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { NavLink, Outlet, Link } from 'react-router-dom';
 import {
   LayoutDashboard, Images, BookOpen, Users, ShieldAlert, Bell, Settings, ArrowLeft,
-  Tags, Clock, ChevronDown, Globe, Gift, TrendingUp, Repeat,
+  Tags, Clock, ChevronDown, Globe, Gift, TrendingUp, Repeat, MessagesSquare, Flag,
+  ScrollText, ShieldCheck, Inbox, FileText,
 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 
@@ -38,12 +39,26 @@ const GROUPS = [
     label: 'Analytics',
     links: [{ to: '/admin/analytics', label: 'Revenue & authors', icon: TrendingUp }],
   },
+  // The community system: spaces, posts, reports. Distinct from the chapter
+  // comment moderation under People below.
   {
-    id: 'community',
+    id: 'spaces',
     label: 'Community',
     links: [
+      { to: '/admin/spaces', label: 'Spaces', icon: MessagesSquare, end: true },
+      { to: '/admin/spaces/requests', label: 'Requests', icon: Inbox },
+      { to: '/admin/community/posts', label: 'Posts', icon: FileText },
+      { to: '/admin/community/reports', label: 'Reports', icon: Flag },
+      { to: '/admin/community/modlog', label: 'Mod log', icon: ScrollText },
+      { to: '/admin/community/safety', label: 'Safety', icon: ShieldCheck },
+    ],
+  },
+  {
+    id: 'people',
+    label: 'People',
+    links: [
       { to: '/admin/users', label: 'Users', icon: Users },
-      { to: '/admin/moderation', label: 'Moderation', icon: ShieldAlert },
+      { to: '/admin/moderation', label: 'Chapter comments', icon: ShieldAlert },
       { to: '/admin/notifications', label: 'Notifications', icon: Bell },
     ],
   },

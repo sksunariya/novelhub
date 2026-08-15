@@ -46,4 +46,29 @@ const adminOnly = (req, res, next) => {
   next();
 };
 
-module.exports = { protect, optionalAuth, adminOnly };
+/**
+ * Require a named elevated permission on top of admin.
+ *
+ *   router.use('/safety', protect, adminOnly, requireElevated(ELEVATED_PERMISSIONS.CHILD_SAFETY));
+ *
+ * Deliberately does NOT treat `admin` as implying every permission. The whole
+ * purpose of the child-safety queue being separate is that being an admin is
+ * not sufficient to see it — the permission has to be granted explicitly, which
+ * makes the set of people who can view that material small, deliberate and
+ * auditable.
+ */
+const requireElevated = (permission) =>
+  function elevatedGuard(req, res, next) {
+    const held = (req.user && req.user.elevatedPermissions) || [];
+    if (!held.includes(permission)) {
+      return res.status(403).json({
+        message: 'This area requires an additional permission that has not been granted to your account',
+      });
+    }
+    return next();
+  };
+
+const hasElevated = (user, permission) =>
+  Boolean(user && Array.isArray(user.elevatedPermissions) && user.elevatedPermissions.includes(permission));
+
+module.exports = { protect, optionalAuth, adminOnly, requireElevated, hasElevated };

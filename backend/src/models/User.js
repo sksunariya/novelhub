@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const { ROLES } = require('../config/constants');
+const { ROLES, ELEVATED_PERMISSIONS } = require('../config/constants');
 const softDelete = require('./plugins/softDelete');
 
 const userSchema = new mongoose.Schema(
@@ -18,6 +18,10 @@ const userSchema = new mongoose.Schema(
     },
     googleId: { type: String },
     role: { type: String, enum: Object.values(ROLES), default: ROLES.USER },
+    // Capabilities on top of the role. Gates the restricted child-safety queue,
+    // legal request handling and security tooling. See config/constants.js for
+    // why this is an array rather than extra role values.
+    elevatedPermissions: [{ type: String, enum: Object.values(ELEVATED_PERMISSIONS) }],
     avatarUrl: { type: String, default: '' },
     banned: { type: Boolean, default: false },
     library: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Novel' }],
@@ -28,6 +32,48 @@ const userSchema = new mongoose.Schema(
     // Set when a user with financial records is "deleted": PII is cleared but
     // orders and ledger rows are retained for tax and audit purposes.
     anonymizedAt: { type: Date, default: null },
+
+    // --- Community -------------------------------------------------------
+    // Karma. Written on the vote path through counterService; rebuilt nightly
+    // from the Vote ledger, which is truth.
+    karma: {
+      post: { type: Number, default: 0 },
+      comment: { type: Number, default: 0 },
+      awarded: { type: Number, default: 0 }, // admin-granted
+      total: { type: Number, default: 0 },
+    },
+
+    // Site-wide community ban, distinct from `banned`. Banning someone from the
+    // whole platform also cuts off paid chapter access — an unreasonable
+    // penalty for being rude in one thread, and one with refund liability
+    // attached. This is the proportionate tool.
+    communityBannedUntil: { type: Date, default: null },
+    communityBanReason: { type: String, default: '', maxlength: 1000 },
+
+    // Per-user override of the global space-creation gate. Lets an admin grant
+    // creation rights to a trusted user while the global mode is admin_only, or
+    // revoke them from one abuser without tightening the gate on everyone.
+    spaceCreation: {
+      policy: { type: String, enum: ['default', 'always', 'never'], default: 'default' },
+      reason: { type: String, default: '', maxlength: 500 },
+      setBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      setAt: { type: Date, default: null },
+    },
+
+    // Age assurance. Integration point for a vendor — never build the
+    // verification itself. Unused until Phase 10.
+    ageAssurance: {
+      method: { type: String, default: '' },
+      provider: { type: String, default: '' },
+      level: { type: String, default: '' },
+      verifiedAt: { type: Date, default: null },
+    },
+
+    // Moderation history. Drives repeat-infringer policy (DMCA safe harbour
+    // depends on actually enforcing one) and the graduated enforcement ladder.
+    strikes: { type: Number, default: 0 },
+    warnings: { type: Number, default: 0 },
+    trustedFlagger: { type: Boolean, default: false },
     notificationPreferences: {
       emailMentions: { type: Boolean, default: true },
       emailReplies: { type: Boolean, default: true },
@@ -83,6 +129,10 @@ userSchema.index(
 userSchema.index({ library: 1 });
 // Audience targeting filters and sorts on activity.
 userSchema.index({ lastActiveAt: -1 });
+// Karma leaderboards, and the karma gates on posting, voting and space creation.
+userSchema.index({ 'karma.total': -1 });
+// Sparse: almost nobody is community-banned, so this costs nothing.
+userSchema.index({ communityBannedUntil: 1 }, { sparse: true });
 
 userSchema.plugin(softDelete);
 
