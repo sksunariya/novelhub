@@ -9,7 +9,7 @@
 export default {
   community: {
     nav: {
-      label: 'Community',
+      label: 'Spaces',
       home: 'Home',
       popular: 'Popular',
       all: 'All',

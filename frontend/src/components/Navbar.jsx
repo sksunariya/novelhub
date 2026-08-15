@@ -14,7 +14,7 @@ const NAV_LINKS = [
   // Shown only when the community is enabled AND spaces.entryPoint is 'nav'.
   // Both come from the public settings projection, so launching or hiding it is
   // an admin toggle rather than a deploy.
-  { to: '/community', label: 'Community', when: (s) => s['spaces.enabled'] && s['spaces.entryPoint'] === 'nav' },
+  { to: '/community', label: 'Spaces', when: (s) => s['spaces.enabled'] && s['spaces.entryPoint'] === 'nav' },
 ];
 
 /** Links whose `when` predicate passes against the current public settings. */

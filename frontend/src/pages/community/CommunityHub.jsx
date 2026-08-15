@@ -93,7 +93,7 @@ const CommunityHub = () => {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16 text-center">
         <h1 className="font-display text-2xl font-bold text-silver">Not available yet</h1>
-        <p className="mt-2 text-sm text-silver-muted">The community is not open at the moment.</p>
+        <p className="mt-2 text-sm text-silver-muted">Spaces are not open at the moment.</p>
       </main>
     );
   }
@@ -112,7 +112,7 @@ const CommunityHub = () => {
   return (
     <main className="mx-auto max-w-3xl px-4 py-6">
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h1 className="sr-only">Community</h1>
+        <h1 className="sr-only">Spaces</h1>
         <nav aria-label="Feeds" className="flex gap-1">
           {TABS.filter((tab) => !tab.authOnly || user).map((tab) => (
             <button

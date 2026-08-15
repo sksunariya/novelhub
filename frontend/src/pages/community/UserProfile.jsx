@@ -86,7 +86,7 @@ const UserProfile = () => {
           field for anyone else. */}
       {profile.suspendedUntil && (
         <div role="status" className="mb-4 rounded-xl border border-crimson/40 bg-crimson/5 p-3 text-sm text-crimson-soft">
-          Your community access is suspended until{' '}
+          Your spaces access is suspended until{' '}
           {new Date(profile.suspendedUntil).toLocaleDateString()}.{' '}
           <Link to="/community/appeals" className="underline">See why, or appeal</Link>.
         </div>
