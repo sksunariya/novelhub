@@ -15,6 +15,7 @@ import Library from './pages/Library';
 import Notifications from './pages/Notifications';
 import { useAuth } from './context/AuthContext';
 import { CommunityProvider } from './context/CommunityContext';
+import { AdminAccessProvider, useAdminAccess } from './context/AdminAccessContext';
 import Spinner from './components/Spinner';
 
 // Lazy: the PayPal SDK wrapper should not be in the bundle a reader downloads
@@ -54,6 +55,7 @@ const ChildSafetyAdmin = lazy(() => import('./admin/ChildSafetyAdmin'));
 const SpaceRequestsAdmin = lazy(() => import('./admin/SpaceRequestsAdmin'));
 const CommunityPostsAdmin = lazy(() => import('./admin/CommunityPostsAdmin'));
 const SpaceDetailAdmin = lazy(() => import('./admin/SpaceDetailAdmin'));
+const AccessControlAdmin = lazy(() => import('./admin/AccessControlAdmin'));
 
 const RequireAuth = ({ children }) => {
   const { user, loading } = useAuth();
@@ -66,6 +68,25 @@ const RequireAdmin = ({ children }) => {
   if (loading) return <Spinner full />;
   if (!user) return <Navigate to="/login" replace />;
   return isAdmin ? children : <Navigate to="/" replace />;
+};
+
+/**
+ * One admin page, gated on its module.
+ *
+ * The redirect is a convenience, not a control — an admin who edits the URL is
+ * sent back to the dashboard, and the API refuses them either way. Keeping both
+ * is what stops a hidden section from being one guessed path away.
+ *
+ * `module` must match the id used by the nav entry and the backend route guard.
+ */
+const AdminRoute = ({ module, requires = [], anyOf = null, children }) => {
+  const { loading, can } = useAdminAccess();
+  if (loading) return <Spinner full />;
+  const allowed = anyOf
+    ? anyOf.some((moduleId) => can(moduleId))
+    : can(module) && requires.every((required) => can(required));
+  if (!allowed) return <Navigate to="/admin" replace />;
+  return <Suspense fallback={<Spinner full />}>{children}</Suspense>;
 };
 
 const App = () => {
@@ -225,12 +246,16 @@ const App = () => {
           path="/admin"
           element={
             <RequireAdmin>
-              <Suspense fallback={<Spinner full />}>
-                <AdminLayout />
-              </Suspense>
+              <AdminAccessProvider>
+                <Suspense fallback={<Spinner full />}>
+                  <AdminLayout />
+                </Suspense>
+              </AdminAccessProvider>
             </RequireAdmin>
           }
         >
+          {/* `dashboard` is always visible, so the index route needs no gate —
+              and must not have one, or a redirect to /admin would loop. */}
           <Route
             index
             element={
@@ -242,57 +267,57 @@ const App = () => {
           <Route
             path="carousel"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="carousel">
                 <CarouselAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="novels"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="novels">
                 <NovelsAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="novels/:id/chapters"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="novels">
                 <ChaptersAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="users"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="users">
                 <UsersAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="moderation"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="moderation">
                 <ModerationAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="notifications"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="notifications">
                 <NotificationsAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="settings"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="site_settings">
                 <SettingsAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           {/* Registry-driven configuration. Separate from the legacy site
@@ -300,57 +325,57 @@ const App = () => {
           <Route
             path="config"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute anyOf={['monetization_config', 'platform_config', 'community_config']}>
                 <ConfigPage />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="jobs"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="jobs">
                 <JobsAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="packs"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="packs">
                 <PacksAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="plans"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="plans">
                 <PlansAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="currencies"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="currencies">
                 <CurrenciesAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="grants"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="grants">
                 <GrantsAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="analytics"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="analytics">
                 <AnalyticsAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           {/* Community. Every route 404s server-side while spaces.enabled is
@@ -358,57 +383,67 @@ const App = () => {
           <Route
             path="spaces"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="spaces">
                 <SpacesAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="spaces/requests"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="space_requests" requires={['spaces']}>
                 <SpaceRequestsAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="spaces/:id"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="spaces">
                 <SpaceDetailAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="community/posts"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="community_posts">
                 <CommunityPostsAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="community/reports"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="community_reports">
                 <CommunityReportsAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="community/modlog"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="community_modlog">
                 <CommunityModlogAdmin />
-              </Suspense>
+              </AdminRoute>
             }
           />
           <Route
             path="community/safety"
             element={
-              <Suspense fallback={<Spinner full />}>
+              <AdminRoute module="community_safety">
                 <ChildSafetyAdmin />
-              </Suspense>
+              </AdminRoute>
+            }
+          />
+          {/* Governance. `access_control` resolves false for every non-super
+              account, so this gate is what keeps admins out of it client-side. */}
+          <Route
+            path="access-control"
+            element={
+              <AdminRoute module="access_control">
+                <AccessControlAdmin />
+              </AdminRoute>
             }
           />
         </Route>

@@ -15,9 +15,29 @@ const {
   PRICE_REASONS,
   CREDIT_REF_TYPES,
   MICROS_PER_CENT,
+  ROLES,
 } = require('../config/constants');
 
 const badRequest = (message, status = 400) => Object.assign(new Error(message), { status });
+
+/**
+ * The owner tier reads everything without spending.
+ *
+ * Not a discount and not an entitlement: no ChapterAccess row is written and no
+ * revenue is attributed, because nothing was bought. The alternative — giving
+ * the owner a credit balance large enough to never run out — would pollute the
+ * ledger every operator has to reconcile, to simulate a decision the platform
+ * can simply make.
+ */
+const readsFree = (user) => Boolean(user && user.role === ROLES.SUPERADMIN);
+
+const staffAccess = () => ({
+  locked: false,
+  free: true,
+  priceCredits: 0,
+  reason: PRICE_REASONS.STAFF_BYPASS,
+  staffBypass: true,
+});
 
 const PRICING_KEYS = [
   'monetization.enabled',
@@ -109,6 +129,11 @@ const resolveAccess = async ({
   subscriptionCtx = null,
   now = new Date(),
 }) => {
+  // Checked before every other gate, including early access: the owner needs
+  // to be able to open a chapter to verify it, and a release window they
+  // configured should not lock them out of checking their own work.
+  if (readsFree(user)) return staffAccess();
+
   const cfg = config || (await pricingConfig());
 
   if (!cfg.monetizationEnabled) {
@@ -183,6 +208,13 @@ const resolveAccess = async ({
 
 /** Price and ownership for every chapter of a novel, for the chapter list. */
 const resolveNovelChapters = async ({ novel, chapters, user, now = new Date() }) => {
+  // The list must agree with what the reader sees when they open a chapter,
+  // which includes the staff bypass — a list quoting prices the reader will
+  // never be charged is the same inconsistency, just in the other direction.
+  if (readsFree(user)) {
+    return chapters.map((chapter) => ({ chapter, owned: false, ...staffAccess() }));
+  }
+
   // The list must agree with what the reader sees when they open a chapter, so
   // it goes through the same subscription context the single-chapter resolver
   // uses rather than reimplementing the perk rules.
@@ -274,6 +306,11 @@ const rentalExpiry = (hours) => (hours > 0 ? new Date(Date.now() + hours * 60 * 
  * twice for something already owned.
  */
 const unlockChapter = async ({ user, novel, chapter }) => {
+  // Nothing to buy: the chapter is already open to this account. Reported as
+  // already-owned rather than as an error, so a stale client that still shows
+  // an Unlock button lands the reader on the chapter instead of on a 409.
+  if (readsFree(user)) return { alreadyOwned: true, access: null, staffBypass: true };
+
   const config = await pricingConfig();
   if (!config.monetizationEnabled) throw badRequest('Monetization is disabled', 409);
 
@@ -392,6 +429,22 @@ const unlockChapter = async ({ user, novel, chapter }) => {
  * bundle earns proportionally more than a cheap one.
  */
 const unlockChapters = async ({ user, novel, chapters }) => {
+  // Shape must match the success return below — the controller spreads this
+  // straight into the HTTP response, so `unlocked` is a count and the spend
+  // field is `spent`. Returning a different shape here would hand the client
+  // an array where it expects a number.
+  if (readsFree(user)) {
+    return {
+      unlocked: 0,
+      listTotal: 0,
+      discountPct: 0,
+      spent: 0,
+      transaction: null,
+      alreadyOwned: true,
+      staffBypass: true,
+    };
+  }
+
   const config = await pricingConfig();
   if (!config.monetizationEnabled) throw badRequest('Monetization is disabled', 409);
   if (!config.allowBulkUnlock) throw badRequest('Bulk unlock is disabled', 403);
@@ -500,7 +553,9 @@ const quoteBulk = async ({ user, novel, chapters }) => {
   const ownedIds = await ownedChapterIds(user && user._id, novel._id);
   const sub = await subscriptionContext(user, novel);
 
-  const payable = sub.unmetered
+  // Nothing is payable for an account that reads free, so the quote is empty
+  // and the totals below fall out as zero without a special case.
+  const payable = readsFree(user) || sub.unmetered
     ? []
     : chapters
         .filter((chapter) => !ownedIds.has(String(chapter._id)))

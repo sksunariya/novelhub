@@ -64,8 +64,29 @@ export const AuthProvider = ({ children }) => {
 
   const updateUser = useCallback((updated) => setUser(updated), []);
 
+  // `isAdmin` answers "may this account reach the admin portal", which a
+  // superadmin obviously may. Callers that specifically mean the owner tier —
+  // and there are few — use isSuperAdmin. What an admin sees once inside is a
+  // separate question, answered by AdminAccessContext.
+  const isSuperAdmin = user?.role === 'superadmin';
+  const isAdmin = user?.role === 'admin' || isSuperAdmin;
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, verifySignup, resendSignupOtp, googleLogin, logout, updateUser, isAdmin: user?.role === 'admin' }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        signup,
+        verifySignup,
+        resendSignupOtp,
+        googleLogin,
+        logout,
+        updateUser,
+        isAdmin,
+        isSuperAdmin,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

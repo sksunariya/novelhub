@@ -13,6 +13,7 @@
 
 const settingsService = require('../services/settingsService');
 const rateLimitStore = require('../services/rateLimitStore');
+const { ROLES } = require('../config/constants');
 
 const identify = (req) => (req.user ? `u:${req.user._id}` : `ip:${req.ip}`);
 
@@ -25,6 +26,11 @@ const identify = (req) => (req.user ? `u:${req.user._id}` : `ip:${req.ip}`);
  */
 const createLimiter = (settingKey, windowMs, name, { scope = null } = {}) =>
   async function limiter(req, res, next) {
+    // These limits are an abuse brake on the public. The owner tripping one
+    // mid-incident — bulk-editing content or replaying webhooks to fix an
+    // outage — is the brake working against the person trying to stop the fire.
+    if (req.user && req.user.role === ROLES.SUPERADMIN) return next();
+
     let enabled = true;
     let max = 0;
     try {

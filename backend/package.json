@@ -10,6 +10,7 @@
     "sync-indexes": "node scripts/syncIndexes.js",
     "migrate:monetization": "node scripts/migrateForMonetization.js",
     "seed:monetization": "node scripts/seedMonetization.js",
+    "seed:superadmin": "node scripts/seedSuperAdmin.js",
     "test": "jest --runInBand",
     "test:unit": "jest --config jest.unit.config.js"
   },

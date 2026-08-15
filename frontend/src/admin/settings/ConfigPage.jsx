@@ -54,6 +54,24 @@ const ConfigPage = () => {
     return map;
   }, [config.defs]);
 
+  // SETTING_TABS is the full map of the screen; the API returns only the
+  // sections this admin's modules cover. Rendering the full list against a
+  // filtered payload would leave empty tabs standing — which both looks broken
+  // and advertises the existence of everything being withheld.
+  const tabs = useMemo(() => {
+    const available = SETTING_TABS.map((entry) => ({
+      ...entry,
+      groups: entry.groups.filter((group) => (bySection[group.section] || []).length > 0),
+    })).filter((entry) => entry.groups.length > 0);
+    return available;
+  }, [bySection]);
+
+  // The selected tab can disappear — on first load, or if access changes while
+  // the page is open. Fall back rather than rendering nothing.
+  useEffect(() => {
+    if (tabs.length && !tabs.some((entry) => entry.id === tabId)) setTabId(tabs[0].id);
+  }, [tabs, tabId]);
+
   // Jumping from search switches tab, scrolls to the field and flashes it.
   const jumpTo = (key) => {
     const def = config.byKey[key];
@@ -70,7 +88,18 @@ const ConfigPage = () => {
 
   if (config.loading) return <Spinner />;
 
-  const tab = SETTING_TABS.find((t) => t.id === tabId) || SETTING_TABS[0];
+  if (!tabs.length) {
+    return (
+      <div className="rounded-xl border border-line bg-night-surface p-8 text-center">
+        <p className="text-sm text-silver">No settings are available to your account.</p>
+        <p className="mt-1 text-xs text-silver-muted">
+          Settings are grouped into modules. Ask a superadmin if you need one of them.
+        </p>
+      </div>
+    );
+  }
+
+  const tab = tabs.find((t) => t.id === tabId) || tabs[0];
 
   return (
     <div className="pb-28">
@@ -92,7 +121,7 @@ const ConfigPage = () => {
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2 border-b border-line pb-3">
-        {SETTING_TABS.map((entry) => {
+        {tabs.map((entry) => {
           const dirtyHere = entry.groups.some((group) =>
             (bySection[group.section] || []).some((def) => config.dirtyKeys.includes(def.key))
           );

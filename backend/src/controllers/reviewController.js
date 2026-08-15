@@ -2,7 +2,14 @@ const Review = require('../models/Review');
 const Novel = require('../models/Novel');
 const Chapter = require('../models/Chapter');
 const { asyncHandler } = require('../middlewares/errorHandler');
-const { ROLES, RATING, PUBLIC_USER_FIELDS } = require('../config/constants');
+const { RATING, PUBLIC_USER_FIELDS } = require('../config/constants');
+const moduleAccess = require('../services/moduleAccessService');
+
+// Admin authority to moderate comments and reviews, which is what the
+// `moderation` portal module grants. Checked here as well as on the portal
+// routes because these endpoints are public: an admin whose module is hidden
+// must not keep the power simply by calling the API the reader UI uses.
+const canModerate = (user) => moduleAccess.hasCapability(user, 'moderation');
 const { parsePagination } = require('./novelController');
 const { REACTIONS, toggleReaction } = require('../utils/reactions');
 const { notifyCommentActivity } = require('../utils/notifications');
@@ -140,7 +147,7 @@ const updateReview = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Review not found' });
   }
   const isOwner = review.user.toString() === req.user._id.toString();
-  if (!isOwner && req.user.role !== ROLES.ADMIN) {
+  if (!isOwner && !canModerate(req.user)) {
     return res.status(403).json({ message: 'Not allowed' });
   }
   const newContent = req.body.content !== undefined ? String(req.body.content || '').trim() : review.content;
@@ -164,7 +171,7 @@ const deleteReview = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Review not found' });
   }
   const isOwner = review.user.toString() === req.user._id.toString();
-  if (!isOwner && req.user.role !== ROLES.ADMIN) {
+  if (!isOwner && !canModerate(req.user)) {
     return res.status(403).json({ message: 'Not allowed' });
   }
   await review.softDelete();
@@ -242,7 +249,7 @@ const deleteReviewReply = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Reply not found' });
   }
   const isOwner = reply.user.toString() === req.user._id.toString();
-  if (!isOwner && req.user.role !== ROLES.ADMIN) {
+  if (!isOwner && !canModerate(req.user)) {
     return res.status(403).json({ message: 'Not allowed' });
   }
   reply.deletedAt = new Date();
@@ -265,7 +272,7 @@ const updateReviewReply = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Reply not found' });
   }
   const isOwner = reply.user.toString() === req.user._id.toString();
-  if (!isOwner && req.user.role !== ROLES.ADMIN) {
+  if (!isOwner && !canModerate(req.user)) {
     return res.status(403).json({ message: 'Not allowed' });
   }
   reply.content = content.trim();
@@ -297,7 +304,7 @@ const toggleReviewReplyLike = reactToReviewReply(REACTIONS.LIKE);
 const toggleReviewReplyDislike = reactToReviewReply(REACTIONS.DISLIKE);
 
 const toggleReviewPin = asyncHandler(async (req, res) => {
-  if (req.user.role !== ROLES.ADMIN) {
+  if (!canModerate(req.user)) {
     return res.status(403).json({ message: 'Not allowed' });
   }
   const review = await Review.findById(req.params.id);

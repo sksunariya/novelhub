@@ -8,12 +8,18 @@ const GateImpression = require('../models/GateImpression');
 const ChapterStatsDaily = require('../models/ChapterStatsDaily');
 const settingsService = require('./settingsService');
 const { resolveReader, isBot, dayKey } = require('../utils/readerIdentity');
+const { ROLES } = require('../config/constants');
 
 /** Should this request count at all? */
 const shouldTrack = async (req, reader) => {
   const snapshot = await settingsService.snapshot();
   if (snapshot.get('views.filterBots') && isBot(req.headers['user-agent'])) return false;
   if (!snapshot.get('views.countAnonymous') && reader.anonymous) return false;
+  // The owner account reads every chapter free and reads them to check they
+  // work. Counting that as readership would inflate the retention curve and the
+  // reader→payer funnel with traffic that can never convert, which is precisely
+  // the number those metrics exist to measure.
+  if (req.user && req.user.role === ROLES.SUPERADMIN) return false;
   return true;
 };
 

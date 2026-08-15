@@ -6,6 +6,12 @@ const Post = require('../models/Post');
 const PostComment = require('../models/PostComment');
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { REPORT_TARGET_TYPES } = require('../config/constants');
+const moduleAccess = require('../services/moduleAccessService');
+
+// Site-wide report and appeal handling, granted by the `community_reports`
+// module. Space moderators reach these routes through their own permissions;
+// this is the admin path only.
+const canHandleReports = (user) => moduleAccess.hasCapability(user, 'community_reports');
 
 const requireCommunityEnabled = async () => {
   const snapshot = await settingsService.snapshot();
@@ -77,7 +83,7 @@ const getQueue = asyncHandler(async (req, res) => {
       return res.status(403).json({ message: 'You do not have permission to do that' });
     }
     space = loaded.space;
-  } else if (!req.user || req.user.role !== 'admin') {
+  } else if (!canHandleReports(req.user)) {
     return res.status(403).json({ message: 'Admin access required' });
   }
 
@@ -142,7 +148,7 @@ const reviewReport = asyncHandler(async (req, res) => {
 
 const claimReport = asyncHandler(async (req, res) => {
   await requireCommunityEnabled();
-  if (!req.user || req.user.role !== 'admin') {
+  if (!canHandleReports(req.user)) {
     return res.status(403).json({ message: 'Admin access required' });
   }
   return res.json({ report: await reportService.claim({ reportId: req.params.id, reviewer: req.user }) });
@@ -214,7 +220,7 @@ const resolveAppeal = asyncHandler(async (req, res) => {
     if (!perms.can.managePosts) {
       return res.status(403).json({ message: 'You do not have permission to do that' });
     }
-  } else if (!req.user || req.user.role !== 'admin') {
+  } else if (!canHandleReports(req.user)) {
     return res.status(403).json({ message: 'Admin access required' });
   }
 

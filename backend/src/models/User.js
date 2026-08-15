@@ -22,6 +22,19 @@ const userSchema = new mongoose.Schema(
     // legal request handling and security tooling. See config/constants.js for
     // why this is an array rather than extra role values.
     elevatedPermissions: [{ type: String, enum: Object.values(ELEVATED_PERMISSIONS) }],
+
+    // Per-admin overrides of the global module visibility baseline held in
+    // AdminModuleAccess. Sparse on purpose: a key present here wins over the
+    // global default, a key absent inherits it. Storing the full matrix per
+    // admin would freeze each account at the moment it was last edited, so a
+    // later change to the global default would reach nobody.
+    //
+    // Meaningless on a superadmin, who sees everything unconditionally.
+    adminModules: {
+      type: Map,
+      of: Boolean,
+      default: undefined,
+    },
     avatarUrl: { type: String, default: '' },
     banned: { type: Boolean, default: false },
     library: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Novel' }],
@@ -126,6 +139,15 @@ userSchema.index(
 // Multikey index on the library array. Every chapter publish queries
 // { library: novelId } to find who to notify, and the audience resolver's
 // hasNovelInLibrary filter does the same — both were collection scans.
+// Staff lookups: the Access Control admin list, and the "is this the last
+// superadmin" count that runs on every role change and every user demote.
+// Sparse, because the overwhelming majority of users are plain readers and
+// indexing them here would buy nothing.
+userSchema.index(
+  { role: 1 },
+  { partialFilterExpression: { role: { $in: ['admin', 'superadmin'] } } }
+);
+
 userSchema.index({ library: 1 });
 // Audience targeting filters and sorts on activity.
 userSchema.index({ lastActiveAt: -1 });

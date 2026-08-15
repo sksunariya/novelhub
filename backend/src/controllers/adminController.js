@@ -618,12 +618,38 @@ const updateUser = asyncHandler(async (req, res) => {
   if (user._id.toString() === req.user._id.toString()) {
     return res.status(400).json({ message: 'Cannot modify your own account here' });
   }
+
+  const actorIsSuper = req.user.role === ROLES.SUPERADMIN;
+
+  // An admin editing a superadmin — banning them, demoting them — would let the
+  // constrained account remove the one constraining it. Only the owner tier
+  // touches the owner tier.
+  if (user.role === ROLES.SUPERADMIN && !actorIsSuper) {
+    return res.status(403).json({ message: 'Only a superadmin can modify a superadmin account' });
+  }
+
   const { role, banned } = req.body;
   if (role) {
     if (!Object.values(ROLES).includes(role)) {
       return res.status(400).json({ message: 'Invalid role' });
     }
+    // Otherwise an admin restricted to three modules could grant themselves the
+    // role that overrides the restriction, via a colleague's account or their
+    // own second login. Promotion to the owner tier goes through Access
+    // Control, which is superadmin-only and audited.
+    if (role === ROLES.SUPERADMIN && !actorIsSuper) {
+      return res.status(403).json({ message: 'Only a superadmin can grant the superadmin role' });
+    }
+    // Losing the last superadmin leaves nobody able to administer the access
+    // matrix, and no way back short of re-running the seed script.
+    if (user.role === ROLES.SUPERADMIN && role !== ROLES.SUPERADMIN) {
+      const remaining = await User.countDocuments({ role: ROLES.SUPERADMIN, _id: { $ne: user._id } });
+      if (remaining === 0) {
+        return res.status(400).json({ message: 'Cannot demote the only superadmin' });
+      }
+    }
     user.role = role;
+    if (role !== ROLES.ADMIN) user.adminModules = undefined;
   }
   if (banned !== undefined) {
     user.banned = banned === 'true' || banned === true;
@@ -639,6 +665,11 @@ const deleteUser = asyncHandler(async (req, res) => {
   }
   if (user._id.toString() === req.user._id.toString()) {
     return res.status(400).json({ message: 'Cannot delete your own account' });
+  }
+  // Same reasoning as updateUser: deleting the account that constrains you is
+  // the most direct way to escape the constraint.
+  if (user.role === ROLES.SUPERADMIN && req.user.role !== ROLES.SUPERADMIN) {
+    return res.status(403).json({ message: 'Only a superadmin can delete a superadmin account' });
   }
   // Financial records must survive an erasure request, so a user who has
   // transacted is anonymized rather than removed. The guard decides.

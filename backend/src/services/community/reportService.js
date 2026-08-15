@@ -326,7 +326,9 @@ const confirmRemoval = async ({
       $set: {
         status: POST_STATUS.REMOVED,
         'removal.by': reviewer._id,
-        'removal.byRole': reviewer.role === 'admin' ? 'admin' : 'moderator',
+        // Superadmin removals are recorded as admin removals — same authority,
+        // wider reach. See moderationService.roleOf.
+        'removal.byRole': ['admin', 'superadmin'].includes(reviewer.role) ? 'admin' : 'moderator',
         'removal.reason': reason,
         'removal.ruleId': ruleId,
         'removal.note': note,

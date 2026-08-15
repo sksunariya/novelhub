@@ -15,8 +15,8 @@
 
 const settingsService = require('../settingsService');
 const registry = require('../../config/settingsRegistry');
+const moduleAccess = require('../moduleAccessService');
 const {
-  ROLES,
   SPACE_VISIBILITY,
   SPACE_STATUS,
   SPACE_MEMBER_ROLES,
@@ -45,7 +45,15 @@ const ALL_PERMISSIONS = Object.keys(NO_PERMISSIONS).reduce(
   {}
 );
 
-const isAdmin = (user) => Boolean(user && user.role === ROLES.ADMIN);
+// Site-admin authority over spaces, which is what the `spaces` portal module
+// grants. A superadmin always has it; an admin has it unless the superadmin has
+// hidden the module from them.
+//
+// This is checked here rather than only on the portal routes because the same
+// authority reaches the public API — PATCH /api/spaces/:slug honours it, and an
+// admin whose Spaces module is hidden should not keep that power just because
+// they took a different door to it.
+const isAdmin = (user) => moduleAccess.hasCapability(user, 'spaces');
 
 const isCommunityBanned = (user) =>
   Boolean(user && user.communityBannedUntil && user.communityBannedUntil > new Date());

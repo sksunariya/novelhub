@@ -23,7 +23,11 @@ const APPEAL_WINDOW_DAYS = 90;
 
 const roleOf = (actor, perms) => {
   if (!actor) return 'system';
-  if (actor.role === ROLES.ADMIN) return 'admin';
+  // The mod log records the authority an action was taken under. Superadmin
+  // actions are admin actions with a wider reach, not a separate kind, so they
+  // are logged as `admin` rather than adding a value every reader of the log
+  // and every historical row would have to learn.
+  if (actor.role === ROLES.ADMIN || actor.role === ROLES.SUPERADMIN) return 'admin';
   if (perms && perms.isOwner) return 'owner';
   if (perms && perms.isModerator) return 'moderator';
   return 'user';

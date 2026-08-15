@@ -67,6 +67,7 @@ const Profile = () => {
             {user.fullName ? `@${user.username} • ${user.email}` : user.email}
           </p>
           {user.role === 'admin' && <p className="text-xs font-medium text-crimson-soft">Administrator</p>}
+          {user.role === 'superadmin' && <p className="text-xs font-medium text-crimson-soft">Superadmin</p>}
         </div>
       </div>
 

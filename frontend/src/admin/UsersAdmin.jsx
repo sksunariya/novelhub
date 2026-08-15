@@ -87,7 +87,15 @@ const UsersAdmin = () => {
                       </p>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${user.role === 'admin' ? 'bg-crimson/20 text-crimson-soft' : 'bg-night-raised text-silver-muted'}`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          user.role === 'superadmin'
+                            ? 'bg-crimson text-white'
+                            : user.role === 'admin'
+                              ? 'bg-crimson/20 text-crimson-soft'
+                              : 'bg-night-raised text-silver-muted'
+                        }`}
+                      >
                         {user.role}
                       </span>
                     </td>
@@ -98,7 +106,13 @@ const UsersAdmin = () => {
                     </td>
                     <td className="px-4 py-3 text-silver-muted">{new Date(user.createdAt).toLocaleDateString()}</td>
                     <td className="px-4 py-3">
-                      {!isSelf && (
+                      {/* Superadmin accounts are managed in Access Control, which
+                          is the only screen that can explain what the role means
+                          and refuse to remove the last one. */}
+                      {!isSelf && user.role === 'superadmin' && (
+                        <p className="text-right text-xs text-silver-muted">Managed in Access control</p>
+                      )}
+                      {!isSelf && user.role !== 'superadmin' && (
                         <div className="flex justify-end gap-1">
                           <button
                             type="button"

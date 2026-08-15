@@ -3,41 +3,56 @@ import { NavLink, Outlet, Link } from 'react-router-dom';
 import {
   LayoutDashboard, Images, BookOpen, Users, ShieldAlert, Bell, Settings, ArrowLeft,
   Tags, Clock, ChevronDown, Globe, Gift, TrendingUp, Repeat, MessagesSquare, Flag,
-  ScrollText, ShieldCheck, Inbox, FileText,
+  ScrollText, ShieldCheck, Inbox, FileText, KeyRound, Crown,
 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
+import { useAdminAccess } from '../context/AdminAccessContext';
 
 // Two-level navigation. A flat list worked at seven links; it does not at
 // twenty-plus, and grouping is what keeps the portal navigable as sections
 // are added.
+//
+// Every link carries the `module` id its API routes are guarded by. The two
+// must agree: a link whose module is hidden disappears, and the route behind it
+// returns 404 regardless. Keep them in step with backend config/constants.js.
+//
+// `requires` adds modules that must ALSO be held; `anyOf` names a set where one
+// is enough, for screens that span several modules.
 const GROUPS = [
   {
     id: 'overview',
-    links: [{ to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true }],
+    links: [{ to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true, module: 'dashboard' }],
   },
   {
     id: 'content',
     label: 'Content',
     links: [
-      { to: '/admin/novels', label: 'Novels', icon: BookOpen },
-      { to: '/admin/carousel', label: 'Hero carousel', icon: Images },
+      { to: '/admin/novels', label: 'Novels', icon: BookOpen, module: 'novels' },
+      { to: '/admin/carousel', label: 'Hero carousel', icon: Images, module: 'carousel' },
     ],
   },
   {
     id: 'monetization',
     label: 'Monetization',
     links: [
-      { to: '/admin/config', label: 'Settings', icon: Settings },
-      { to: '/admin/packs', label: 'Credit packs', icon: Tags },
-      { to: '/admin/plans', label: 'Subscriptions', icon: Repeat },
-      { to: '/admin/currencies', label: 'Currencies', icon: Globe },
-      { to: '/admin/grants', label: 'Free credits', icon: Gift },
+      // The settings registry spans three modules. The link shows if the admin
+      // holds any of them, and the API filters the page down to their sections.
+      {
+        to: '/admin/config',
+        label: 'Settings',
+        icon: Settings,
+        anyOf: ['monetization_config', 'platform_config', 'community_config'],
+      },
+      { to: '/admin/packs', label: 'Credit packs', icon: Tags, module: 'packs' },
+      { to: '/admin/plans', label: 'Subscriptions', icon: Repeat, module: 'plans' },
+      { to: '/admin/currencies', label: 'Currencies', icon: Globe, module: 'currencies' },
+      { to: '/admin/grants', label: 'Free credits', icon: Gift, module: 'grants' },
     ],
   },
   {
     id: 'analytics',
     label: 'Analytics',
-    links: [{ to: '/admin/analytics', label: 'Revenue & authors', icon: TrendingUp }],
+    links: [{ to: '/admin/analytics', label: 'Revenue & authors', icon: TrendingUp, module: 'analytics' }],
   },
   // The community system: spaces, posts, reports. Distinct from the chapter
   // comment moderation under People below.
@@ -45,30 +60,37 @@ const GROUPS = [
     id: 'spaces',
     label: 'Community',
     links: [
-      { to: '/admin/spaces', label: 'Spaces', icon: MessagesSquare, end: true },
-      { to: '/admin/spaces/requests', label: 'Requests', icon: Inbox },
-      { to: '/admin/community/posts', label: 'Posts', icon: FileText },
-      { to: '/admin/community/reports', label: 'Reports', icon: Flag },
-      { to: '/admin/community/modlog', label: 'Mod log', icon: ScrollText },
-      { to: '/admin/community/safety', label: 'Safety', icon: ShieldCheck },
+      { to: '/admin/spaces', label: 'Spaces', icon: MessagesSquare, end: true, module: 'spaces' },
+      // The request queue reads the spaces endpoints, so it needs both: its
+      // own module to act on requests, and Spaces to see them at all.
+      { to: '/admin/spaces/requests', label: 'Requests', icon: Inbox, module: 'space_requests', requires: ['spaces'] },
+      { to: '/admin/community/posts', label: 'Posts', icon: FileText, module: 'community_posts' },
+      { to: '/admin/community/reports', label: 'Reports', icon: Flag, module: 'community_reports' },
+      { to: '/admin/community/modlog', label: 'Mod log', icon: ScrollText, module: 'community_modlog' },
+      { to: '/admin/community/safety', label: 'Safety', icon: ShieldCheck, module: 'community_safety' },
     ],
   },
   {
     id: 'people',
     label: 'People',
     links: [
-      { to: '/admin/users', label: 'Users', icon: Users },
-      { to: '/admin/moderation', label: 'Chapter comments', icon: ShieldAlert },
-      { to: '/admin/notifications', label: 'Notifications', icon: Bell },
+      { to: '/admin/users', label: 'Users', icon: Users, module: 'users' },
+      { to: '/admin/moderation', label: 'Chapter comments', icon: ShieldAlert, module: 'moderation' },
+      { to: '/admin/notifications', label: 'Notifications', icon: Bell, module: 'notifications' },
     ],
   },
   {
     id: 'system',
     label: 'System',
     links: [
-      { to: '/admin/settings', label: 'Site settings', icon: Settings },
-      { to: '/admin/jobs', label: 'Jobs', icon: Clock },
+      { to: '/admin/settings', label: 'Site settings', icon: Settings, module: 'site_settings' },
+      { to: '/admin/jobs', label: 'Jobs', icon: Clock, module: 'jobs' },
     ],
+  },
+  {
+    id: 'governance',
+    label: 'Governance',
+    links: [{ to: '/admin/access-control', label: 'Access control', icon: KeyRound, module: 'access_control' }],
   },
 ];
 
@@ -79,21 +101,57 @@ const linkClass = ({ isActive }) =>
 
 const AdminLayout = () => {
   const { settings } = useSettings();
+  const { can, loading, error, isSuperAdmin } = useAdminAccess();
   const [collapsed, setCollapsed] = useState({});
 
   const toggle = (id) => setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
-  const allLinks = GROUPS.flatMap((group) => group.links);
+
+  // A group whose every link is hidden should not leave an empty heading behind
+  // — that would advertise the existence of the section it is hiding.
+  const visible = (link) => {
+    if (link.anyOf) return link.anyOf.some((moduleId) => can(moduleId));
+    return can(link.module) && (link.requires || []).every((required) => can(required));
+  };
+
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    links: group.links.filter(visible),
+  })).filter((group) => group.links.length > 0);
+
+  const allLinks = groups.flatMap((group) => group.links);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-night">
+        <p className="text-sm text-silver-muted">Loading portal…</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-night px-6 text-center">
+        <p className="text-sm text-silver">{error}</p>
+        <Link to="/" className="text-sm text-crimson-soft hover:underline">
+          Back to site
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-dvh bg-night">
       <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-night-surface md:flex">
         <div className="border-b border-line p-4">
           <p className="font-display text-lg font-bold text-silver">{settings?.siteName || 'Apex NovelHub'}</p>
-          <p className="text-xs text-crimson-soft">Admin Portal</p>
+          <p className="flex items-center gap-1.5 text-xs text-crimson-soft">
+            {isSuperAdmin && <Crown className="h-3 w-3" aria-hidden="true" />}
+            {isSuperAdmin ? 'Superadmin' : 'Admin Portal'}
+          </p>
         </div>
 
         <nav className="flex-1 space-y-4 overflow-y-auto p-3" aria-label="Admin navigation">
-          {GROUPS.map((group) => (
+          {groups.map((group) => (
             <div key={group.id}>
               {group.label && (
                 <button

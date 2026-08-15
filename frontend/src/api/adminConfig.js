@@ -1,5 +1,18 @@
 import client from './client';
 
+// --- admin portal access control -----------------------------------------
+// `me` is readable by any admin and reports only their own access. Everything
+// else is superadmin-only and will 403 for an admin.
+
+const ac = (path) => `/admin/access-control${path}`;
+
+export const getMyAdminAccess = () => client.get(ac('/me')).then((r) => r.data);
+export const getAccessModules = () => client.get(ac('/modules')).then((r) => r.data);
+export const updateGlobalAccess = (modules) => client.put(ac('/global'), { modules }).then((r) => r.data);
+export const listAdminAccounts = () => client.get(ac('/admins')).then((r) => r.data);
+export const updateAdminAccess = (id, modules) => client.put(ac(`/admins/${id}`), { modules }).then((r) => r.data);
+export const setAdminRole = (id, role) => client.post(ac(`/admins/${id}/role`), { role }).then((r) => r.data);
+
 // Registry-backed configuration. The backend returns each setting's type,
 // bounds, options and metadata, so the UI never hardcodes a field list.
 

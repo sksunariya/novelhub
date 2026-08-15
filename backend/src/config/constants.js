@@ -1,7 +1,20 @@
 const ROLES = {
   USER: 'user',
   ADMIN: 'admin',
+  // The owner tier. Sees the whole admin portal unconditionally, holds every
+  // elevated permission implicitly, and reads paid content without spending —
+  // and is the only role that can decide which modules an `admin` may see.
+  //
+  // Deliberately a separate role value rather than an elevated permission:
+  // this is not a capability layered on top of admin, it is the account that
+  // defines what admin means. Two accounts holding it should be a deliberate,
+  // rare act, which a role value makes visible in a way a flag in an array
+  // does not.
+  SUPERADMIN: 'superadmin',
 };
+
+/** Roles that reach the admin portal at all. */
+const ADMIN_ROLES = [ROLES.ADMIN, ROLES.SUPERADMIN];
 
 // Capabilities granted on top of a role, held as an array on the user.
 //
@@ -19,6 +32,210 @@ const ELEVATED_PERMISSIONS = {
   LEGAL: 'legal', // DMCA counter-notices, law enforcement requests
   SECURITY: 'security', // audit log export, session revocation
 };
+
+// --- Admin portal modules -------------------------------------------------
+//
+// The single source of truth for what the admin portal is made of. The
+// superadmin's visibility matrix, the nav, the route guards and the API guards
+// all read this list, so a module cannot be hidden in one place and reachable
+// in another — the failure mode that makes UI-only permission systems
+// worthless.
+//
+// `id` is what gets stored per-admin and in the global defaults. Renaming one
+// orphans stored settings, so treat ids as permanent.
+//
+// `alwaysOn` marks modules no toggle can remove; an admin with no dashboard has
+// no portal to land on. `superOnly` marks modules the superadmin never shares —
+// they are invisible to admins regardless of what the matrix says.
+//
+// A module governs CAPABILITY, not just visibility. Several of these powers also
+// reach the public API — an admin can delete any comment through the endpoint
+// the reader UI calls, and override any space through /api/spaces/:slug — so
+// hiding the module withdraws the authority everywhere, not only the screen.
+// See services/moduleAccessService.js (capabilities) for the mechanism.
+const ADMIN_MODULE_GROUPS = {
+  OVERVIEW: 'overview',
+  CONTENT: 'content',
+  MONETIZATION: 'monetization',
+  ANALYTICS: 'analytics',
+  COMMUNITY: 'community',
+  PEOPLE: 'people',
+  SYSTEM: 'system',
+  GOVERNANCE: 'governance',
+};
+
+const ADMIN_MODULES = [
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    group: ADMIN_MODULE_GROUPS.OVERVIEW,
+    description: 'Landing page and headline stats.',
+    alwaysOn: true,
+  },
+  {
+    id: 'novels',
+    label: 'Novels & chapters',
+    group: ADMIN_MODULE_GROUPS.CONTENT,
+    description: 'Create and edit novels, upload and price chapters.',
+  },
+  {
+    id: 'carousel',
+    label: 'Hero carousel',
+    group: ADMIN_MODULE_GROUPS.CONTENT,
+    description: 'Homepage carousel slides.',
+  },
+  {
+    id: 'monetization_config',
+    label: 'Monetization settings',
+    group: ADMIN_MODULE_GROUPS.MONETIZATION,
+    description: 'Pricing, gates, store, currency, refunds, tax and revenue share.',
+    // The settings registry is one screen spanning three domains. Splitting the
+    // guard by section prefix keeps "hide monetization settings" from also
+    // hiding auth, ranking and community configuration — which is what a single
+    // guard on /admin/config would have done.
+    configPrefix: 'monetization',
+  },
+  {
+    id: 'packs',
+    label: 'Credit packs',
+    group: ADMIN_MODULE_GROUPS.MONETIZATION,
+    description: 'Credit pack catalogue and pricing rules.',
+  },
+  {
+    id: 'plans',
+    label: 'Subscriptions',
+    group: ADMIN_MODULE_GROUPS.MONETIZATION,
+    description: 'Subscription plans and subscriber list.',
+  },
+  {
+    id: 'currencies',
+    label: 'Currencies',
+    group: ADMIN_MODULE_GROUPS.MONETIZATION,
+    description: 'Currency catalogue, FX rates and settlement.',
+  },
+  {
+    id: 'grants',
+    label: 'Free credits',
+    group: ADMIN_MODULE_GROUPS.MONETIZATION,
+    description: 'Grant campaigns and direct credit sends.',
+  },
+  {
+    id: 'wallets',
+    label: 'Wallets & orders',
+    group: ADMIN_MODULE_GROUPS.MONETIZATION,
+    description:
+      'User balances, manual credit adjustments, orders and refunds. No portal screen yet — this governs the API only, and still matters: adjusting a balance and refunding an order are the two most sensitive things an admin can do.',
+    apiOnly: true,
+  },
+  {
+    id: 'analytics',
+    label: 'Revenue & authors',
+    group: ADMIN_MODULE_GROUPS.ANALYTICS,
+    description: 'Revenue rollups, funnels, economy and author earnings.',
+  },
+  {
+    id: 'spaces',
+    label: 'Spaces',
+    group: ADMIN_MODULE_GROUPS.COMMUNITY,
+    description:
+      'Space directory, lifecycle, overrides and moderators. Also grants site-admin authority inside every space, which overrides that space\'s own rules.',
+  },
+  {
+    id: 'space_requests',
+    label: 'Space requests',
+    group: ADMIN_MODULE_GROUPS.COMMUNITY,
+    description:
+      'Approving and rejecting new space requests. Sits inside Spaces — hiding Spaces hides this queue with it.',
+  },
+  {
+    id: 'community_posts',
+    label: 'Posts',
+    group: ADMIN_MODULE_GROUPS.COMMUNITY,
+    description:
+      'Cross-space post search and bulk actions. Per-post moderation authority follows Spaces, since it flows through space permissions.',
+  },
+  {
+    id: 'community_reports',
+    label: 'Reports & appeals',
+    group: ADMIN_MODULE_GROUPS.COMMUNITY,
+    description:
+      'The report queue, appeals and transparency figures — including handling reports through the public community API.',
+  },
+  {
+    id: 'community_modlog',
+    label: 'Mod log',
+    group: ADMIN_MODULE_GROUPS.COMMUNITY,
+    description: 'Site-wide moderation action history.',
+  },
+  {
+    id: 'community_safety',
+    label: 'Child safety queue',
+    group: ADMIN_MODULE_GROUPS.COMMUNITY,
+    description:
+      'Restricted escalation queue. Also requires the child_safety elevated permission — visibility alone does not open it.',
+  },
+  {
+    id: 'users',
+    label: 'Users',
+    group: ADMIN_MODULE_GROUPS.PEOPLE,
+    description: 'User search, edit, ban and delete.',
+  },
+  {
+    id: 'moderation',
+    label: 'Chapter comments',
+    group: ADMIN_MODULE_GROUPS.PEOPLE,
+    description:
+      'Comment and review moderation, including editing or removing any comment or review through the public API.',
+  },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    group: ADMIN_MODULE_GROUPS.PEOPLE,
+    description: 'Announcements, dispatch and campaign history.',
+  },
+  {
+    id: 'platform_config',
+    label: 'Platform settings',
+    group: ADMIN_MODULE_GROUPS.SYSTEM,
+    description: 'Ranking, discovery, reader, auth, notifications and platform limits.',
+    configPrefix: 'platform',
+  },
+  {
+    id: 'community_config',
+    label: 'Community settings',
+    group: ADMIN_MODULE_GROUPS.COMMUNITY,
+    description: 'Space creation, posting, voting, karma, feed and community moderation rules.',
+    configPrefix: 'spaces',
+  },
+  {
+    id: 'site_settings',
+    label: 'Site settings',
+    group: ADMIN_MODULE_GROUPS.SYSTEM,
+    description: 'Branding, maintenance mode and site-wide options.',
+  },
+  {
+    id: 'jobs',
+    label: 'Jobs & webhooks',
+    group: ADMIN_MODULE_GROUPS.SYSTEM,
+    description: 'Scheduled job runs, manual triggers and webhook replay.',
+  },
+  {
+    id: 'access_control',
+    label: 'Access control',
+    group: ADMIN_MODULE_GROUPS.GOVERNANCE,
+    description: 'Decide which modules admins can see. Superadmin only.',
+    superOnly: true,
+  },
+];
+
+const ADMIN_MODULE_IDS = ADMIN_MODULES.map((m) => m.id);
+
+// Settings-registry section prefix -> module id, for the three modules that
+// carve up /admin/config between them.
+const CONFIG_PREFIX_MODULES = ADMIN_MODULES.filter((m) => m.configPrefix).reduce(
+  (acc, m) => ({ ...acc, [m.configPrefix]: m.id }),
+  {}
+);
 
 const NOVEL_STATUS = {
   ONGOING: 'ongoing',
@@ -134,6 +351,10 @@ const PRICE_REASONS = {
   PRICING_RULE: 'pricing_rule',
   NOVEL_DEFAULT: 'novel_default',
   GLOBAL_DEFAULT: 'global_default',
+  // A superadmin reading paid content without spending. Recorded as its own
+  // reason rather than reusing `monetization_off` so the bypass is legible in
+  // read logs and never mistaken for a pricing bug.
+  STAFF_BYPASS: 'staff_bypass',
 };
 
 const PRICING_RULE_SCOPES = {
@@ -444,7 +665,12 @@ const VIEW_DEDUP_WINDOW_SECONDS = 30 * 60;
 
 module.exports = {
   ROLES,
+  ADMIN_ROLES,
   ELEVATED_PERMISSIONS,
+  ADMIN_MODULES,
+  ADMIN_MODULE_IDS,
+  CONFIG_PREFIX_MODULES,
+  ADMIN_MODULE_GROUPS,
   NOVEL_STATUS,
   RANKING_TYPES,
   NOTIFICATION_TYPES,

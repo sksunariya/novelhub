@@ -2,7 +2,14 @@ const Comment = require('../models/Comment');
 const Chapter = require('../models/Chapter');
 const Novel = require('../models/Novel');
 const { asyncHandler } = require('../middlewares/errorHandler');
-const { ROLES, PUBLIC_USER_FIELDS } = require('../config/constants');
+const { PUBLIC_USER_FIELDS } = require('../config/constants');
+const moduleAccess = require('../services/moduleAccessService');
+
+// Admin authority to moderate comments and reviews, which is what the
+// `moderation` portal module grants. Checked here as well as on the portal
+// routes because these endpoints are public: an admin whose module is hidden
+// must not keep the power simply by calling the API the reader UI uses.
+const canModerate = (user) => moduleAccess.hasCapability(user, 'moderation');
 const { parsePagination } = require('./novelController');
 const { REACTIONS, toggleReaction } = require('../utils/reactions');
 const { notifyCommentActivity } = require('../utils/notifications');
@@ -98,7 +105,7 @@ const updateComment = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Comment not found' });
   }
   const isOwner = comment.user.toString() === req.user._id.toString();
-  if (!isOwner && req.user.role !== ROLES.ADMIN) {
+  if (!isOwner && !canModerate(req.user)) {
     return res.status(403).json({ message: 'Not allowed' });
   }
   comment.content = content.trim();
@@ -115,7 +122,7 @@ const deleteComment = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'Comment not found' });
   }
   const isOwner = comment.user.toString() === req.user._id.toString();
-  if (!isOwner && req.user.role !== ROLES.ADMIN) {
+  if (!isOwner && !canModerate(req.user)) {
     return res.status(403).json({ message: 'Not allowed' });
   }
   await comment.softDelete();
@@ -139,7 +146,7 @@ const toggleCommentLike = reactToComment(REACTIONS.LIKE);
 const toggleCommentDislike = reactToComment(REACTIONS.DISLIKE);
 
 const toggleCommentPin = asyncHandler(async (req, res) => {
-  if (req.user.role !== ROLES.ADMIN) {
+  if (!canModerate(req.user)) {
     return res.status(403).json({ message: 'Not allowed' });
   }
   const comment = await Comment.findById(req.params.id);
