@@ -235,7 +235,7 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
       {!shouldReduceMotion && <HeroEmbers />}
 
       {/* Main Slide Track & Animations */}
-      <div className="relative min-h-0 sm:min-h-[380px] lg:min-h-[440px] w-full px-4 py-7 sm:px-10 sm:py-10 md:px-12 md:py-12 lg:px-16 lg:py-14 flex items-center">
+      <div className="relative min-h-0 md:min-h-[440px] w-full px-4 py-7 sm:px-6 sm:py-9 md:px-12 md:py-12 lg:px-16 lg:py-14 flex items-center justify-center">
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
             key={currentSlide._id || currentIndex}
@@ -251,19 +251,19 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
               if (offset.x < -50) handleNext();
               else if (offset.x > 50) handlePrev();
             }}
-            className="grid w-full grid-cols-1 md:grid-cols-12 items-center gap-5 sm:gap-6 md:gap-8"
+            className="flex flex-col items-center justify-center md:grid md:grid-cols-12 md:items-center md:gap-8 w-full"
           >
-            {/* Left/Bottom Content Side */}
+            {/* Left Content Side (Desktop & Tablet only) */}
             <motion.div
               variants={contentContainer}
               initial="hidden"
               animate="show"
-              className="order-2 md:order-1 md:col-span-7 flex flex-col items-center text-center md:items-start md:text-left z-10"
+              className="hidden md:flex md:flex-col md:items-start md:text-left md:col-span-7 z-10"
             >
               {/* Badge */}
-              <motion.div variants={contentItem} className="mb-2 sm:mb-3 md:mb-4">
+              <motion.div variants={contentItem} className="mb-3 md:mb-4">
                 <span
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-0.5 sm:px-3.5 sm:py-1 text-xs font-bold tracking-wider uppercase backdrop-blur-md shadow-sm ${badgeStyle}`}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1 text-xs font-bold tracking-wider uppercase backdrop-blur-md shadow-sm ${badgeStyle}`}
                 >
                   <Flame className="h-3.5 w-3.5" />
                   {currentSlide.badgeText || 'FEATURED'}
@@ -273,14 +273,14 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
               {/* Title */}
               <motion.h1
                 variants={contentItem}
-                className="font-display text-xl xs:text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-silver line-clamp-2 leading-tight"
+                className="font-display text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-silver line-clamp-2 leading-tight"
               >
                 {currentSlide.title}
               </motion.h1>
 
               {/* Subtitle / Author Tagline */}
               {currentSlide.subtitle && (
-                <motion.p variants={contentItem} className="mt-1.5 sm:mt-2 text-xs sm:text-sm md:text-base font-semibold text-crimson-soft">
+                <motion.p variants={contentItem} className="mt-2 text-sm md:text-base font-semibold text-crimson-soft">
                   {currentSlide.subtitle}
                 </motion.p>
               )}
@@ -288,7 +288,7 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
               {/* Description */}
               <motion.p
                 variants={contentItem}
-                className="mt-2 sm:mt-3 max-w-xl text-xs sm:text-sm md:text-base leading-relaxed text-silver-muted line-clamp-2 sm:line-clamp-3"
+                className="mt-3 max-w-xl text-sm md:text-base leading-relaxed text-silver-muted line-clamp-3"
               >
                 {currentSlide.description}
               </motion.p>
@@ -296,12 +296,12 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
               {/* CTA Button */}
               <motion.div
                 variants={contentItem}
-                className="mt-4 sm:mt-6 md:mt-7 flex items-center justify-center md:justify-start"
+                className="mt-6 md:mt-7 flex items-center justify-start"
               >
                 {currentSlide.primaryButtonUrl?.startsWith('/') ? (
                   <Link
                     to={currentSlide.primaryButtonUrl}
-                    className={`inline-flex items-center gap-2 rounded-full px-6 py-2.5 sm:px-7 sm:py-3 text-xs sm:text-sm font-bold transition-all transform hover:scale-105 active:scale-95 ${theme.buttonPrimary}`}
+                    className={`inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-bold transition-all transform hover:scale-105 active:scale-95 ${theme.buttonPrimary}`}
                   >
                     <BookOpen className="h-4 w-4" />
                     {currentSlide.primaryButtonText || 'Start Reading'}
@@ -311,7 +311,7 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
                     href={currentSlide.primaryButtonUrl || '#'}
                     target="_blank"
                     rel="noreferrer"
-                    className={`inline-flex items-center gap-2 rounded-full px-6 py-2.5 sm:px-7 sm:py-3 text-xs sm:text-sm font-bold transition-all transform hover:scale-105 active:scale-95 ${theme.buttonPrimary}`}
+                    className={`inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-bold transition-all transform hover:scale-105 active:scale-95 ${theme.buttonPrimary}`}
                   >
                     <BookOpen className="h-4 w-4" />
                     {currentSlide.primaryButtonText || 'Start Reading'}
@@ -320,15 +320,19 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
               </motion.div>
             </motion.div>
 
-            {/* Right/Top Side: 3D Animated Cover Poster Card */}
+            {/* Right Side / Mobile Center: 3D Animated Cover Poster Card */}
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.15 }}
-              className="order-1 md:order-2 md:col-span-5 flex justify-center z-10"
+              className="flex justify-center md:col-span-5 z-10"
             >
               {currentSlide.primaryButtonUrl?.startsWith('/') ? (
-                <Link to={currentSlide.primaryButtonUrl} className="relative group/poster cursor-pointer block" aria-label={`View ${currentSlide.title}`}>
+                <Link
+                  to={currentSlide.primaryButtonUrl}
+                  className="relative group/poster cursor-pointer block"
+                  aria-label={`Read ${currentSlide.title}`}
+                >
                   {/* Glowing Aura Ring */}
                   <div
                     className="absolute -inset-1.5 rounded-2xl opacity-60 blur-xl transition-all duration-500 group-hover/poster:opacity-100 group-hover/poster:blur-2xl"
@@ -344,12 +348,12 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
                         src={currentSlide.imageUrl}
                         alt={currentSlide.title}
                         onError={() => setImgError(true)}
-                        className="h-44 w-32 xs:h-52 xs:w-36 sm:h-64 sm:w-44 md:h-80 md:w-56 lg:h-96 lg:w-64 object-cover transition-transform duration-700 group-hover/poster:scale-105"
+                        className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 object-cover transition-transform duration-700 group-hover/poster:scale-105"
                         loading="eager"
                       />
                     ) : (
-                      <div className="h-44 w-32 xs:h-52 xs:w-36 sm:h-64 sm:w-44 md:h-80 md:w-56 lg:h-96 lg:w-64 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
-                        <Layers className="h-8 w-8 sm:h-12 sm:w-12 text-silver-muted/50 mb-2 sm:mb-3" />
+                      <div className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
+                        <Layers className="h-10 w-10 sm:h-12 sm:w-12 text-silver-muted/50 mb-2 sm:mb-3" />
                         <p className="font-display font-bold text-silver text-xs sm:text-sm line-clamp-3">{currentSlide.title}</p>
                         <p className="text-[10px] sm:text-xs text-crimson-soft mt-1">Apex NovelHub</p>
                       </div>
@@ -368,7 +372,11 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
                   </div>
                 </Link>
               ) : (
-                <a href={currentSlide.primaryButtonUrl || '#'} className="relative group/poster cursor-pointer block" aria-label={`View ${currentSlide.title}`}>
+                <a
+                  href={currentSlide.primaryButtonUrl || '#'}
+                  className="relative group/poster cursor-pointer block"
+                  aria-label={`Read ${currentSlide.title}`}
+                >
                   {/* Glowing Aura Ring */}
                   <div
                     className="absolute -inset-1.5 rounded-2xl opacity-60 blur-xl transition-all duration-500 group-hover/poster:opacity-100 group-hover/poster:blur-2xl"
@@ -384,12 +392,12 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
                         src={currentSlide.imageUrl}
                         alt={currentSlide.title}
                         onError={() => setImgError(true)}
-                        className="h-44 w-32 xs:h-52 xs:w-36 sm:h-64 sm:w-44 md:h-80 md:w-56 lg:h-96 lg:w-64 object-cover transition-transform duration-700 group-hover/poster:scale-105"
+                        className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 object-cover transition-transform duration-700 group-hover/poster:scale-105"
                         loading="eager"
                       />
                     ) : (
-                      <div className="h-44 w-32 xs:h-52 xs:w-36 sm:h-64 sm:w-44 md:h-80 md:w-56 lg:h-96 lg:w-64 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
-                        <Layers className="h-8 w-8 sm:h-12 sm:w-12 text-silver-muted/50 mb-2 sm:mb-3" />
+                      <div className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
+                        <Layers className="h-10 w-10 sm:h-12 sm:w-12 text-silver-muted/50 mb-2 sm:mb-3" />
                         <p className="font-display font-bold text-silver text-xs sm:text-sm line-clamp-3">{currentSlide.title}</p>
                         <p className="text-[10px] sm:text-xs text-crimson-soft mt-1">Apex NovelHub</p>
                       </div>
