@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Sparkles, BookOpen, Star, Layers, Flame, Compass } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Sparkles, BookOpen, Star, Layers, Flame } from 'lucide-react';
 import client from '../api/client';
 import HeroEmbers from './HeroEmbers';
 
@@ -195,7 +195,7 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
 
   if (loading) {
     return (
-      <div className="relative h-96 w-full animate-pulse rounded-2xl border border-line bg-night-surface p-8 shadow-card flex items-center justify-center">
+      <div className="relative h-72 sm:h-96 w-full animate-pulse rounded-2xl border border-line bg-night-surface p-8 shadow-card flex items-center justify-center">
         <div className="flex items-center gap-3 text-silver-muted">
           <Sparkles className="h-6 w-6 animate-spin text-crimson" />
           <span className="font-medium text-sm">Loading Hero Carousel...</span>
@@ -235,7 +235,7 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
       {!shouldReduceMotion && <HeroEmbers />}
 
       {/* Main Slide Track & Animations */}
-      <div className="relative min-h-[460px] w-full px-6 py-10 sm:px-12 sm:py-16 md:px-16 flex items-center">
+      <div className="relative min-h-0 sm:min-h-[380px] lg:min-h-[440px] w-full px-4 py-7 sm:px-10 sm:py-10 md:px-12 md:py-12 lg:px-16 lg:py-14 flex items-center">
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
             key={currentSlide._id || currentIndex}
@@ -251,19 +251,19 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
               if (offset.x < -50) handleNext();
               else if (offset.x > 50) handlePrev();
             }}
-            className="grid w-full grid-cols-1 items-center gap-8 lg:grid-cols-12"
+            className="grid w-full grid-cols-1 md:grid-cols-12 items-center gap-5 sm:gap-6 md:gap-8"
           >
-            {/* Left Content Side */}
+            {/* Left/Bottom Content Side */}
             <motion.div
               variants={contentContainer}
               initial="hidden"
               animate="show"
-              className="lg:col-span-7 flex flex-col items-center text-center lg:items-start lg:text-left z-10"
+              className="order-2 md:order-1 md:col-span-7 flex flex-col items-center text-center md:items-start md:text-left z-10"
             >
               {/* Badge */}
-              <motion.div variants={contentItem} className="mb-4">
+              <motion.div variants={contentItem} className="mb-2 sm:mb-3 md:mb-4">
                 <span
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1 text-xs font-bold tracking-wider uppercase backdrop-blur-md shadow-sm ${badgeStyle}`}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-0.5 sm:px-3.5 sm:py-1 text-xs font-bold tracking-wider uppercase backdrop-blur-md shadow-sm ${badgeStyle}`}
                 >
                   <Flame className="h-3.5 w-3.5" />
                   {currentSlide.badgeText || 'FEATURED'}
@@ -273,14 +273,14 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
               {/* Title */}
               <motion.h1
                 variants={contentItem}
-                className="font-display text-3xl font-black tracking-tight text-silver sm:text-5xl lg:text-6xl line-clamp-2 leading-tight"
+                className="font-display text-xl xs:text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-silver line-clamp-2 leading-tight"
               >
                 {currentSlide.title}
               </motion.h1>
 
               {/* Subtitle / Author Tagline */}
               {currentSlide.subtitle && (
-                <motion.p variants={contentItem} className="mt-2 text-sm font-semibold text-crimson-soft sm:text-base">
+                <motion.p variants={contentItem} className="mt-1.5 sm:mt-2 text-xs sm:text-sm md:text-base font-semibold text-crimson-soft">
                   {currentSlide.subtitle}
                 </motion.p>
               )}
@@ -288,20 +288,20 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
               {/* Description */}
               <motion.p
                 variants={contentItem}
-                className="mt-3 max-w-xl text-sm leading-relaxed text-silver-muted sm:text-base line-clamp-3"
+                className="mt-2 sm:mt-3 max-w-xl text-xs sm:text-sm md:text-base leading-relaxed text-silver-muted line-clamp-2 sm:line-clamp-3"
               >
                 {currentSlide.description}
               </motion.p>
 
-              {/* CTA Buttons */}
+              {/* CTA Button */}
               <motion.div
                 variants={contentItem}
-                className="mt-7 flex flex-wrap items-center justify-center gap-3.5 lg:justify-start"
+                className="mt-4 sm:mt-6 md:mt-7 flex items-center justify-center md:justify-start"
               >
                 {currentSlide.primaryButtonUrl?.startsWith('/') ? (
                   <Link
                     to={currentSlide.primaryButtonUrl}
-                    className={`inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-bold transition-all transform hover:scale-105 active:scale-95 ${theme.buttonPrimary}`}
+                    className={`inline-flex items-center gap-2 rounded-full px-6 py-2.5 sm:px-7 sm:py-3 text-xs sm:text-sm font-bold transition-all transform hover:scale-105 active:scale-95 ${theme.buttonPrimary}`}
                   >
                     <BookOpen className="h-4 w-4" />
                     {currentSlide.primaryButtonText || 'Start Reading'}
@@ -311,88 +311,103 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
                     href={currentSlide.primaryButtonUrl || '#'}
                     target="_blank"
                     rel="noreferrer"
-                    className={`inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-bold transition-all transform hover:scale-105 active:scale-95 ${theme.buttonPrimary}`}
+                    className={`inline-flex items-center gap-2 rounded-full px-6 py-2.5 sm:px-7 sm:py-3 text-xs sm:text-sm font-bold transition-all transform hover:scale-105 active:scale-95 ${theme.buttonPrimary}`}
                   >
                     <BookOpen className="h-4 w-4" />
                     {currentSlide.primaryButtonText || 'Start Reading'}
                   </a>
                 )}
-
-                {currentSlide.secondaryButtonText && (
-                  currentSlide.secondaryButtonUrl?.startsWith('/') ? (
-                    <Link
-                      to={currentSlide.secondaryButtonUrl}
-                      className="inline-flex items-center gap-2 rounded-full border border-line bg-night-raised/80 px-6 py-3 text-sm font-semibold text-silver backdrop-blur-md transition-all hover:border-silver-muted hover:text-white transform hover:scale-105 active:scale-95"
-                    >
-                      <Compass className="h-4 w-4" />
-                      {currentSlide.secondaryButtonText}
-                    </Link>
-                  ) : (
-                    <a
-                      href={currentSlide.secondaryButtonUrl || '#'}
-                      className="inline-flex items-center gap-2 rounded-full border border-line bg-night-raised/80 px-6 py-3 text-sm font-semibold text-silver backdrop-blur-md transition-all hover:border-silver-muted hover:text-white transform hover:scale-105 active:scale-95"
-                    >
-                      <Compass className="h-4 w-4" />
-                      {currentSlide.secondaryButtonText}
-                    </a>
-                  )
-                )}
               </motion.div>
             </motion.div>
 
-            {/* Right Side: 3D Animated Cover Poster Card */}
+            {/* Right/Top Side: 3D Animated Cover Poster Card */}
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.15 }}
-              className="lg:col-span-5 flex justify-center z-10"
+              className="order-1 md:order-2 md:col-span-5 flex justify-center z-10"
             >
-              <div className="relative group/poster cursor-pointer">
-                {/* Glowing Aura Ring */}
-                <div
-                  className="absolute -inset-1.5 rounded-2xl opacity-60 blur-xl transition-all duration-500 group-hover/poster:opacity-100 group-hover/poster:blur-2xl"
-                  style={{ background: theme.glowColor }}
-                />
+              {currentSlide.primaryButtonUrl?.startsWith('/') ? (
+                <Link to={currentSlide.primaryButtonUrl} className="relative group/poster cursor-pointer block" aria-label={`View ${currentSlide.title}`}>
+                  {/* Glowing Aura Ring */}
+                  <div
+                    className="absolute -inset-1.5 rounded-2xl opacity-60 blur-xl transition-all duration-500 group-hover/poster:opacity-100 group-hover/poster:blur-2xl"
+                    style={{ background: theme.glowColor }}
+                  />
 
-                {/* Poster Frame Container */}
-                <div
-                  className={`relative overflow-hidden rounded-2xl border bg-night-surface/90 shadow-2xl transition-all duration-300 transform group-hover/poster:-translate-y-2 group-hover/poster:rotate-1 ${theme.border}`}
-                >
-                  {currentSlide.imageUrl && !imgError ? (
-                    <img
-                      src={currentSlide.imageUrl}
-                      alt={currentSlide.title}
-                      onError={() => setImgError(true)}
-                      className="h-64 sm:h-80 md:h-96 w-48 sm:w-60 md:w-64 object-cover transition-transform duration-700 group-hover/poster:scale-105"
-                      loading="eager"
-                    />
-                  ) : (
-                    <div className="h-64 sm:h-80 md:h-96 w-48 sm:w-60 md:w-64 flex flex-col items-center justify-center p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
-                      <Layers className="h-12 w-12 text-silver-muted/50 mb-3" />
-                      <p className="font-display font-bold text-silver text-sm line-clamp-3">{currentSlide.title}</p>
-                      <p className="text-xs text-crimson-soft mt-1">Apex NovelHub</p>
-                    </div>
-                  )}
+                  {/* Poster Frame Container */}
+                  <div
+                    className={`relative overflow-hidden rounded-xl sm:rounded-2xl border bg-night-surface/90 shadow-2xl transition-all duration-300 transform group-hover/poster:-translate-y-2 group-hover/poster:rotate-1 ${theme.border}`}
+                  >
+                    {currentSlide.imageUrl && !imgError ? (
+                      <img
+                        src={currentSlide.imageUrl}
+                        alt={currentSlide.title}
+                        onError={() => setImgError(true)}
+                        className="h-44 w-32 xs:h-52 xs:w-36 sm:h-64 sm:w-44 md:h-80 md:w-56 lg:h-96 lg:w-64 object-cover transition-transform duration-700 group-hover/poster:scale-105"
+                        loading="eager"
+                      />
+                    ) : (
+                      <div className="h-44 w-32 xs:h-52 xs:w-36 sm:h-64 sm:w-44 md:h-80 md:w-56 lg:h-96 lg:w-64 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
+                        <Layers className="h-8 w-8 sm:h-12 sm:w-12 text-silver-muted/50 mb-2 sm:mb-3" />
+                        <p className="font-display font-bold text-silver text-xs sm:text-sm line-clamp-3">{currentSlide.title}</p>
+                        <p className="text-[10px] sm:text-xs text-crimson-soft mt-1">Apex NovelHub</p>
+                      </div>
+                    )}
 
-                  {/* Gradient Overlay & Details Pill */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-night/90 via-transparent to-transparent opacity-80" />
+                    {/* Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-night/80 via-transparent to-transparent opacity-70" />
 
-                  {/* Live Rating Pill */}
-                  {currentSlide.novel?.ratingAvg > 0 && (
-                    <div className="absolute top-3 right-3 rounded-full bg-night/80 border border-amber-500/40 px-2.5 py-1 text-xs font-bold text-amber-400 backdrop-blur-md flex items-center gap-1 shadow-md">
-                      <Star className="h-3.5 w-3.5 fill-amber-400" />
-                      <span>{currentSlide.novel.ratingAvg.toFixed(1)}</span>
-                    </div>
-                  )}
+                    {/* Live Rating Pill */}
+                    {currentSlide.novel?.ratingAvg > 0 && (
+                      <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 rounded-full bg-night/80 border border-amber-500/40 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-xs font-bold text-amber-400 backdrop-blur-md flex items-center gap-1 shadow-md">
+                        <Star className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-amber-400" />
+                        <span>{currentSlide.novel.ratingAvg.toFixed(1)}</span>
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              ) : (
+                <a href={currentSlide.primaryButtonUrl || '#'} className="relative group/poster cursor-pointer block" aria-label={`View ${currentSlide.title}`}>
+                  {/* Glowing Aura Ring */}
+                  <div
+                    className="absolute -inset-1.5 rounded-2xl opacity-60 blur-xl transition-all duration-500 group-hover/poster:opacity-100 group-hover/poster:blur-2xl"
+                    style={{ background: theme.glowColor }}
+                  />
 
-                  {/* Chapter Pill */}
-                  {currentSlide.novel?.chapterCount > 0 && (
-                    <div className="absolute bottom-3 left-3 right-3 rounded-xl bg-night-surface/90 border border-line p-2 text-xs text-silver text-center backdrop-blur-md font-medium shadow-md">
-                      <span>📖 {currentSlide.novel.chapterCount} Available Chapters</span>
-                    </div>
-                  )}
-                </div>
-              </div>
+                  {/* Poster Frame Container */}
+                  <div
+                    className={`relative overflow-hidden rounded-xl sm:rounded-2xl border bg-night-surface/90 shadow-2xl transition-all duration-300 transform group-hover/poster:-translate-y-2 group-hover/poster:rotate-1 ${theme.border}`}
+                  >
+                    {currentSlide.imageUrl && !imgError ? (
+                      <img
+                        src={currentSlide.imageUrl}
+                        alt={currentSlide.title}
+                        onError={() => setImgError(true)}
+                        className="h-44 w-32 xs:h-52 xs:w-36 sm:h-64 sm:w-44 md:h-80 md:w-56 lg:h-96 lg:w-64 object-cover transition-transform duration-700 group-hover/poster:scale-105"
+                        loading="eager"
+                      />
+                    ) : (
+                      <div className="h-44 w-32 xs:h-52 xs:w-36 sm:h-64 sm:w-44 md:h-80 md:w-56 lg:h-96 lg:w-64 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
+                        <Layers className="h-8 w-8 sm:h-12 sm:w-12 text-silver-muted/50 mb-2 sm:mb-3" />
+                        <p className="font-display font-bold text-silver text-xs sm:text-sm line-clamp-3">{currentSlide.title}</p>
+                        <p className="text-[10px] sm:text-xs text-crimson-soft mt-1">Apex NovelHub</p>
+                      </div>
+                    )}
+
+                    {/* Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-night/80 via-transparent to-transparent opacity-70" />
+
+                    {/* Live Rating Pill */}
+                    {currentSlide.novel?.ratingAvg > 0 && (
+                      <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 rounded-full bg-night/80 border border-amber-500/40 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-xs font-bold text-amber-400 backdrop-blur-md flex items-center gap-1 shadow-md">
+                        <Star className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-amber-400" />
+                        <span>{currentSlide.novel.ratingAvg.toFixed(1)}</span>
+                      </div>
+                    )}
+                  </div>
+                </a>
+              )}
             </motion.div>
           </motion.div>
         </AnimatePresence>
@@ -404,30 +419,30 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
           <button
             onClick={handlePrev}
             aria-label="Previous Slide"
-            className="absolute left-3 top-1/2 -translate-y-1/2 z-20 rounded-full border border-line bg-night/70 p-2.5 text-silver backdrop-blur-md transition-all hover:bg-crimson hover:border-crimson hover:text-white hover:scale-110 active:scale-90"
+            className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-20 rounded-full border border-line bg-night/70 p-1.5 sm:p-2.5 text-silver backdrop-blur-md transition-all hover:bg-crimson hover:border-crimson hover:text-white hover:scale-110 active:scale-90"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
           <button
             onClick={handleNext}
             aria-label="Next Slide"
-            className="absolute right-3 top-1/2 -translate-y-1/2 z-20 rounded-full border border-line bg-night/70 p-2.5 text-silver backdrop-blur-md transition-all hover:bg-crimson hover:border-crimson hover:text-white hover:scale-110 active:scale-90"
+            className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 z-20 rounded-full border border-line bg-night/70 p-1.5 sm:p-2.5 text-silver backdrop-blur-md transition-all hover:bg-crimson hover:border-crimson hover:text-white hover:scale-110 active:scale-90"
           >
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
         </>
       )}
 
       {/* Dot Indicators & Slide Counter */}
       {slides.length > 1 && (
-        <div className="absolute bottom-4 left-0 right-0 z-20 flex items-center justify-center gap-2">
+        <div className="absolute bottom-2 sm:bottom-3 md:bottom-4 left-0 right-0 z-20 flex items-center justify-center gap-1.5 sm:gap-2">
           {slides.map((_, idx) => (
             <button
               key={idx}
               onClick={() => handleGoTo(idx)}
               aria-label={`Go to slide ${idx + 1}`}
-              className={`h-2 rounded-full transition-all duration-300 ${
-                idx === currentIndex ? 'w-8 bg-crimson shadow-glow' : 'w-2 bg-silver-muted/30 hover:bg-silver-muted/60'
+              className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 ${
+                idx === currentIndex ? 'w-6 sm:w-8 bg-crimson shadow-glow' : 'w-1.5 sm:w-2 bg-silver-muted/30 hover:bg-silver-muted/60'
               }`}
             />
           ))}
