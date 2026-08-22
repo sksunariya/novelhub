@@ -82,17 +82,46 @@ const parseRating = (rating) => {
 };
 
 const saveReview = async (res, { novelId, chapterId, reqUser, rating, content }) => {
-  const review = await Review.create({
+  let review = await Review.findOne({
     novel: novelId,
-    chapter: chapterId,
+    chapter: chapterId || null,
     user: reqUser._id,
-    rating,
-    content: (content || '').trim(),
+    deletedAt: null,
   });
+  let status = 200;
+  if (review) {
+    review.rating = rating;
+    review.content = (content || '').trim();
+    review.editedAt = new Date();
+    review.editedBy = reqUser._id;
+    await review.save();
+  } else {
+    status = 201;
+    review = await Review.create({
+      novel: novelId,
+      chapter: chapterId || null,
+      user: reqUser._id,
+      rating,
+      content: (content || '').trim(),
+    });
+  }
   await recalcForReview(review);
   await populateReview(review);
-  const novel = await Novel.findById(novelId).select('slug');
-  const link = novel ? `/novel/${novel.slug}#review-${review._id}` : '';
+  let link = '';
+  if (chapterId) {
+    const [novel, chapter] = await Promise.all([
+      Novel.findById(novelId).select('slug'),
+      Chapter.findById(chapterId).select('number'),
+    ]);
+    if (novel && chapter) {
+      link = `/novel/${novel.slug}/chapter/${chapter.number}#review-${review._id}`;
+    }
+  } else {
+    const novel = await Novel.findById(novelId).select('slug');
+    if (novel) {
+      link = `/novel/${novel.slug}#review-${review._id}`;
+    }
+  }
   await notifyCommentActivity({
     parentAuthor: null,
     actor: reqUser,
@@ -100,7 +129,7 @@ const saveReview = async (res, { novelId, chapterId, reqUser, rating, content })
     link,
     commentContext: 'review',
   });
-  res.status(201).json({ review: publicReview(review) });
+  res.status(status).json({ review: publicReview(review) });
 };
 
 const upsertReview = asyncHandler(async (req, res) => {

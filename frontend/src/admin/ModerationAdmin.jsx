@@ -28,8 +28,8 @@ const toReply = (reply, parentId, page, prefix) => ({
   createdAt: reply.createdAt,
   editedAt: reply.editedAt,
   deletedAt: reply.deletedAt,
-  likes: reply.likes,
-  dislikes: reply.dislikes,
+  likes: reply.likes || [],
+  dislikes: reply.dislikes || [],
   link: page ? anchorLink(page, prefix, reply._id) : null,
 });
 
@@ -45,8 +45,8 @@ const commentToEntry = (comment) => {
     editedAt: comment.editedAt,
     deletedAt: comment.deletedAt,
     isPinned: comment.isPinned,
-    likes: comment.likes,
-    dislikes: comment.dislikes,
+    likes: comment.likes || [],
+    dislikes: comment.dislikes || [],
     chapterId: comment.chapter?._id || null,
     canReply: Boolean(comment.chapter?._id),
     context: `${comment.novel?.title || 'Deleted novel'}${comment.chapter ? ` · Ch. ${comment.chapter.number}` : ''}`,
@@ -69,8 +69,8 @@ const reviewToEntry = (review) => {
     editedAt: review.editedAt,
     deletedAt: review.deletedAt,
     isPinned: review.isPinned,
-    likes: review.likes,
-    dislikes: review.dislikes,
+    likes: review.likes || [],
+    dislikes: review.dislikes || [],
     canReply: true,
     context: `${review.novel?.title || 'Deleted novel'}${
       review.chapter ? ` · Ch. ${review.chapter.number} review` : ' · novel review'
@@ -111,8 +111,8 @@ const ModerationAdmin = () => {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const load = useCallback(async () => {
-    setEntries(null);
+  const load = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setEntries(null);
     const params = { page, status };
     if (search.trim()) params.search = search.trim();
     if (novelId) params.novel = novelId;
@@ -140,7 +140,7 @@ const ModerationAdmin = () => {
     setMessage('');
     try {
       await action();
-      await load();
+      await load(false);
     } catch (error) {
       setMessage(error.response?.data?.message || 'Action failed');
     }
@@ -190,6 +190,24 @@ const ModerationAdmin = () => {
           ? client.post(`/community/comments/${target.id}/pin`)
           : client.post(`/community/reviews/${target.id}/pin`)
       ),
+    onLike: (target, isReply) =>
+      run(() => {
+        if (isComments) {
+          return client.post(`/community/comments/${target.id}/like`);
+        }
+        return isReply
+          ? client.post(`/community/reviews/${target.parentId}/replies/${target.id}/like`)
+          : client.post(`/community/reviews/${target.id}/like`);
+      }),
+    onDislike: (target, isReply) =>
+      run(() => {
+        if (isComments) {
+          return client.post(`/community/comments/${target.id}/dislike`);
+        }
+        return isReply
+          ? client.post(`/community/reviews/${target.parentId}/replies/${target.id}/dislike`)
+          : client.post(`/community/reviews/${target.id}/dislike`);
+      }),
     onToggleBan: (author) => {
       if (!window.confirm(`${author.banned ? 'Unban' : 'Ban'} "${author.username}"?`)) return undefined;
       return run(() => client.put(`/admin/users/${author._id}`, { banned: !author.banned }));
@@ -282,7 +300,7 @@ const ModerationAdmin = () => {
       ) : (
         <div className="space-y-3">
           {entries.map((entry) => (
-            <ModerationEntry key={entry.id} entry={entry} currentUserId={currentUser?.id} actions={actions} />
+            <ModerationEntry key={entry.id} entry={entry} currentUserId={currentUser?.id || currentUser?._id} actions={actions} />
           ))}
         </div>
       )}

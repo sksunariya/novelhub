@@ -15,6 +15,17 @@ import { ANCHORS, readHashTarget, isTargetInItems } from '../utils/hashTarget';
 
 const SETTINGS_KEY = 'novelhub_reader_settings';
 
+const withUser = (reactions, userId, active) => {
+  const others = (reactions || []).filter((id) => (id._id || id)?.toString() !== userId);
+  return active ? [...others, userId] : others;
+};
+
+const applyReaction = (item, reaction, userId) => ({
+  ...item,
+  likes: withUser(item.likes, userId, reaction.liked),
+  dislikes: withUser(item.dislikes, userId, reaction.disliked),
+});
+
 const READER_THEMES = {
   dark: { background: '#0a0507', text: '#d6d3d1', name: 'Dark' },
   black: { background: '#000000', text: '#c7c7c7', name: 'Black' },
@@ -104,6 +115,7 @@ const Reader = () => {
     setPanelCommentText('');
     setBottomCommentText('');
     setChapterReview(null);
+    setChapterReviews(null);
     setChapterReviewForm({ rating: 0, content: '' });
     setChapterReviewMsg('');
     window.scrollTo(0, 0);
@@ -131,6 +143,9 @@ const Reader = () => {
       .then(({ data: res }) => {
         const found = res.reviews?.find((r) => r.user?._id === user.id || r.user === user.id);
         setUserReview(found || null);
+        if (found) {
+          setReviewForm({ rating: found.rating || 0, content: found.content || '' });
+        }
       })
       .catch(() => {});
   }, [data, user]);
@@ -146,6 +161,9 @@ const Reader = () => {
         if (user) {
           const found = res.reviews?.find((r) => r.user?._id === user.id || r.user === user.id);
           setChapterReview(found || null);
+          if (found) {
+            setChapterReviewForm({ rating: found.rating || 0, content: found.content || '' });
+          }
         }
       })
       .catch(() => setChapterReviews([]));
@@ -232,6 +250,7 @@ const Reader = () => {
       setChapterReviewMsg('Chapter rating saved.');
       setChapterReviewForm({ rating: 0, content: '' });
       await loadChapter();
+      loadChapterReview();
     } catch (err) {
       setChapterReviewMsg(err.response?.data?.message || 'Failed to save chapter rating');
     } finally {
@@ -239,12 +258,79 @@ const Reader = () => {
     }
   };
 
+  const reactToChapterReview = (action) => async (reviewId) => {
+    if (!user) return navigate('/login');
+    const { data: res } = await client.post(`/community/reviews/${reviewId}/${action}`);
+    return setChapterReviews((prev) => (prev || []).map((r) => (r._id === reviewId ? applyReaction(r, res, user.id) : r)));
+  };
+
+  const likeChapterReview = reactToChapterReview('like');
+  const dislikeChapterReview = reactToChapterReview('dislike');
+
+  const postChapterReviewReply = async (reviewId, text) => {
+    if (!text.trim()) return;
+    const { data: res } = await client.post(`/community/reviews/${reviewId}/replies`, { content: text });
+    setChapterReviews((prev) => (prev || []).map((r) => (r._id === reviewId ? res.review : r)));
+  };
+
+  const editChapterReview = async (reviewId, payload) => {
+    const { data: res } = await client.put(`/community/reviews/${reviewId}`, payload);
+    setChapterReviews((prev) => (prev || []).map((r) => (r._id === reviewId ? res.review : r)));
+    await loadChapter();
+  };
+
+  const deleteChapterReview = async (reviewId) => {
+    if (!window.confirm('Delete this review?')) return;
+    await client.delete(`/community/reviews/${reviewId}`);
+    setChapterReviews((prev) => (prev || []).filter((r) => r._id !== reviewId));
+    await loadChapter();
+  };
+
+  const pinChapterReview = async (reviewId) => {
+    const { data: res } = await client.post(`/community/reviews/${reviewId}/pin`);
+    setChapterReviews((prev) => {
+      const updated = (prev || []).map((r) => (r._id === reviewId ? res.review : r));
+      return [...updated].sort((a, b) => {
+        if (Boolean(a.isPinned) !== Boolean(b.isPinned)) return a.isPinned ? -1 : 1;
+        if (a.isPinned && b.isPinned) return new Date(b.pinnedAt || 0) - new Date(a.pinnedAt || 0);
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+    });
+  };
+
+  const editChapterReviewReply = async (reviewId, replyId, text) => {
+    const { data: res } = await client.put(`/community/reviews/${reviewId}/replies/${replyId}`, { content: text });
+    setChapterReviews((prev) => (prev || []).map((r) => (r._id === reviewId ? res.review : r)));
+  };
+
+  const deleteChapterReviewReply = async (reviewId, replyId) => {
+    const { data: res } = await client.delete(`/community/reviews/${reviewId}/replies/${replyId}`);
+    setChapterReviews((prev) => (prev || []).map((r) => (r._id === reviewId ? res.review : r)));
+  };
+
+  const reactToChapterReviewReply = (action) => async (reviewId, replyId) => {
+    if (!user) return navigate('/login');
+    const { data: res } = await client.post(`/community/reviews/${reviewId}/replies/${replyId}/${action}`);
+    setChapterReviews((prev) => (prev || []).map((r) => (r._id === reviewId ? res.review : r)));
+  };
+
+  const likeChapterReviewReply = reactToChapterReviewReply('like');
+  const dislikeChapterReviewReply = reactToChapterReviewReply('dislike');
+
   const commentCount = (comments || []).reduce((count, comment) => count + 1 + (comment.replies?.length || 0), 0);
 
   const [showDeletedModal, setShowDeletedModal] = useState(false);
 
   const commentTarget = readHashTarget(hash, ANCHORS.COMMENT);
   const reviewTarget = readHashTarget(hash, ANCHORS.REVIEW);
+
+  useEffect(() => {
+    if (reviewTarget) {
+      setActiveTab('review');
+    } else if (commentTarget) {
+      setActiveTab('comments');
+    }
+  }, [reviewTarget, commentTarget]);
 
   useEffect(() => {
     if (commentTarget && Array.isArray(comments)) {
@@ -609,7 +695,7 @@ const Reader = () => {
                     activeTab === 'review' ? 'bg-crimson text-white shadow-glow' : 'border border-line opacity-75 hover:opacity-100'
                   }`}
                 >
-                  {userReview ? 'Your Review ★' : 'Rate & Review'}
+                  Reviews ({chapterReviews?.length ?? 0})
                 </button>
               </div>
             </div>
@@ -738,7 +824,7 @@ const Reader = () => {
                         disabled={submittingReview || !reviewForm.rating}
                         className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white transition-opacity hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50 shadow-md"
                       >
-                        {submittingReview ? 'Submitting...' : 'Submit Review'}
+                        {submittingReview ? 'Submitting...' : userReview ? 'Update Novel Review' : 'Submit Review'}
                       </button>
                     </div>
                   </form>
@@ -785,7 +871,7 @@ const Reader = () => {
                           disabled={savingChapterReview || !chapterReviewForm.rating}
                           className="cursor-pointer rounded-full border border-crimson px-5 py-2 text-xs font-semibold text-crimson-soft transition-colors hover:bg-crimson hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {savingChapterReview ? 'Saving...' : 'Submit Chapter Rating'}
+                          {savingChapterReview ? 'Saving...' : chapterReview ? 'Update Chapter Rating' : 'Submit Chapter Rating'}
                         </button>
                       </div>
                     </form>
@@ -793,6 +879,42 @@ const Reader = () => {
                     <p className="text-sm text-silver-muted">
                       <Link to="/login" className="text-crimson-soft hover:underline font-medium">Log in</Link> to rate this chapter.
                     </p>
+                  )}
+                </div>
+
+                <div className="mt-6 border-t border-line pt-5">
+                  <h4 className="mb-3 font-display text-sm font-semibold text-silver">
+                    Chapter {data.chapter.number} Reviews ({chapterReviews?.length || 0})
+                  </h4>
+                  {chapterReviews === null ? (
+                    <Spinner />
+                  ) : chapterReviews.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-silver-muted">
+                      No reviews for this chapter yet. Be the first to leave a review!
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {chapterReviews.map((review) => (
+                        <CommentCard
+                          key={review._id}
+                          item={review}
+                          currentUser={user}
+                          isAdmin={isAdmin}
+                          anchorPrefix={ANCHORS.REVIEW}
+                          targetId={reviewTarget}
+                          onLike={likeChapterReview}
+                          onDislike={dislikeChapterReview}
+                          onEdit={editChapterReview}
+                          onDelete={deleteChapterReview}
+                          onPin={pinChapterReview}
+                          onReplySubmit={postChapterReviewReply}
+                          onLikeReply={likeChapterReviewReply}
+                          onDislikeReply={dislikeChapterReviewReply}
+                          onEditReply={editChapterReviewReply}
+                          onDeleteReply={deleteChapterReviewReply}
+                        />
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>

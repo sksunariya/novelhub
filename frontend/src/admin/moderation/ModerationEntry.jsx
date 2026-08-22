@@ -62,16 +62,53 @@ const ViewOnSiteLink = ({ link }) =>
     </Link>
   ) : null;
 
-const ReactionCounts = ({ likes, dislikes }) => (
-  <div className="flex items-center gap-3 text-xs text-silver-muted">
-    <span className="flex items-center gap-1">
-      <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" /> {likes?.length || 0}
-    </span>
-    <span className="flex items-center gap-1">
-      <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" /> {dislikes?.length || 0}
-    </span>
-  </div>
-);
+const checkHasReacted = (reactions, currentUserId) => {
+  if (!reactions || !currentUserId) return false;
+  const targetId = currentUserId.toString();
+  return reactions.some((id) => (id._id || id.id || id)?.toString() === targetId);
+};
+
+const ReactionButtons = ({ target, isReply, currentUserId, onLike, onDislike, disabled }) => {
+  const liked = checkHasReacted(target?.likes, currentUserId);
+  const disliked = checkHasReacted(target?.dislikes, currentUserId);
+  const likeCount = target?.likes?.length || 0;
+  const dislikeCount = target?.dislikes?.length || 0;
+
+  return (
+    <div className="flex items-center gap-1 text-xs text-silver-muted">
+      <button
+        type="button"
+        disabled={disabled || !onLike}
+        onClick={() => onLike && onLike(target, isReply)}
+        aria-label={liked ? 'Unlike' : 'Like'}
+        title={liked ? 'Unlike' : 'Like'}
+        className={`flex items-center gap-1 rounded-full px-2 py-1 transition-colors ${
+          disabled
+            ? 'cursor-not-allowed opacity-50'
+            : 'cursor-pointer hover:bg-night-raised hover:text-silver'
+        }`}
+      >
+        <ThumbsUp className={`h-3.5 w-3.5 ${liked ? 'fill-crimson text-crimson' : ''}`} aria-hidden="true" />
+        <span className="text-[11px] tabular-nums">{likeCount}</span>
+      </button>
+      <button
+        type="button"
+        disabled={disabled || !onDislike}
+        onClick={() => onDislike && onDislike(target, isReply)}
+        aria-label={disliked ? 'Undislike' : 'Dislike'}
+        title={disliked ? 'Undislike' : 'Dislike'}
+        className={`flex items-center gap-1 rounded-full px-2 py-1 transition-colors ${
+          disabled
+            ? 'cursor-not-allowed opacity-50'
+            : 'cursor-pointer hover:bg-night-raised hover:text-silver'
+        }`}
+      >
+        <ThumbsDown className={`h-3.5 w-3.5 ${disliked ? 'fill-silver text-silver' : ''}`} aria-hidden="true" />
+        <span className="text-[11px] tabular-nums">{dislikeCount}</span>
+      </button>
+    </div>
+  );
+};
 
 const EditForm = ({ initialContent, initialRating, onCancel, onSave }) => {
   const [content, setContent] = useState(initialContent || '');
@@ -242,7 +279,14 @@ const ModerationEntry = ({ entry, currentUserId, actions }) => {
             <p className="mt-2 whitespace-pre-line break-words text-sm text-silver">{entry.content || '—'}</p>
           )}
           <div className="mt-2 flex items-center gap-4">
-            <ReactionCounts likes={entry.likes} dislikes={entry.dislikes} />
+            <ReactionButtons
+              target={entry}
+              isReply={false}
+              currentUserId={currentUserId}
+              onLike={actions.onLike}
+              onDislike={actions.onDislike}
+              disabled={Boolean(entry.deletedAt)}
+            />
             {!entry.deletedAt && entry.canReply && (
               <button
                 type="button"
@@ -292,7 +336,14 @@ const ModerationEntry = ({ entry, currentUserId, actions }) => {
                   <p className="mt-1 whitespace-pre-line break-words text-sm text-silver">{reply.content}</p>
                 )}
                 <div className="mt-1.5 flex flex-wrap items-center gap-4">
-                  <ReactionCounts likes={reply.likes} dislikes={reply.dislikes} />
+                  <ReactionButtons
+                    target={reply}
+                    isReply={true}
+                    currentUserId={currentUserId}
+                    onLike={actions.onLike}
+                    onDislike={actions.onDislike}
+                    disabled={Boolean(reply.deletedAt || entry.deletedAt)}
+                  />
                   {!reply.deletedAt && <ViewOnSiteLink link={reply.link} />}
                 </div>
               </div>

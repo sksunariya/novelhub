@@ -10,6 +10,13 @@ const run = async () => {
 
   console.log('Dropping legacy unique review index if present...');
   try {
+    await Review.collection.dropIndex('novel_1_user_1');
+    console.log('Successfully dropped legacy index "novel_1_user_1".');
+  } catch (err) {
+    console.log('Legacy index "novel_1_user_1" not found or already dropped.');
+  }
+
+  try {
     await Review.collection.dropIndex('novel_1_chapter_1_user_1');
     console.log('Successfully dropped legacy index "novel_1_chapter_1_user_1".');
   } catch (err) {
