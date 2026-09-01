@@ -4,7 +4,7 @@ const { buildReadingGateSchema } = require('./schemas/readingGate');
 const siteSettingsSchema = new mongoose.Schema(
   {
     singleton: { type: Boolean, default: true, unique: true },
-    siteName: { type: String, default: 'Apex NovelHub' },
+    siteName: { type: String, default: () => process.env.SITE_NAME || process.env.APP_NAME || 'NovelHub' },
     tagline: { type: String, default: 'Where dark tales come alive' },
     logoUrl: { type: String, default: '' },
     faviconUrl: { type: String, default: '' },
@@ -59,6 +59,9 @@ siteSettingsSchema.statics.getSettings = async function () {
       if (error.code !== 11000) throw error;
       settings = await this.findOne({ singleton: true });
     }
+  } else if (settings && (!settings.siteName || settings.siteName === 'Apex NovelHub')) {
+    settings.siteName = process.env.SITE_NAME || process.env.APP_NAME || 'NovelHub';
+    await settings.save().catch(() => {});
   }
   return settings;
 };

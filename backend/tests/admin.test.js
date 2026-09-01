@@ -226,12 +226,12 @@ describe('Admin', () => {
       const res = await api()
         .put('/api/admin/settings')
         .set('Authorization', `Bearer ${token}`)
-        .field('siteName', 'Apex NovelHub')
+        .field('siteName', 'Test NovelHub')
         .field('announcement', 'Welcome!')
         .field('logoUrl', 'https://cdn.example.com/logo.png')
         .field('themeColors', JSON.stringify({ primary: '#ff0000' }));
       expect(res.status).toBe(200);
-      expect(res.body.settings.siteName).toBe('Apex NovelHub');
+      expect(res.body.settings.siteName).toBe('Test NovelHub');
       expect(res.body.settings.logoUrl).toBe('https://cdn.example.com/logo.png');
       expect(res.body.settings.themeColors.primary).toBe('#ff0000');
       const publicRes = await api().get('/api/settings');

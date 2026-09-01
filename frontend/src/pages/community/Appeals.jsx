@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ShieldAlert, Bot, User, Clock, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCommunity } from '../../context/CommunityContext';
+import { useSettings } from '../../context/SettingsContext';
 import * as api from '../../api/spaces';
 import Spinner from '../../components/Spinner';
 
@@ -205,6 +206,7 @@ const StatementCard = ({ statement, onAppealed }) => {
 const Appeals = () => {
   const { user } = useAuth();
   const { enabled } = useCommunity();
+  const { settings } = useSettings();
   const [statements, setStatements] = useState(null);
   const [error, setError] = useState(null);
 
@@ -215,9 +217,11 @@ const Appeals = () => {
   }, []);
 
   useEffect(() => {
-    document.title = 'Moderation decisions · Apex NovelHub';
+    document.title = settings?.siteName
+      ? `Moderation decisions · ${settings.siteName}`
+      : 'Moderation decisions';
     if (user && enabled) load();
-  }, [user, enabled, load]);
+  }, [user, enabled, load, settings?.siteName]);
 
   if (!enabled) {
     return (

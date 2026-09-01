@@ -94,14 +94,14 @@ describe('paypal order payload', () => {
   };
 
   it('sends absolute return and cancel URLs derived from the origin', async () => {
-    const args = await buildPayload({ Origin: 'https://apexnovelhub.com' });
-    expect(args.returnUrl).toBe('https://apexnovelhub.com/store?paypal=return');
-    expect(args.cancelUrl).toBe('https://apexnovelhub.com/store?paypal=cancel');
+    const args = await buildPayload({ Origin: 'https://novelhub.com' });
+    expect(args.returnUrl).toBe('https://novelhub.com/store?paypal=return');
+    expect(args.cancelUrl).toBe('https://novelhub.com/store?paypal=cancel');
   });
 
   it('does not depend on the client sending them', async () => {
     // The store page never has; the server must fill them in regardless.
-    const args = await buildPayload({ Origin: 'https://apexnovelhub.com' });
+    const args = await buildPayload({ Origin: 'https://novelhub.com' });
     expect(args.returnUrl).toMatch(/^https:\/\//);
   });
 

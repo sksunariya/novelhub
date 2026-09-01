@@ -132,7 +132,7 @@ const createOrder = async ({ order, description, returnUrl, cancelUrl }) => {
     body.payment_source = {
       paypal: {
         experience_context: {
-          brand_name: (brandName || 'NovelHub').slice(0, 127),
+          brand_name: (brandName || process.env.PAYPAL_BRAND_NAME || process.env.SITE_NAME || process.env.APP_NAME || 'NovelHub').slice(0, 127),
           shipping_preference: 'NO_SHIPPING',
           user_action: 'PAY_NOW',
           return_url: returnUrl,
@@ -219,7 +219,7 @@ const createSubscription = ({ planId, subscriptionId, returnUrl, cancelUrl, bran
     // Carried back on every webhook, the same role custom_id plays for orders.
     custom_id: String(subscriptionId),
     application_context: {
-      brand_name: (brandName || 'NovelHub').slice(0, 127),
+      brand_name: (brandName || process.env.PAYPAL_BRAND_NAME || process.env.SITE_NAME || process.env.APP_NAME || 'NovelHub').slice(0, 127),
       shipping_preference: 'NO_SHIPPING',
       user_action: 'SUBSCRIBE_NOW',
       return_url: returnUrl,

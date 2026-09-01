@@ -39,7 +39,7 @@ const formatSlide = (slide) => {
 
   return {
     _id: s._id,
-    title: title || 'Apex NovelHub',
+    title: title || process.env.SITE_NAME || process.env.APP_NAME || 'NovelHub',
     subtitle: subtitle || 'Where dark tales come alive',
     description: description || 'Discover thousands of incredible fantasy, dark romance, and web novels.',
     imageUrl: imageUrl || '',
@@ -85,7 +85,7 @@ const generateDynamicSlideFromNovel = (novel, index) => {
     _id: `dynamic-${novel._id}`,
     title: novel.title,
     subtitle: `By ${novel.author} • ${novel.chapterCount || 0} Chapters`,
-    description: novel.synopsis ? (novel.synopsis.length > 220 ? novel.synopsis.slice(0, 220) + '...' : novel.synopsis) : 'Read this captivating novel on Apex NovelHub.',
+    description: novel.synopsis ? (novel.synopsis.length > 220 ? novel.synopsis.slice(0, 220) + '...' : novel.synopsis) : `Read this captivating novel on ${process.env.SITE_NAME || process.env.APP_NAME || 'NovelHub'}.`,
     imageUrl: novel.coverUrl || '',
     badgeText: badgeText,
     badgeColor: badgeColor,

@@ -31,7 +31,7 @@ const escapeXml = (value) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 
-const baseUrl = () => (process.env.CLIENT_URL || 'https://apexnovelhub.com').replace(/\/+$/, '');
+const baseUrl = () => (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/+$/, '');
 
 const urlEntry = ({ loc, lastmod, changefreq, priority }) =>
   `  <url>\n    <loc>${escapeXml(loc)}</loc>\n` +

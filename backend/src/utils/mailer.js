@@ -23,7 +23,8 @@ const SUBJECTS = {
   password_reset: 'Reset your password',
 };
 
-const brandName = () => process.env.MAIL_BRAND || 'Apex NovelHub';
+const brandName = () => process.env.MAIL_BRAND || process.env.SITE_NAME || process.env.APP_NAME || 'NovelHub';
+const defaultFrom = () => process.env.MAIL_FROM || `${brandName()} <no-reply@novelhub.com>`;
 
 const copyFor = (purpose) => {
   if (purpose === 'password_reset') {
@@ -127,7 +128,7 @@ const sendOtpEmail = async ({ to, code, purpose }) => {
     return;
   }
   await getTransport().sendMail({
-    from: process.env.MAIL_FROM || 'Apex NovelHub <no-reply@novelhub.com>',
+    from: defaultFrom(),
     to,
     subject: SUBJECTS[purpose] || 'Your code',
     text: bodyText(code, purpose),
@@ -196,7 +197,7 @@ const deliverNotificationEmail = async ({ to, title, message, link }) => {
     return;
   }
   await getTransport().sendMail({
-    from: process.env.MAIL_FROM || 'Apex NovelHub <no-reply@novelhub.com>',
+    from: defaultFrom(),
     to,
     subject: title || 'New Notification',
     text: `${title}\n\n${message}${link ? `\n\nLink: ${link}` : ''}`,

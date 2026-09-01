@@ -1,4 +1,4 @@
-# Apex NovelHub
+# NovelHub
 
 A novel reading platform with a full admin portal. Dark gothic theme derived from the site logo.
 
@@ -55,7 +55,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=your-smtp-user
 SMTP_PASS=your-smtp-pass
-MAIL_FROM="Apex NovelHub <no-reply@novelhub.com>"
+MAIL_FROM="NovelHub <no-reply@novelhub.com>"
 OTP_TTL_MINUTES=10
 ```
 

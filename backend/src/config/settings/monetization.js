@@ -586,7 +586,7 @@ const settings = [
     key: 'paypal.brandName',
     section: SECTIONS.PAYPAL,
     type: 'string',
-    default: 'Apex NovelHub',
+    default: process.env.PAYPAL_BRAND_NAME || process.env.SITE_NAME || process.env.APP_NAME || 'NovelHub',
     maxLength: 127,
     label: 'Brand name shown at checkout',
     public: true,

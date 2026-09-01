@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Sparkles, BookOpen, Star, Layers, Flame } from 'lucide-react';
 import client from '../api/client';
+import { useSettings } from '../context/SettingsContext';
 import HeroEmbers from './HeroEmbers';
 
 const THEME_STYLES = {
@@ -103,6 +104,7 @@ const contentItem = {
 };
 
 const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6 }) => {
+  const { settings } = useSettings();
   const [slides, setSlides] = useState(slidesProp || []);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState(1);
@@ -355,7 +357,7 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
                       <div className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
                         <Layers className="h-10 w-10 sm:h-12 sm:w-12 text-silver-muted/50 mb-2 sm:mb-3" />
                         <p className="font-display font-bold text-silver text-xs sm:text-sm line-clamp-3">{currentSlide.title}</p>
-                        <p className="text-[10px] sm:text-xs text-crimson-soft mt-1">Apex NovelHub</p>
+                        <p className="text-[10px] sm:text-xs text-crimson-soft mt-1">{settings?.siteName || ''}</p>
                       </div>
                     )}
 
@@ -399,7 +401,7 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
                       <div className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
                         <Layers className="h-10 w-10 sm:h-12 sm:w-12 text-silver-muted/50 mb-2 sm:mb-3" />
                         <p className="font-display font-bold text-silver text-xs sm:text-sm line-clamp-3">{currentSlide.title}</p>
-                        <p className="text-[10px] sm:text-xs text-crimson-soft mt-1">Apex NovelHub</p>
+                        <p className="text-[10px] sm:text-xs text-crimson-soft mt-1">{settings?.siteName || ''}</p>
                       </div>
                     )}
 

@@ -81,7 +81,7 @@ const Navbar = () => {
             />
           ) : null}
           <span className="truncate font-display text-base font-bold tracking-wide text-silver sm:text-lg">
-            {settings?.siteName || 'Apex NovelHub'}
+            {settings?.siteName || ''}
           </span>
         </Link>
 

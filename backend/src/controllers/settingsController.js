@@ -9,7 +9,10 @@ const getPublicSettings = asyncHandler(async (req, res) => {
     // getPublic() projects from the registry whitelist, not from the document.
     config,
     settings: {
-      siteName: settings.siteName,
+      siteName:
+        settings.siteName && settings.siteName !== 'Apex NovelHub'
+          ? settings.siteName
+          : process.env.SITE_NAME || process.env.APP_NAME || 'NovelHub',
       tagline: settings.tagline,
       logoUrl: settings.logoUrl,
       faviconUrl: settings.faviconUrl,

@@ -143,7 +143,7 @@ const AdminLayout = () => {
     <div className="flex min-h-dvh bg-night">
       <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-night-surface md:flex">
         <div className="border-b border-line p-4">
-          <p className="font-display text-lg font-bold text-silver">{settings?.siteName || 'Apex NovelHub'}</p>
+          <p className="font-display text-lg font-bold text-silver">{settings?.siteName || 'Admin Portal'}</p>
           <p className="flex items-center gap-1.5 text-xs text-crimson-soft">
             {isSuperAdmin && <Crown className="h-3 w-3" aria-hidden="true" />}
             {isSuperAdmin ? 'Superadmin' : 'Admin Portal'}
