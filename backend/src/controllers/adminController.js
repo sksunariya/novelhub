@@ -888,11 +888,30 @@ const restoreReview = asyncHandler(async (req, res) => {
   if (!review) {
     return res.status(404).json({ message: 'Review not found' });
   }
+
+  // A reader gets one live review per target. If they wrote a replacement while
+  // this one was in the bin, restoring it would give them two and let a single
+  // account count twice toward the rating. Checked here so the admin gets a
+  // reason rather than a duplicate-key error from the unique index behind it.
+  const replacement = await Review.findOne({
+    novel: review.novel,
+    chapter: review.chapter || null,
+    user: review.user,
+    _id: { $ne: review._id },
+    deletedAt: null,
+  });
+  if (replacement) {
+    return res.status(409).json({
+      message: 'This reader has written another review since. Delete that one first to restore this.',
+      conflictingReviewId: replacement._id,
+    });
+  }
+
   review.deletedAt = null;
   await review.save();
   await recalcForReview(review);
   await review.populate('user', ADMIN_USER_FIELDS);
-  res.json({ review });
+  return res.json({ review });
 });
 
 const findReviewReply = async (reviewId, replyId, res) => {

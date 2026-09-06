@@ -88,25 +88,43 @@ currencySchema.pre('validate', function derive() {
 
 // An update that bypasses the document entirely would otherwise skip every
 // guard above and persist a setting PayPal cannot honour.
-currencySchema.pre(['findOneAndUpdate', 'updateOne'], function sanitizeUpdate(next) {
+currencySchema.pre(['findOneAndUpdate', 'updateOne', 'updateMany'], function sanitizeUpdate(next) {
   const update = this.getUpdate();
   if (!update) return next();
-  const target = update.$set || update;
-  const code = target.code || (this.getFilter() || {}).code;
+
+  // A field can be written at the top level OR inside $set, and an update
+  // routinely contains both at once: the timestamps plugin adds `$set.updatedAt`
+  // before this hook runs, so `update.$set || update` looked only at {updatedAt}
+  // and left a top-level `settlementMode: 'local'` untouched — persisting
+  // exactly the setting PayPal cannot honour that this guard exists to stop.
+  const read = (field) => {
+    if (update.$set && update.$set[field] !== undefined) return update.$set[field];
+    return update[field];
+  };
+  const write = (field, value) => {
+    if (update.$set && update.$set[field] !== undefined) update.$set[field] = value;
+    else if (update[field] !== undefined) update[field] = value;
+  };
+
+  const code = read('code') || (this.getFilter() || {}).code;
   if (!code) return next();
 
   // `this` is the Query here, so `this.constructor` is Query — the model is
   // reached through `this.model`.
   const derived = this.model.deriveCapabilities({
     code,
-    decimals: target.decimals,
-    settlementMode: target.settlementMode,
-    rounding: target.rounding,
+    decimals: read('decimals'),
+    settlementMode: read('settlementMode'),
+    rounding: read('rounding'),
   });
-  target.paypalSupported = derived.paypalSupported;
-  if (target.settlementMode !== undefined) target.settlementMode = derived.settlementMode;
-  if (target.decimals !== undefined) target.decimals = derived.decimals;
-  if (target.rounding !== undefined) target.rounding = derived.rounding;
+
+  // Always asserted, never merely corrected: it is derived from the code alone.
+  if (update.$set) update.$set.paypalSupported = derived.paypalSupported;
+  else update.paypalSupported = derived.paypalSupported;
+
+  write('settlementMode', derived.settlementMode);
+  write('decimals', derived.decimals);
+  write('rounding', derived.rounding);
   return next();
 });
 

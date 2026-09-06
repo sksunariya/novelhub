@@ -19,6 +19,15 @@ const sentToday = new Map(); // email -> { day, count }
 let active = 0;
 let draining = false;
 let sender = null;
+// Jobs waiting out a backoff. Counted separately from `queue` and `active`
+// because they are in neither, and flush() must still wait for them.
+const retryTimers = new Set();
+
+// Bumped by reset(). A drain that was already running when the queue was reset
+// belongs to the previous generation: it holds a stale config snapshot, and
+// letting it keep draining means two drains racing over one queue — the older
+// one admitting jobs under the limits that applied before the reset.
+let generation = 0;
 
 const stats = { queued: 0, sent: 0, failed: 0, retried: 0, skippedByCap: 0 };
 
@@ -32,37 +41,64 @@ const setSender = (fn) => {
   sender = fn;
 };
 
-const underDailyCap = (to, cap) => {
-  if (!cap) return true;
+/**
+ * Claim one of today's slots for this recipient, or refuse.
+ *
+ * Check and increment together, at ADMISSION rather than on completion. The
+ * counter used to be bumped after `sender()` resolved, so with concurrency N
+ * the first N jobs for one address were all dequeued and started before any of
+ * them had counted — a cap of 2 let five through.
+ *
+ * A retried job keeps the slot it already claimed, so backoff attempts do not
+ * each consume one.
+ */
+const reserveSlot = (job, cap) => {
+  if (job.reserved) return true;
+  if (!cap) {
+    job.reserved = true;
+    return true;
+  }
   const today = dayKey();
-  const row = sentToday.get(to);
-  if (!row || row.day !== today) return true;
-  return row.count < cap;
-};
-
-const recordSend = (to) => {
-  const today = dayKey();
+  const to = job.message.to;
   const row = sentToday.get(to);
   if (!row || row.day !== today) sentToday.set(to, { day: today, count: 1 });
+  else if (row.count >= cap) return false;
   else row.count += 1;
+  job.reserved = true;
+  return true;
 };
 
-const backoffMs = (attempt) => Math.min(30000, 500 * 2 ** attempt);
+
+// Exponential backoff. The base is a test seam: the real 1s/2s/4s schedule is
+// right for a throttling mail server and wrong for a test that has to sit
+// through it, and a suite waiting seven seconds per retry case is one slow CI
+// box away from a flake.
+let backoffBase = 500;
+const setBackoffBase = (ms) => {
+  backoffBase = Math.max(1, Number(ms) || 500);
+};
+const backoffMs = (attempt) => Math.min(30000, backoffBase * 2 ** attempt);
 
 const runOne = async (job, config) => {
   try {
     await sender(job.message);
-    recordSend(job.message.to);
     stats.sent += 1;
   } catch (error) {
     job.attempts += 1;
     if (job.attempts <= config.maxAttempts) {
       stats.retried += 1;
-      // Re-queue behind current work rather than blocking the drain.
-      setTimeout(() => {
+      // Re-queue behind current work rather than blocking the drain. The timer
+      // is tracked so flush() waits for it: previously the job was in neither
+      // `queue` nor `active` while it waited, so flush() returned early and the
+      // retry fired after the caller had moved on — which in tests meant the
+      // callback ran against a torn-down database.
+      const timer = setTimeout(() => {
+        retryTimers.delete(timer);
         queue.push(job);
-        drain();
-      }, backoffMs(job.attempts)).unref?.();
+        drain().catch((err) => console.error('[emailQueue] retry drain failed:', err.message));
+      }, backoffMs(job.attempts));
+      timer.unref?.();
+      retryTimers.add(timer);
       return;
     }
     stats.failed += 1;
@@ -73,22 +109,41 @@ const runOne = async (job, config) => {
 const drain = async () => {
   if (draining) return;
   draining = true;
+  const myGeneration = generation;
   try {
     const snapshot = await settingsService.snapshot();
+    if (myGeneration !== generation) return;
     const config = {
       concurrency: Math.max(1, snapshot.get('notifications.emailConcurrency')),
       perUserPerDay: snapshot.get('notifications.maxEmailsPerUserPerDay'),
       maxAttempts: 3,
     };
 
-    while (queue.length) {
-      while (active >= config.concurrency) {
+    // One condition covering all three kinds of outstanding work: queued jobs,
+    // sends still in flight, and retries waiting out a backoff.
+    //
+    // These cannot be separate phases. A drain that emptied the queue and then
+    // waited for in-flight sends in a second loop would ignore anything pushed
+    // back during that wait — and a retry timer firing in exactly that window
+    // hits `if (draining) return` and is swallowed, so the job sits in the
+    // queue with nothing left to pick it up and flush() blocks until timeout.
+    while (queue.length || retryTimers.size || active > 0) {
+      if (myGeneration !== generation) return; // reset() superseded this drain
+      if (!queue.length) {
+        // In-flight work or a pending backoff. Wait for it rather than
+        // declaring the queue drained.
         await new Promise((resolve) => setTimeout(resolve, 25));
+        continue;
       }
-      const job = queue.shift();
-      if (!job) break;
+      if (active >= config.concurrency) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        continue;
+      }
 
-      if (!underDailyCap(job.message.to, config.perUserPerDay)) {
+      const job = queue.shift();
+      if (!job) continue;
+
+      if (!reserveSlot(job, config.perUserPerDay)) {
         stats.skippedByCap += 1;
         continue;
       }
@@ -97,11 +152,6 @@ const drain = async () => {
       runOne(job, config).finally(() => {
         active -= 1;
       });
-    }
-
-    // Let the last batch settle so callers awaiting flush() see final counts.
-    while (active > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 25));
     }
   } finally {
     draining = false;
@@ -127,18 +177,27 @@ const enqueue = (message) => {
 /** Wait for the queue to empty. For tests and graceful shutdown. */
 const flush = async (timeoutMs = 10000) => {
   const deadline = Date.now() + timeoutMs;
-  while ((queue.length || active > 0) && Date.now() < deadline) {
+  while ((queue.length || active > 0 || retryTimers.size) && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  return { drained: queue.length === 0 && active === 0, pending: queue.length };
+  return {
+    drained: queue.length === 0 && active === 0 && retryTimers.size === 0,
+    pending: queue.length + retryTimers.size,
+  };
 };
 
-const getStats = () => ({ ...stats, pending: queue.length, active });
+const getStats = () => ({ ...stats, pending: queue.length + retryTimers.size, active });
 
 /** Test seam. */
 const reset = () => {
   queue.length = 0;
   sentToday.clear();
+  // Cancel pending backoffs. A surviving timer fires after the suite that
+  // queued it has finished and drains against a closed connection.
+  retryTimers.forEach((timer) => clearTimeout(timer));
+  retryTimers.clear();
+  backoffBase = 500;
+  generation += 1;
   active = 0;
   draining = false;
   Object.keys(stats).forEach((key) => {
@@ -146,4 +205,4 @@ const reset = () => {
   });
 };
 
-module.exports = { enqueue, flush, getStats, setSender, reset, _queue: queue };
+module.exports = { enqueue, flush, getStats, setSender, reset, setBackoffBase, _queue: queue };

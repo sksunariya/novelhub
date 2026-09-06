@@ -97,13 +97,33 @@ const saveReview = async (res, { novelId, chapterId, reqUser, rating, content })
     await review.save();
   } else {
     status = 201;
-    review = await Review.create({
-      novel: novelId,
-      chapter: chapterId || null,
-      user: reqUser._id,
-      rating,
-      content: (content || '').trim(),
-    });
+    try {
+      review = await Review.create({
+        novel: novelId,
+        chapter: chapterId || null,
+        user: reqUser._id,
+        rating,
+        content: (content || '').trim(),
+      });
+    } catch (error) {
+      // Lost the race against a concurrent first submission from the same
+      // reader — the unique (novel, chapter, user) index caught it. Treat it as
+      // the edit it effectively is rather than as a 500.
+      if (error.code !== 11000) throw error;
+      review = await Review.findOne({
+        novel: novelId,
+        chapter: chapterId || null,
+        user: reqUser._id,
+        deletedAt: null,
+      });
+      if (!review) throw error;
+      status = 200;
+      review.rating = rating;
+      review.content = (content || '').trim();
+      review.editedAt = new Date();
+      review.editedBy = reqUser._id;
+      await review.save();
+    }
   }
   await recalcForReview(review);
   await populateReview(review);

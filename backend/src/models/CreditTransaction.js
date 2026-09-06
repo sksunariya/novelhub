@@ -16,6 +16,14 @@ const creditTransactionSchema = new mongoose.Schema(
     // Cash recognized by this movement, in micro-USD. Positive on a spend
     // (revenue recognized), negative on a refund (revenue reversed).
     attributedUsdMicros: { type: Number, default: 0 },
+
+    // What this ISSUANCE cost, in USD cents — the post-discount, post-fee order
+    // or subscription-cycle total behind these credits. Zero for grants.
+    //
+    // Recorded here as well as on the tranche so an auditor reading the ledger
+    // alone can see what was paid for a batch of credits without joining back
+    // through CreditBucket. Revenue is still recognized on the spend, not here.
+    costUsdCents: { type: Number, default: 0 },
     bucketBreakdown: [
       {
         _id: false,

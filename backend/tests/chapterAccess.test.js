@@ -261,7 +261,9 @@ describe('wallet endpoints', () => {
   });
 
   it('clamps auto-unlock to the admin ceiling', async () => {
-    await settingsService.update({ 'pricing.autoUnlockMaxCredits': 25 });
+    // allowAutoUnlock defaults off (the unlock engine is not built yet), so the
+    // endpoint 403s until it is enabled — the clamp is what is under test here.
+    await settingsService.update({ 'pricing.allowAutoUnlock': true, 'pricing.autoUnlockMaxCredits': 25 });
     settingsService.clearCache();
     const res = await auth(api().put('/api/wallet/auto-unlock'))
       .send({ enabled: true, maxPriceCredits: 9999 })

@@ -51,6 +51,11 @@ const {
   getAuthorBreakdown,
   exportAuthorEarnings,
   rebuildRollups,
+  getRevenueSummary,
+  getRevenueByNovel,
+  getRevenueByChapter,
+  getRevenueByAuthor,
+  exportRevenue,
 } = require('../controllers/analyticsController');
 const { replayWebhook } = require('../controllers/webhookController');
 const accessControl = require('../controllers/accessControlController');
@@ -192,6 +197,14 @@ router.use('/monetization', monetizationAdminRoutes);
 
 // Analytics
 router.use('/analytics', requireModule('analytics'));
+// Ranged revenue. Declared before the /analytics/novels/:id route below so
+// "revenue" is never captured as a novel id.
+router.get('/analytics/revenue/export.csv', exportRevenue);
+router.get('/analytics/revenue/novels/:id', getRevenueByChapter);
+router.get('/analytics/revenue/novels', getRevenueByNovel);
+router.get('/analytics/revenue/authors', getRevenueByAuthor);
+router.get('/analytics/revenue', getRevenueSummary);
+
 router.get('/analytics/novels/:id', getNovelPerformance);
 router.get('/analytics/novels', getNovelLeaderboard);
 router.get('/analytics/funnel', getFunnel);

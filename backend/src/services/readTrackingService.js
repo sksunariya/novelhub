@@ -120,11 +120,15 @@ const recordGateImpression = async (req, res, { chapter, novel, reason, priceCre
 };
 
 /** Called on unlock so conversion sits alongside readership in one rollup. */
-const recordUnlock = async ({ chapter, novel, chapterNumber, creditsSpent, attributedUsdMicros }) => {
+const recordUnlock = async ({ chapter, novel, chapterNumber, creditsSpent, attributedUsdMicros, day = null }) => {
   try {
     await bumpDaily(
       { unlocks: 1, creditsSpent: creditsSpent || 0, attributedUsdMicros: attributedUsdMicros || 0 },
-      { chapter, novel, chapterNumber, day: dayKey() }
+      // `day` is explicit for events settled after the fact — a subscription
+      // cycle closed late belongs to the day it covered, not to today. Bumping
+      // today's row for a back-dated event double-counts it: the rebuild puts
+      // the ledger row on its own day and never revisits today's.
+      { chapter, novel, chapterNumber, day: day || dayKey() }
     );
   } catch (error) {
     console.error('[readTracking] recordUnlock failed:', error.message);

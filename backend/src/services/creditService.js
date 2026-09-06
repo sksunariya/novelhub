@@ -127,9 +127,24 @@ const consumeBuckets = async (userId, credits, order, { allowPartial = false } =
       continue; // another spend moved first — retry with fresh state
     }
 
+    // Credits drawn from zero-cost tranches. Reported rather than inferred from
+    // a zero total, because a spend that draws on BOTH a purchased and a
+    // granted tranche has cash behind it and is still part-funded by a give-
+    // away — treating "attributed > 0" as "fully paid" hides exactly that case.
+    const grantFundedCredits = breakdown.reduce(
+      (sum, entry) => sum + (entry.costMicros === 0 ? entry.credits : 0),
+      0
+    );
+
     if (outstanding > 0) {
       if (allowPartial) {
-        return { breakdown, attributedUsdMicros, consumed: credits - outstanding, shortfall: outstanding };
+        return {
+          breakdown,
+          attributedUsdMicros,
+          grantFundedCredits,
+          consumed: credits - outstanding,
+          shortfall: outstanding,
+        };
       }
       await restoreBuckets(breakdown);
       // Tranches did not cover the debit. The wallet said they should, so the
@@ -137,7 +152,7 @@ const consumeBuckets = async (userId, credits, order, { allowPartial = false } =
       throw badRequest('Credit tranches are out of sync with the balance. Run reconciliation.', 409);
     }
 
-    return { breakdown, attributedUsdMicros, consumed: credits, shortfall: 0 };
+    return { breakdown, attributedUsdMicros, grantFundedCredits, consumed: credits, shortfall: 0 };
   }
   throw badRequest('Could not reserve credits, please retry', 409);
 };
@@ -223,6 +238,7 @@ const credit = async ({
       amount,
       balanceAfter: wallet.balance,
       attributedUsdMicros: 0, // recognized when spent, not when issued
+      costUsdCents: Math.round(totalCostMicros / MICROS_PER_CENT),
       bucketBreakdown: [{ bucket: bucket._id, credits: amount, costMicros: totalCostMicros }],
       reason,
       description,
@@ -342,7 +358,13 @@ const debit = async ({
       );
     }
 
-    return { transaction, wallet, attributedUsdMicros: consumed.attributedUsdMicros, replayed: false };
+    return {
+      transaction,
+      wallet,
+      attributedUsdMicros: consumed.attributedUsdMicros,
+      grantFundedCredits: consumed.grantFundedCredits,
+      replayed: false,
+    };
   } catch (error) {
     await restoreBuckets(consumed.breakdown);
     await Wallet.updateOne({ user: userId }, { $inc: { balance: amount, lifetimeSpent: -amount } });
@@ -354,6 +376,126 @@ const debit = async ({
           wallet: await Wallet.getOrCreate(userId),
           replayed: true,
           attributedUsdMicros: winner.attributedUsdMicros,
+        };
+      }
+    }
+    throw error;
+  }
+};
+
+/**
+ * Undo a spend, putting the cash back in the tranches it came from.
+ *
+ * NOT the same as crediting the same number of credits. A plain credit mints a
+ * fresh tranche with a zero cost basis, so the cash behind the returned credits
+ * simply disappears: it is no longer deferred (the original tranche stayed
+ * drained) and it was never recognized (the unlock was undone). The §6.4
+ * identity stops balancing and the missing money is invisible.
+ *
+ * `credits` reverses part of a spend — a bulk unlock where some chapters turned
+ * out to be owned already gives back a proportional slice of every tranche the
+ * debit drew from, which is the only split that leaves per-credit cost intact.
+ */
+const reverseSpend = async ({
+  user,
+  transaction,
+  credits = null,
+  idempotencyKey = null,
+  reason = '',
+  description = '',
+  metadata = {},
+}) => {
+  const userId = user._id || user;
+
+  const existing = await findByKey(idempotencyKey);
+  if (existing) {
+    // Callers subtract `restoredMicros` from what they are about to attribute.
+    // Omitting it on a replay read as "nothing was refunded" and re-recognized
+    // cash that had already gone back to the tranche. The reversal's own ledger
+    // row carries the figure, negated.
+    return {
+      transaction: existing,
+      replayed: true,
+      credits: existing.amount,
+      restoredMicros: -(existing.attributedUsdMicros || 0),
+    };
+  }
+
+  const spent = Math.abs(transaction.amount);
+  const take = credits === null ? spent : Math.min(credits, spent);
+  if (take <= 0) return { transaction: null, replayed: false, credits: 0 };
+
+  const entries = transaction.bucketBreakdown || [];
+  const breakdown = [];
+  let restoredMicros = 0;
+  let allocated = 0;
+
+  entries.forEach((entry, index) => {
+    const isLast = index === entries.length - 1;
+    // The last tranche absorbs the rounding remainder, so the parts sum to
+    // exactly `take` and no credit is created or destroyed by division.
+    const creditsBack = isLast ? take - allocated : Math.floor((take * entry.credits) / spent);
+    allocated += creditsBack;
+    if (creditsBack <= 0) return;
+    const microsBack = entry.credits ? Math.floor((entry.costMicros * creditsBack) / entry.credits) : 0;
+    restoredMicros += microsBack;
+    breakdown.push({ bucket: entry.bucket, credits: creditsBack, costMicros: microsBack });
+  });
+
+  await restoreBuckets(breakdown);
+
+  const wallet = await Wallet.findOneAndUpdate(
+    { user: userId },
+    { $inc: { balance: take, lifetimeSpent: -take }, $set: { lastTransactionAt: new Date() } },
+    { new: true }
+  );
+
+  try {
+    const reversal = await CreditTransaction.create({
+      user: userId,
+      type: CREDIT_TRANSACTION_TYPES.REVERSAL,
+      amount: take,
+      balanceAfter: wallet ? wallet.balance : take,
+      // Negative: this un-recognizes cash the spend had recognized.
+      attributedUsdMicros: -restoredMicros,
+      bucketBreakdown: breakdown,
+      reason,
+      description,
+      refType: transaction.refType,
+      refId: transaction.refId,
+      novel: transaction.novel,
+      chapter: transaction.chapter,
+      ...keyField(idempotencyKey),
+      metadata: { ...metadata, reversalOf: transaction._id },
+    });
+
+    if (restoredMicros > 0) {
+      await Wallet.updateOne(
+        { user: userId },
+        { $inc: { lifetimeSpendUsdCents: -Math.round(restoredMicros / MICROS_PER_CENT) } }
+      );
+    }
+
+    return { transaction: reversal, wallet, credits: take, restoredMicros, replayed: false };
+  } catch (error) {
+    if (error.code === 11000) {
+      // Lost an idempotency race: undo our restore and return the winner.
+      await Promise.all([
+        ...breakdown.map((entry) =>
+          CreditBucket.updateOne(
+            { _id: entry.bucket },
+            { $inc: { remaining: -entry.credits, remainingCostMicros: -entry.costMicros } }
+          )
+        ),
+        Wallet.updateOne({ user: userId }, { $inc: { balance: -take, lifetimeSpent: take } }),
+      ]);
+      const winner = await findByKey(idempotencyKey);
+      if (winner) {
+        return {
+          transaction: winner,
+          replayed: true,
+          credits: take,
+          restoredMicros: -(winner.attributedUsdMicros || 0),
         };
       }
     }
@@ -415,6 +557,7 @@ const reconcile = async ({ apply = false, userId = null } = {}) => {
 module.exports = {
   credit,
   debit,
+  reverseSpend,
   getBalance,
   getDeferredRevenueMicros,
   reconcile,

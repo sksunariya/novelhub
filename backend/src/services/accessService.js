@@ -7,6 +7,7 @@ const Chapter = require('../models/Chapter');
 const Novel = require('../models/Novel');
 const settingsService = require('./settingsService');
 const creditService = require('./creditService');
+const revenueService = require('./revenueService');
 const subscriptionService = require('./subscriptionService');
 const { resolveChapterPrice, resolveNovelMonetization, bulkDiscountPct } = require('../utils/chapterPricing');
 const {
@@ -16,6 +17,7 @@ const {
   CREDIT_REF_TYPES,
   MICROS_PER_CENT,
   ROLES,
+  REVENUE_EVENT_KINDS,
 } = require('../config/constants');
 
 const badRequest = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -278,9 +280,47 @@ const resolveNovelChapters = async ({ novel, chapters, user, now = new Date() })
   });
 };
 
-const recordRevenue = async ({ chapter, novel, chapterNumber, creditsSpent = 0, attributedUsdMicros }) => {
-  // Daily rollup is recorded even for a zero-cash unlock, so unlock counts stay
-  // right when a reader pays with granted credits.
+/**
+ * Recognize revenue for one unlock.
+ *
+ * Writes the durable RevenueEvent first — that row is what rollups rebuild
+ * from, and it is the only copy that survives a rental lapsing or a novel being
+ * binned. The live daily bump after it is a latency optimization so the
+ * dashboard moves before the hourly rollup runs; the rebuild overwrites it from
+ * the ledger either way.
+ */
+const recordRevenue = async ({
+  chapter,
+  novel,
+  chapterNumber,
+  user = null,
+  kind = REVENUE_EVENT_KINDS.UNLOCK,
+  source = '',
+  creditsSpent = 0,
+  attributedUsdMicros,
+  grantFundedCredits = null,
+  transaction = null,
+  idempotencyKey = null,
+  attribution = null,
+  creditsPerUsd = null,
+}) => {
+  await revenueService.record({
+    chapter,
+    novel,
+    chapterNumber,
+    user,
+    kind,
+    source,
+    creditsSpent,
+    attributedUsdMicros,
+    grantFundedCredits,
+    transaction,
+    idempotencyKey,
+    attribution,
+    creditsPerUsd,
+  });
+  // Recorded even for a zero-cash unlock, so unlock counts stay right when a
+  // reader pays with granted credits.
   await require('./readTrackingService').recordUnlock({
     chapter,
     novel,
@@ -288,11 +328,6 @@ const recordRevenue = async ({ chapter, novel, chapterNumber, creditsSpent = 0, 
     creditsSpent,
     attributedUsdMicros,
   });
-  if (!attributedUsdMicros) return;
-  await Promise.all([
-    Chapter.updateOne({ _id: chapter }, { $inc: { revenueLifetimeUsdMicros: attributedUsdMicros } }),
-    Novel.updateOne({ _id: novel }, { $inc: { revenueLifetimeUsdMicros: attributedUsdMicros } }),
-  ]);
 };
 
 const rentalExpiry = (hours) => (hours > 0 ? new Date(Date.now() + hours * 60 * 60 * 1000) : null);
@@ -344,8 +379,12 @@ const unlockChapter = async ({ user, novel, chapter }) => {
           chapter: chapter._id,
           novel: novel._id,
           chapterNumber: chapter.number,
+          user: user._id,
+          kind: REVENUE_EVENT_KINDS.SUBSCRIPTION,
+          source: ACCESS_SOURCES.SUBSCRIPTION,
           creditsSpent: 0,
           attributedUsdMicros: claimed.attributedUsdMicros,
+          idempotencyKey: `sub-unlock:${row._id}`,
         });
         return {
           alreadyOwned: false,
@@ -366,7 +405,16 @@ const unlockChapter = async ({ user, novel, chapter }) => {
     }
   }
 
-  const idempotencyKey = `unlock:${user._id}:${chapter._id}`;
+  // The key has to identify THIS purchase, not the (reader, chapter) pair.
+  //
+  // A rental deletes its entitlement when it lapses, so the same chapter can be
+  // bought again — and a pair-scoped key made the second purchase replay the
+  // first debit, handing out every re-rental free forever. Counting the
+  // purchases already in the ledger gives a stable epoch: two clicks in the
+  // same instant both see the same count and stay idempotent, while a genuine
+  // repurchase after the first one settled sees a higher one.
+  const priorPurchases = await revenueService.purchaseCount(user._id, chapter._id);
+  const idempotencyKey = `unlock:${user._id}:${chapter._id}:${priorPurchases}`;
 
   const debited = await creditService.debit({
     user,
@@ -395,8 +443,14 @@ const unlockChapter = async ({ user, novel, chapter }) => {
       chapter: chapter._id,
       novel: novel._id,
       chapterNumber: chapter.number,
+      user: user._id,
+      kind: REVENUE_EVENT_KINDS.UNLOCK,
+      source: ACCESS_SOURCES.CREDITS,
       creditsSpent: price,
       attributedUsdMicros: debited.attributedUsdMicros,
+      grantFundedCredits: debited.grantFundedCredits,
+      transaction: debited.transaction._id,
+      idempotencyKey: `unlock:${debited.transaction._id}:${chapter._id}`,
     });
     // Nudge once when the balance crosses the low threshold, so the reader
     // finds out before they hit a wall mid-chapter.
@@ -406,13 +460,14 @@ const unlockChapter = async ({ user, novel, chapter }) => {
     if (error.code === 11000) {
       // Concurrent unlock won. Give the credits back — the reader owns it either way.
       if (!debited.replayed) {
-        await creditService.credit({
+        // Restore the tranches rather than minting zero-cost credits, or the
+        // cash behind these credits becomes neither deferred nor recognized.
+        await creditService.reverseSpend({
           user,
-          amount: price,
-          type: 'reversal',
-          source: 'adjustment',
+          transaction: debited.transaction,
           idempotencyKey: `${idempotencyKey}:reversal`,
           reason: 'duplicate unlock refunded',
+          description: 'Chapter was already unlocked',
         });
       }
       return { alreadyOwned: true, access: null };
@@ -480,10 +535,17 @@ const unlockChapters = async ({ user, novel, chapters }) => {
   const discountPct = bulkDiscountPct(payable.length, tiers);
   const total = Math.max(1, Math.round(listTotal * (1 - discountPct / 100)));
 
+  // Same purchase-epoch treatment as the single unlock above: without it a
+  // second bulk buy of chapters whose rentals have lapsed replays the first
+  // debit and costs nothing.
+  const priorPurchases = await revenueService.purchaseCount(
+    user._id,
+    payable.map((entry) => entry.chapter._id)
+  );
   const idempotencyKey = `bulk:${user._id}:${novel._id}:${payable
     .map((entry) => entry.chapter._id)
     .sort()
-    .join(',')}`;
+    .join(',')}:${priorPurchases}`;
 
   const debited = await creditService.debit({
     user,
@@ -525,23 +587,113 @@ const unlockChapters = async ({ user, novel, chapters }) => {
     if (error.code !== 11000 && !error.writeErrors) throw error;
   });
 
+  // Which rows actually landed. Read back rather than inspecting driver error
+  // shapes: every row we inserted carries this debit's transaction id, and a
+  // pre-existing row from someone else's unlock carries a different one. A
+  // chapter that lost the race was still charged for in `total`, and
+  // attributing revenue for it — as this did before — booked money against a
+  // chapter the reader already owned and then vanished on the next rebuild,
+  // because no ChapterAccess row existed to rebuild it from.
+  const landed = await ChapterAccess.find({ transaction: debited.transaction._id }).select('chapter');
+  const landedIds = new Set(landed.map((row) => String(row.chapter)));
+
+  const attributed = [];
+  const lost = [];
+  rows.forEach((row, index) => {
+    (landedIds.has(String(row.chapter)) ? attributed : lost).push({ row, entry: payable[index] });
+  });
+
+  // Give back what was charged for chapters the reader turned out to own,
+  // restoring the tranches rather than minting zero-cost credits.
+  let refunded = 0;
+  let restoredMicros = 0;
+  if (lost.length) {
+    const lostList = lost.reduce((sum, item) => sum + item.entry.price, 0);
+    refunded = Math.min(total, Math.round((total * lostList) / listTotal));
+    if (refunded > 0) {
+      const reversal = await creditService.reverseSpend({
+        user,
+        transaction: debited.transaction,
+        credits: refunded,
+        idempotencyKey: `${idempotencyKey}:reversal`,
+        reason: 'bulk unlock partially already owned',
+        description: `Refund for ${lost.length} chapter(s) already owned`,
+        metadata: { chapters: lost.map((item) => item.entry.chapter.number) },
+      });
+      restoredMicros = reversal.restoredMicros || 0;
+    }
+  }
+
+  // Re-split the cash that is actually still spent across the chapters that
+  // actually landed. The provisional split above covered every payable chapter;
+  // leaving it in place would keep the refunded cash attributed as revenue and
+  // deferred in the tranche at the same time.
+  const attributable = Math.max(0, debited.attributedUsdMicros - restoredMicros);
+  // Grant-funded credits are shared out on the same basis as the cash, so a
+  // part-granted bulk buy reports the same free-funded share on every chapter
+  // rather than dumping it all on whichever one rounded to zero.
+  // reverseSpend gives credits back proportionally across every tranche the
+  // debit drew from, so what remains grant-funded shrinks in the same
+  // proportion — not by subtracting the refund from the granted part first.
+  const grantFunded = total > 0
+    ? Math.round(((debited.grantFundedCredits || 0) * (total - refunded)) / total)
+    : 0;
+  const landedList = attributed.reduce((sum, item) => sum + item.entry.price, 0) || 1;
+  let given = 0;
+  let grantGiven = 0;
+  attributed.forEach((item, index) => {
+    const isLast = index === attributed.length - 1;
+    item.micros = isLast ? attributable - given : Math.floor((attributable * item.entry.price) / landedList);
+    given += item.micros;
+    item.grantFunded = isLast
+      ? Math.max(0, grantFunded - grantGiven)
+      : Math.floor((grantFunded * item.entry.price) / landedList);
+    grantGiven += item.grantFunded;
+  });
+
+  if (attributed.length && lost.length) {
+    await ChapterAccess.bulkWrite(
+      attributed.map((item) => ({
+        updateOne: {
+          filter: { user: user._id, chapter: item.row.chapter },
+          update: { $set: { attributedUsdMicros: item.micros } },
+        },
+      })),
+      { ordered: false }
+    );
+  }
+
+  // Attribution is resolved once for the batch — it is the same novel.
+  const attribution = await revenueService.resolveAttribution(novel._id);
+  const creditsPerUsd = await settingsService.get('credits.perUsd');
+
   await Promise.all(
-    rows.map((row, index) =>
+    attributed.map((item) =>
       recordRevenue({
-        chapter: row.chapter,
+        chapter: item.row.chapter,
         novel: novel._id,
-        chapterNumber: payable[index].chapter.number,
-        creditsSpent: row.creditsSpent,
-        attributedUsdMicros: row.attributedUsdMicros,
+        chapterNumber: item.entry.chapter.number,
+        user: user._id,
+        kind: REVENUE_EVENT_KINDS.BULK_UNLOCK,
+        source: ACCESS_SOURCES.BULK,
+        creditsSpent: item.row.creditsSpent,
+        attributedUsdMicros: item.micros,
+        grantFundedCredits: item.grantFunded,
+        transaction: debited.transaction._id,
+        idempotencyKey: `bulk-unlock:${debited.transaction._id}:${item.row.chapter}`,
+        attribution,
+        creditsPerUsd,
       })
     )
   );
 
   return {
-    unlocked: rows.length,
+    unlocked: attributed.length,
+    alreadyOwnedCount: lost.length,
+    refunded,
     listTotal,
     discountPct,
-    spent: total,
+    spent: total - refunded,
     transaction: debited.transaction,
   };
 };

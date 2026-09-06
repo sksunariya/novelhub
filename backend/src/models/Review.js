@@ -35,8 +35,21 @@ const reviewSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Non-unique index for fast lookup of novel comments/reviews.
-reviewSchema.index({ novel: 1, chapter: 1, user: 1 });
+// One live review per reader per target: one for the novel (chapter null) and
+// one per chapter. Comments are a separate model and stay unlimited.
+//
+// A unique index rather than controller logic alone, because saveReview does a
+// find-then-create: two submissions racing each other both miss the existing
+// row and both insert. Partial on deletedAt so a soft-deleted review does not
+// block the reader from writing a new one.
+//
+// NOTE: this index will fail to build on a collection that already holds
+// duplicates. Check with the aggregation in scripts/findDuplicateReviews.js
+// before deploying, and merge or soft-delete the extras first.
+reviewSchema.index(
+  { novel: 1, chapter: 1, user: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } }
+);
 reviewSchema.index({ novel: 1, chapter: 1, isPinned: -1, pinnedAt: -1, createdAt: -1 });
 // Serves the reading gate's "has this user reviewed this chapter" probe, which the
 // index above cannot because its prefix is `novel`.

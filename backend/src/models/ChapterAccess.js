@@ -34,6 +34,9 @@ chapterAccessSchema.index({ chapter: 1, unlockedAt: -1 });
 chapterAccessSchema.index({ novel: 1, unlockedAt: -1 });
 // Rental sweeper.
 chapterAccessSchema.index({ expiresAt: 1 }, { sparse: true });
+// Bulk unlock reads back its own rows by debit to find which ones landed —
+// without this that is a collection scan over every entitlement ever issued.
+chapterAccessSchema.index({ transaction: 1 }, { sparse: true });
 
 chapterAccessSchema.methods.isLive = function isLive() {
   return !this.expiresAt || this.expiresAt.getTime() > Date.now();

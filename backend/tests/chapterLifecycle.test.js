@@ -311,7 +311,7 @@ describe('content guard refunds', () => {
     });
 
     const first = await contentGuard.refundPurchasers({ chapterIds: [chapter._id], reason: 'removed' });
-    expect(first).toEqual({ refunded: 1, credits: 10 });
+    expect(first).toMatchObject({ refunded: 1, credits: 10 });
     expect((await Wallet.findOne({ user: user._id })).balance).toBe(100);
 
     // Access rows are gone, so a second pass finds nothing to refund.

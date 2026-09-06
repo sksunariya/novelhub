@@ -8,7 +8,12 @@ const run = async () => {
   console.log('Connecting to MongoDB...');
   await connectDB(uri);
 
-  console.log('Dropping legacy unique review index if present...');
+  // These drop the OLD index shapes so syncIndexes can lay down the current
+  // one. As of 2026-09-04 that is a PARTIAL UNIQUE index on
+  // (novel, chapter, user) where deletedAt is null — one live review per reader
+  // per novel and per chapter. It will fail to build if the collection already
+  // holds duplicates; run `npm run check:duplicate-reviews` first.
+  console.log('Dropping superseded review index shapes if present...');
   try {
     await Review.collection.dropIndex('novel_1_user_1');
     console.log('Successfully dropped legacy index "novel_1_user_1".');

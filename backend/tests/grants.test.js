@@ -450,7 +450,9 @@ describe('quick send', () => {
     expect(res.body.stats).toMatchObject({ granted: 1, creditsIssued: 250 });
     expect((await Wallet.findOne({ user: users[1]._id })).balance).toBe(250);
     // Everyone else is untouched — the whole point of the specific mode.
-    expect(await Wallet.findOne({ user: users[0]._id })).toBeNull();
+    // A wallet exists for every account (User provisions one on save), so
+    // "untouched" means nothing was credited to it, not that it is absent.
+    expect(await Wallet.findOne({ user: users[0]._id })).toMatchObject({ balance: 0, lifetimeGranted: 0 });
   });
 
   it('pays several named users', async () => {
@@ -499,7 +501,9 @@ describe('quick send', () => {
     const ghost = new mongoose.Types.ObjectId();
     await quickSend({ userIds: [users[0]._id, ghost], amount: 100 }).expect(400);
     // Nobody is paid, rather than one of the two.
-    expect(await Wallet.findOne({ user: users[0]._id })).toBeNull();
+    // A wallet exists for every account (User provisions one on save), so
+    // "untouched" means nothing was credited to it, not that it is absent.
+    expect(await Wallet.findOne({ user: users[0]._id })).toMatchObject({ balance: 0, lifetimeGranted: 0 });
   });
 
   it('refuses a banned recipient', async () => {
@@ -513,7 +517,9 @@ describe('quick send', () => {
     settingsService.clearCache();
     const res = await quickSend({ userIds: [users[0]._id], amount: 5000 });
     expect(res.status).toBe(403);
-    expect(await Wallet.findOne({ user: users[0]._id })).toBeNull();
+    // A wallet exists for every account (User provisions one on save), so
+    // "untouched" means nothing was credited to it, not that it is absent.
+    expect(await Wallet.findOne({ user: users[0]._id })).toMatchObject({ balance: 0, lifetimeGranted: 0 });
   });
 
   it('requires an admin', async () => {

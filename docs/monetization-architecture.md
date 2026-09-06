@@ -609,7 +609,7 @@ Same user then spends 10 granted credits: cost basis 0 → **$0.00** recognized.
 
 Because this resolves at cycle close, the UI shows in-cycle unlocks as *pending attribution* rather than pretending to know.
 
-**Refunds.** A clawback writes a negative `attributedUsdMicros` against the same chapters, so historical revenue self-corrects rather than needing a restatement.
+**Refunds.** A clawback writes a negative `RevenueEvent` against the same chapters, so historical revenue self-corrects rather than needing a restatement. Which chapters is not a guess: the order owns one credit tranche, every spend records the tranches it drew from in `bucketBreakdown`, so the spends this order funded — and how much of each came from here — are both recoverable. Partial refunds reverse pro-rata, and the credit clawback is ratioed by the same fraction so the two halves cannot disagree. Reversal is incremental: escalating a 50% refund to 100% posts the difference rather than repeating or skipping the first round.
 
 **Expiry.** Unspent expired credits release their `remainingCostMicros` as **forfeited revenue** — real money you kept with no content delivered. Reported as its own line, never folded into chapter revenue.
 
@@ -629,9 +629,36 @@ This should hold at all times and is worth asserting in a test:
 
 **Deferred revenue** — the sum of `remainingCostMicros` — is money you've taken but not yet earned in content. It's a real liability and the admin portal surfaces it prominently. A generous grant campaign can quietly balloon it.
 
+### 6.4a The RevenueEvent ledger
+
+Rollups rebuild from `RevenueEvent`, an append-only signed ledger of per-chapter cash. **Not from `ChapterAccess`** — that is an entitlement record, and using it as the financial source loses money three separate ways:
+
+- a lapsed rental is hard-deleted, so the next rebuild erases a sale that really happened
+- an unmetered subscriber never gets an access row at all, so cycle attribution vanishes inside the rebuild window
+- a bulk unlock's row can fail to insert while the cash was still taken
+
+Each of those failed quietly, and only after the rebuild caught up — the numbers looked right for up to three days and then dropped.
+
+Every event freezes what can move later: the credits-per-USD rate at the moment of the spend, the author, and the chapter number. A report is then a sum over immutable rows, and no admin action — re-pricing credits, renaming an author, binning a novel — can restate a closed period. Refunds are negative rows, so `$sum` nets them out with no special case.
+
+One event per (debit, chapter). Keying on (user, chapter) instead looks equivalent and is not: a chapter can be legitimately bought twice once a rental lapses, and the second sale is then swallowed as a duplicate.
+
+### 6.4b Ranged reporting and the reporting timezone
+
+`analytics.reportingTimezone` (IANA, default UTC) decides which day a sale falls in. Rollup rows stay keyed by UTC day; the ranged queries in `revenueReportService` bucket off the raw `occurredAt` with `$dateTrunc`, which applies the zone server-side — so the setting can change at any time with no migration.
+
+Two things this must get right, both of which produce a plausible-looking wrong dashboard:
+
+- the range end is **inclusive of the whole local day**. An exclusive end drops the most recent day's sales, which reads as "today is quiet".
+- bucket keys are stepped through the local calendar, never by adding a fixed 86,400,000 ms. The day after a spring-forward is 23 hours long, so a fixed step drifts off `$dateTrunc`'s keys and every bucket after the transition renders empty beside a totals card showing the true figure.
+
+Readership counts still come from `ChapterStatsDaily` (UTC days), so in a non-UTC zone they can be off by the sliver of a day at each edge. Responses flag this as `readership.readsApproximate` rather than presenting the two as equally precise.
+
 ### 6.5 Both metrics, admin's choice
 
-`analytics.revenueBasis` selects which figure is primary everywhere: `attributed_cash` (default, honest), `face_value` (simple, comparable to credit budgets), or `both` (side-by-side columns). The other is always available in exports.
+`analytics.revenueBasis` selects which figure is primary everywhere: `attributed_cash` (default, honest), `face_value` (simple, comparable to credit budgets), or `both` (side-by-side columns). The other is always available in exports. It is returned on every ranged response so switching costs a render rather than a query.
+
+Face value is only meaningful because it is recorded per event at the rate then in force. Computing it at report time from the live setting — as the rollup once did — meant every historical face-value figure moved whenever an admin touched the rate, including for closed periods.
 
 ---
 

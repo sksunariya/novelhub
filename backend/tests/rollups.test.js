@@ -193,7 +193,9 @@ describe('author earnings', () => {
     const rows = await analyticsService.authorEarnings();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ authorName: 'Vera Blackwood', novelCount: 2, unlocks: 2, linked: true });
-    expect(rows[0].revenueUsdCents).toBe(16); // two unlocks at 83,250 micros
+    // 2 x 83,250 micros = 166,500 = 16.65 cents. Summed in micros and rounded
+    // once, which is why it is 17 rather than two 8c rows added together.
+    expect(rows[0].revenueUsdCents).toBe(17);
   });
 
   it('surfaces unlinked novels rather than dropping them', async () => {

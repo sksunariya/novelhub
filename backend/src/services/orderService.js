@@ -309,14 +309,27 @@ const captureOrder = async (order, { source = 'client' } = {}) => {
  */
 const clawbackOrder = async (order, { refundedUsdCents = null, source = 'webhook' } = {}) => {
   if (!order.creditedAt) return { clawedBack: 0 };
-  if (order.creditsClawedBack >= order.totalCredits) return { clawedBack: 0 };
 
   const snapshot = await settingsService.snapshot();
   const allowNegative = snapshot.get('credits.allowNegativeBalance');
   const balance = await creditService.getBalance(order.user);
 
-  const owed = order.totalCredits - order.creditsClawedBack;
+  // Proportional to what was actually refunded.
+  //
+  // This used to claw back every credit on the order regardless of how much
+  // money went back. On a half refund that destroyed the full cost basis of the
+  // unspent credits AND the revenue reversal below took its ratioed share of
+  // what was already spent — together reversing more than the refund. The two
+  // halves have to be measured the same way or they cannot add up.
+  const refundRatio =
+    order.netUsdCents > 0
+      ? Math.max(0, Math.min(1, (refundedUsdCents === null ? order.netUsdCents : refundedUsdCents) / order.netUsdCents))
+      : 1;
+  const owed = Math.max(0, Math.round(order.totalCredits * refundRatio) - order.creditsClawedBack);
   const take = allowNegative ? owed : Math.min(owed, balance);
+  // Distinguishes refund rounds. Keyed on the capture alone, escalating a
+  // partial refund to a full one replayed the first clawback and took nothing.
+  const round = refundedUsdCents === null ? order.netUsdCents : refundedUsdCents;
 
   let reclaimed = 0;
   if (take > 0) {
@@ -325,7 +338,7 @@ const clawbackOrder = async (order, { refundedUsdCents = null, source = 'webhook
         user: order.user,
         amount: take,
         type: CREDIT_TRANSACTION_TYPES.REFUND,
-        idempotencyKey: `refund:${order.paypalCaptureId || order._id}`,
+        idempotencyKey: `refund:${order.paypalCaptureId || order._id}:${round}`,
         refType: CREDIT_REF_TYPES.ORDER,
         refId: order._id,
         reason: 'order refunded',
@@ -347,10 +360,31 @@ const clawbackOrder = async (order, { refundedUsdCents = null, source = 'webhook
   order.refundedUsdCents = refundedUsdCents === null ? order.netUsdCents : refundedUsdCents;
   order.status =
     order.refundedUsdCents >= order.netUsdCents ? ORDER_STATUS.REFUNDED : ORDER_STATUS.PARTIALLY_REFUNDED;
-  order.log('clawback', source, { credits: take });
+
+  // Reverse the half the credit clawback cannot reach.
+  //
+  // Draining the tranche above only undoes DEFERRED revenue — cash taken but
+  // not yet spent on a chapter. Anything the reader already spent had been
+  // recognized against chapters, and stayed in author earnings forever after a
+  // refund. This posts the offsetting negative events so a refund self-corrects
+  // instead of needing a restatement, exactly as §6.3 says it should.
+  const reversal = await require('./revenueService')
+    .reverseOrder(order, { ratio: refundRatio })
+    .catch((error) => {
+      // The money has already left PayPal. A failed reversal is logged, not
+      // thrown, for the same reason the clawback above is.
+      order.log('revenue_reversal_failed', source, { message: error.message });
+      return { reversed: 0, events: 0 };
+    });
+
+  order.log('clawback', source, {
+    credits: take,
+    revenueReversedUsdMicros: reversal.reversed,
+    chaptersAdjusted: reversal.events,
+  });
   await order.save();
 
-  return { clawedBack: take, shortfall: owed - take };
+  return { clawedBack: take, shortfall: owed - take, revenueReversed: reversal.reversed };
 };
 
 /** Expire stale unpaid orders so the price lock means something. */

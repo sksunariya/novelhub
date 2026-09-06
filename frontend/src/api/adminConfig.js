@@ -89,3 +89,19 @@ export const getNovelLeaderboard = (params = {}) =>
 export const getNovelPerformance = (id) => client.get(`/admin/analytics/novels/${id}`).then((r) => r.data);
 export const getFunnel = (params = {}) => client.get('/admin/analytics/funnel', { params }).then((r) => r.data);
 export const getEconomy = () => client.get('/admin/analytics/economy').then((r) => r.data);
+
+// --- ranged revenue -------------------------------------------------------
+// Every call shares one window contract: { from, to, days, granularity,
+// compare }. Dates are YYYY-MM-DD in the admin's configured reporting timezone.
+export const getRevenueSummary = (params = {}) =>
+  client.get('/admin/analytics/revenue', { params }).then((r) => r.data);
+export const getRevenueByNovel = (params = {}) =>
+  client.get('/admin/analytics/revenue/novels', { params }).then((r) => r.data);
+export const getRevenueByChapter = (id, params = {}) =>
+  client.get(`/admin/analytics/revenue/novels/${id}`, { params }).then((r) => r.data);
+export const getRevenueByAuthor = (params = {}) =>
+  client.get('/admin/analytics/revenue/authors', { params }).then((r) => r.data);
+export const revenueExportUrl = (params = {}) =>
+  `/api/admin/analytics/revenue/export.csv?${new URLSearchParams(
+    Object.entries(params).filter(([, value]) => value !== null && value !== undefined && value !== '')
+  ).toString()}`;

@@ -424,6 +424,24 @@ const BUCKET_CONSUMPTION_ORDER = {
   PURCHASED_FIRST: 'purchased_first',
 };
 
+// What moved cash onto or off a chapter. Written to the RevenueEvent ledger.
+const REVENUE_EVENT_KINDS = {
+  UNLOCK: 'unlock',                 // credits spent on one chapter
+  BULK_UNLOCK: 'bulk_unlock',       // one debit spread pro-rata over several
+  SUBSCRIPTION: 'subscription',     // a metered free-unlock allowance
+  SUBSCRIPTION_CYCLE: 'subscription_cycle', // unmetered cycle settled at close
+  REFUND: 'refund',                 // negative: recognized revenue reversed
+  ADJUSTMENT: 'adjustment',         // manual admin correction
+};
+
+// Bucket sizes the ranged analytics can group by. Mapped straight onto
+// $dateTrunc units, which apply the reporting timezone for us.
+const REPORT_GRANULARITIES = {
+  DAY: 'day',
+  WEEK: 'week',
+  MONTH: 'month',
+};
+
 // --- Payments ------------------------------------------------------------
 // The only currencies PayPal will settle in. Everything else must be charged
 // in USD with the local figure shown as an estimate.
@@ -694,6 +712,8 @@ module.exports = {
   CREDIT_SOURCES,
   CREDIT_REF_TYPES,
   BUCKET_CONSUMPTION_ORDER,
+  REVENUE_EVENT_KINDS,
+  REPORT_GRANULARITIES,
   PAYPAL_CURRENCIES,
   ZERO_DECIMAL_CURRENCIES,
   SETTLEMENT_MODES,

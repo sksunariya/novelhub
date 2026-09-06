@@ -256,6 +256,8 @@ describe('email queue', () => {
   });
 
   it('retries a transient failure', async () => {
+    // Real backoff is 1s/2s/4s; no reason for the suite to sit through it.
+    emailQueue.setBackoffBase(5);
     let attempts = 0;
     emailQueue.setSender(async () => {
       attempts += 1;
@@ -270,6 +272,7 @@ describe('email queue', () => {
   });
 
   it('gives up after the retry limit and records the failure', async () => {
+    emailQueue.setBackoffBase(5);
     emailQueue.setSender(async () => {
       throw new Error('mailbox full');
     });

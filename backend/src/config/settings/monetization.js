@@ -1040,6 +1040,15 @@ const settings = [
     label: 'Subscription revenue attribution',
   },
   {
+    key: 'analytics.reportingTimezone',
+    section: SECTIONS.ANALYTICS,
+    type: 'string',
+    default: 'UTC',
+    maxLength: 64,
+    label: 'Reporting timezone',
+    help: 'IANA zone (e.g. Asia/Kolkata) used to decide which day a sale falls in. Stored data stays UTC, so this can be changed at any time without a migration.',
+  },
+  {
     key: 'analytics.deductPaymentFees',
     section: SECTIONS.ANALYTICS,
     type: 'boolean',

@@ -10,7 +10,12 @@ const Chapter = require('../models/Chapter');
 const settingsService = require('./settingsService');
 const creditService = require('./creditService');
 const accessService = require('./accessService');
-const { CREDIT_TRANSACTION_TYPES, CREDIT_SOURCES, CREDIT_REF_TYPES } = require('../config/constants');
+const {
+  CREDIT_TRANSACTION_TYPES,
+  CREDIT_SOURCES,
+  CREDIT_REF_TYPES,
+  REVENUE_EVENT_KINDS,
+} = require('../config/constants');
 
 const conflict = (message, details) => Object.assign(new Error(message), { status: 409, details });
 
@@ -22,8 +27,11 @@ const conflict = (message, details) => Object.assign(new Error(message), { statu
  */
 const refundPurchasers = async ({ chapterIds, reason }) => {
   const rows = await ChapterAccess.find({ chapter: { $in: chapterIds }, creditsSpent: { $gt: 0 } });
+  const revenueService = require('./revenueService');
   let refunded = 0;
   let credits = 0;
+  let reversedMicros = 0;
+
   for (const row of rows) {
     await creditService.credit({
       user: row.user,
@@ -36,11 +44,36 @@ const refundPurchasers = async ({ chapterIds, reason }) => {
       reason,
       description: 'Refund: a chapter you unlocked was removed',
     });
+
+    // Un-book what this unlock earned.
+    //
+    // Deleting the access row used to be enough, because revenue was rebuilt
+    // from ChapterAccess. It is now rebuilt from the append-only RevenueEvent
+    // ledger, so without an offsetting negative event the reader gets their
+    // credits back AND the chapter — and its author — keep the money forever.
+    if (row.attributedUsdMicros > 0) {
+      const written = await revenueService.record({
+        chapter: row.chapter,
+        novel: row.novel,
+        user: row.user,
+        kind: REVENUE_EVENT_KINDS.REFUND,
+        source: row.source,
+        creditsSpent: -row.creditsSpent,
+        attributedUsdMicros: -row.attributedUsdMicros,
+        grantFundedCredits: 0,
+        transaction: row.transaction,
+        idempotencyKey: `content-removed:${row._id}`,
+        metadata: { reason: 'content removed' },
+      });
+      if (written) reversedMicros += row.attributedUsdMicros;
+    }
+
     refunded += 1;
     credits += row.creditsSpent;
   }
+
   await ChapterAccess.deleteMany({ chapter: { $in: chapterIds } });
-  return { refunded, credits };
+  return { refunded, credits, reversedUsdMicros: reversedMicros };
 };
 
 /**

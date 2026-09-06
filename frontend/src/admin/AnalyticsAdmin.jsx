@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Download, RefreshCw, TrendingUp, Users, Gift } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, TrendingUp, Users, Gift, DollarSign } from 'lucide-react';
 import {
   getNovelLeaderboard, getNovelPerformance, getEconomy, getFunnel,
 } from '../api/adminConfig';
 import client from '../api/client';
 import Spinner from '../components/Spinner';
 import RetentionChart from './analytics/RetentionChart';
+import RevenueExplorer from './analytics/RevenueExplorer';
 import { formatUsd, formatCount } from './analytics/chartScale';
 
 const Tile = ({ label, value, hint }) => (
@@ -101,7 +102,7 @@ const NovelDrilldown = ({ novelId, onBack }) => {
 };
 
 const AnalyticsAdmin = () => {
-  const [tab, setTab] = useState('novels');
+  const [tab, setTab] = useState('revenue');
   const [novels, setNovels] = useState(null);
   const [authors, setAuthors] = useState(null);
   const [economy, setEconomy] = useState(null);
@@ -161,7 +162,7 @@ const AnalyticsAdmin = () => {
         </button>
       </div>
 
-      {economy && (
+      {tab !== 'revenue' && economy && (
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Tile label="Recognized revenue" value={formatUsd(economy.recognizedUsdCents)} hint="earned in content" />
           <Tile
@@ -174,7 +175,7 @@ const AnalyticsAdmin = () => {
         </div>
       )}
 
-      {funnel && funnel.stages?.[0]?.value > 0 && (
+      {tab !== 'revenue' && funnel && funnel.stages?.[0]?.value > 0 && (
         <div className="mb-6 rounded-xl border border-line bg-night-surface p-4">
           <p className="mb-3 text-sm font-semibold text-silver">Paywall funnel, last 30 days</p>
           <div className="space-y-2">
@@ -206,8 +207,9 @@ const AnalyticsAdmin = () => {
 
       <div className="mb-4 flex gap-2 border-b border-line pb-3">
         {[
-          { id: 'novels', label: 'By novel', Icon: TrendingUp },
-          { id: 'authors', label: 'By author', Icon: Users },
+          { id: 'revenue', label: 'Revenue', Icon: DollarSign },
+          { id: 'novels', label: 'Lifetime by novel', Icon: TrendingUp },
+          { id: 'authors', label: 'Lifetime by author', Icon: Users },
         ].map((entry) => (
           <button
             key={entry.id}
@@ -230,7 +232,9 @@ const AnalyticsAdmin = () => {
         )}
       </div>
 
-      {tab === 'novels' ? (
+      {tab === 'revenue' ? (
+        <RevenueExplorer />
+      ) : tab === 'novels' ? (
         <div className="overflow-x-auto rounded-xl border border-line bg-night-surface">
           <table className="w-full text-sm">
             <thead className="border-b border-line text-left text-[11px] uppercase tracking-wide text-silver-muted">

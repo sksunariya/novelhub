@@ -33,6 +33,14 @@ const revenueDailySchema = new mongoose.Schema(
     // real purchases do.
     recognizedUsdMicros: { type: Number, default: 0 },
     deferredUsdMicrosEnd: { type: Number, default: 0 },
+
+    // Cash kept for content never delivered: unspent credits that expired.
+    // Real money, and the fourth term of the §6.4 identity — without it the
+    // identity cannot be checked at all, which is why it is stored rather than
+    // only logged by the sweeper job.
+    forfeitedUsdMicros: { type: Number, default: 0 },
+    // Recognized revenue reversed by refunds on this day.
+    reversedUsdMicros: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

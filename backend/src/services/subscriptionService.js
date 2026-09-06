@@ -24,6 +24,7 @@ const {
   CREDIT_SOURCES,
   CREDIT_REF_TYPES,
   MICROS_PER_CENT,
+  REVENUE_EVENT_KINDS,
 } = require('../config/constants');
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -427,6 +428,10 @@ const attributeCycle = async (subscription, cycle) => {
 
   if (!unmetered || cents <= 0) return { attributed: 0 };
 
+  // The admin's choice, which until now was declared and never read.
+  const mode = await settingsService.get('analytics.subscriptionAttribution');
+  if (mode === 'none') return { attributed: 0, mode };
+
   const start = subscription.currentPeriodStart;
   const end = subscription.currentPeriodEnd || new Date();
   if (!start) return { attributed: 0 };
@@ -443,29 +448,68 @@ const attributeCycle = async (subscription, cycle) => {
   if (!reads.length) return { attributed: 0, reads: 0 };
 
   const total = cents * MICROS_PER_CENT;
-  const per = Math.floor(total / reads.length);
-  // The last chapter absorbs the remainder so the parts sum exactly to the cash.
+
+  // per_novel_prorata splits the cycle evenly across NOVELS first and then
+  // within each novel across its chapters, so a reader who binged eighty
+  // chapters of one novel and two of another does not hand the first novel
+  // 97% of the cycle.
+  const weights = new Map(); // read index -> weight
+  if (mode === 'per_novel_prorata') {
+    const byNovel = new Map();
+    reads.forEach((read, index) => {
+      const key = String(read.novel);
+      if (!byNovel.has(key)) byNovel.set(key, []);
+      byNovel.get(key).push(index);
+    });
+    const perNovel = 1 / byNovel.size;
+    for (const indexes of byNovel.values()) {
+      for (const index of indexes) weights.set(index, perNovel / indexes.length);
+    }
+  } else {
+    reads.forEach((_, index) => weights.set(index, 1 / reads.length));
+  }
+
+  const revenueService = require('./revenueService');
+  const at = end;
   let allocated = 0;
-  const readTracking = require('./readTrackingService');
 
   for (let index = 0; index < reads.length; index += 1) {
     const read = reads[index];
-    const micros = index === reads.length - 1 ? total - allocated : per;
+    // The last chapter absorbs the remainder so the parts sum exactly to the cash.
+    const micros =
+      index === reads.length - 1 ? total - allocated : Math.floor(total * weights.get(index));
     allocated += micros;
-    await readTracking.recordUnlock({
+    if (micros <= 0) continue;
+
+    // A durable event, not just a counter bump. The previous version wrote
+    // only to ChapterStatsDaily, which the nightly rebuild then overwrote from
+    // ChapterAccess — and an unmetered subscriber has no ChapterAccess row, so
+    // every penny of unmetered subscription revenue silently vanished within
+    // the rebuild window.
+    await revenueService.record({
+      chapter: read.chapter,
+      novel: read.novel,
+      chapterNumber: read.chapterNumber,
+      user: subscription.user,
+      kind: REVENUE_EVENT_KINDS.SUBSCRIPTION_CYCLE,
+      source: 'subscription',
+      creditsSpent: 0,
+      attributedUsdMicros: micros,
+      occurredAt: at,
+      idempotencyKey: `sub-cycle:${subscription._id}:${cycle}:${read.chapter}`,
+      metadata: { cycle, mode },
+    });
+    await require('./readTrackingService').recordUnlock({
       chapter: read.chapter,
       novel: read.novel,
       chapterNumber: read.chapterNumber,
       creditsSpent: 0,
       attributedUsdMicros: micros,
+      day: at.toISOString().slice(0, 10),
     });
-    await Promise.all([
-      Chapter.updateOne({ _id: read.chapter }, { $inc: { revenueLifetimeUsdMicros: micros } }),
-      Novel.updateOne({ _id: read.novel }, { $inc: { revenueLifetimeUsdMicros: micros } }),
-    ]);
   }
 
-  return { attributed: allocated, reads: reads.length };
+  return { attributed: allocated, reads: reads.length, mode };
 };
 
 module.exports = {

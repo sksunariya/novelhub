@@ -481,7 +481,10 @@ describe('Admin', () => {
       expect(updated.ratingCount).toBe(1);
     });
 
-    it('restores a deleted review even if the author has another active review', async () => {
+    it('refuses to restore a review the author has since replaced', async () => {
+      // One live review per reader per novel. Restoring this one would give the
+      // author two and let a single account count twice toward the rating, so
+      // the admin is told why rather than silently getting a duplicate.
       const { admin, author, novel, reviewId } = await seedReview(4);
       await api().delete(`/api/community/reviews/${reviewId}`).set('Authorization', `Bearer ${admin.token}`);
       await api()
@@ -490,8 +493,12 @@ describe('Admin', () => {
         .send({ rating: 2 });
 
       const res = await api().post(`/api/admin/reviews/${reviewId}/restore`).set('Authorization', `Bearer ${admin.token}`);
-      expect(res.status).toBe(200);
-      expect((await Novel.findById(novel._id)).ratingCount).toBe(2);
+      expect(res.status).toBe(409);
+      expect(res.body.conflictingReviewId).toBeTruthy();
+      // The replacement still stands, and it is the only one counted.
+      const updated = await Novel.findById(novel._id);
+      expect(updated.ratingCount).toBe(1);
+      expect(updated.ratingAvg).toBe(2);
     });
 
     it('edits and restores a review reply', async () => {

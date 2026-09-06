@@ -8,7 +8,7 @@
 const mongoose = require('mongoose');
 const ChapterRead = require('../models/ChapterRead');
 const GateImpression = require('../models/GateImpression');
-const ChapterAccess = require('../models/ChapterAccess');
+const RevenueEvent = require('../models/RevenueEvent');
 const Chapter = require('../models/Chapter');
 const Novel = require('../models/Novel');
 const accessService = require('./accessService');
@@ -61,12 +61,15 @@ const novelChapterPerformance = async (novelId) => {
         },
       },
     ]),
-    ChapterAccess.aggregate([
+    // The ledger, not ChapterAccess: a lapsed rental deletes its access row,
+    // so reading unlocks from there made revenue disappear when a rental
+    // expired. Events are append-only and signed, so refunds net out here too.
+    RevenueEvent.aggregate([
       { $match: { novel: oid(novelId) } },
       {
         $group: {
           _id: '$chapter',
-          unlocks: { $sum: 1 },
+          unlocks: { $sum: { $cond: [{ $gte: ['$attributedUsdMicros', 0] }, 1, 0] } },
           credits: { $sum: '$creditsSpent' },
           micros: { $sum: '$attributedUsdMicros' },
         },
@@ -152,14 +155,14 @@ const novelChapterPerformance = async (novelId) => {
 /** Novel leaderboard for the analytics landing page. */
 const novelLeaderboard = async ({ limit = 50 } = {}) => {
   const [revenue, readers] = await Promise.all([
-    ChapterAccess.aggregate([
+    RevenueEvent.aggregate([
       {
         $group: {
           _id: '$novel',
-          unlocks: { $sum: 1 },
+          unlocks: { $sum: { $cond: [{ $gte: ['$attributedUsdMicros', 0] }, 1, 0] } },
           credits: { $sum: '$creditsSpent' },
           micros: { $sum: '$attributedUsdMicros' },
-          payers: { $addToSet: '$user' },
+          payers: { $addToSet: { $cond: [{ $gt: ['$attributedUsdMicros', 0] }, '$user', '$$REMOVE'] } },
         },
       },
       { $project: { unlocks: 1, credits: 1, micros: 1, payers: { $size: '$payers' } } },
@@ -216,8 +219,11 @@ const paywallFunnel = async ({ novelId = null, since = null } = {}) => {
 
   const unlockMatch = {};
   if (novelId) unlockMatch.novel = oid(novelId);
-  if (since) unlockMatch.unlockedAt = { $gte: since };
-  const [unlock] = await ChapterAccess.aggregate([
+  if (since) unlockMatch.occurredAt = { $gte: since };
+  // The ledger rather than ChapterAccess: a lapsed rental deletes its access
+  // row, which would quietly drop those conversions out of the funnel and
+  // overstate the drop-off it exists to measure.
+  const [unlock] = await RevenueEvent.aggregate([
     { $match: { ...unlockMatch, creditsSpent: { $gt: 0 } } },
     { $group: { _id: null, unlocks: { $sum: 1 }, buyers: { $addToSet: '$user' } } },
     { $project: { unlocks: 1, buyers: { $size: '$buyers' } } },
@@ -246,18 +252,21 @@ const creditEconomy = async () => {
   const creditService = require('./creditService');
   const CreditTransaction = require('../models/CreditTransaction');
 
-  const [byType, deferred] = await Promise.all([
+  const [byType, deferred, recognizedRows] = await Promise.all([
     CreditTransaction.aggregate([
       { $group: { _id: '$type', credits: { $sum: '$amount' }, micros: { $sum: '$attributedUsdMicros' } } },
     ]),
     creditService.getDeferredRevenueMicros(),
+    // Recognized revenue comes from the chapter ledger, not from spend rows.
+    // Summing type:'spend' alone counts refunds and duplicate-unlock reversals
+    // as revenue that was never given back, because those carry their own
+    // types — so the headline figure drifted upward with every reversal.
+    RevenueEvent.aggregate([{ $group: { _id: null, micros: { $sum: '$attributedUsdMicros' } } }]),
   ]);
 
   const map = toMap(byType);
   const get = (type) => (map.get(type) ? map.get(type).credits : 0);
-  const recognized = byType
-    .filter((row) => row._id === 'spend')
-    .reduce((sum, row) => sum + row.micros, 0);
+  const recognized = recognizedRows[0]?.micros || 0;
   const snapshot = await settingsService.snapshot();
 
   return {
