@@ -1,8 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Send, Bell, Mail, Users, CheckCircle, AlertCircle } from 'lucide-react';
 import client from '../api/client';
 import Spinner from '../components/Spinner';
 import Pagination from '../components/Pagination';
+import EmailListRecipients from './EmailListRecipients';
+import { parseEmailList, mergeParseResults, MAX_RECIPIENTS } from '../utils/emailList';
+
+const AUDIENCE_LABELS = {
+  all: 'All Users (Broadcast)',
+  user: 'Regular Users Only',
+  admin: 'Admin Staff Only',
+  specific: 'Specific User',
+  emails: 'Custom Email List',
+};
 
 const inputClass =
   'w-full rounded-lg border border-line bg-night px-3.5 py-2 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none';
@@ -22,10 +32,52 @@ const NotificationsAdmin = () => {
   const [statusMsg, setStatusMsg] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
+  // Marketing audience: a pasted list plus any number of uploaded CSVs.
+  const [rawEmails, setRawEmails] = useState('');
+  const [csvFiles, setCsvFiles] = useState([]);
+  const [dispatchSummary, setDispatchSummary] = useState(null);
+  // The list as it stood when the admin hit Dispatch. What the confirm modal
+  // shows and what gets posted are the same object, so a keystroke landing
+  // between confirming and sending cannot change the recipients.
+  const [pendingRecipients, setPendingRecipients] = useState(null);
+
   // Campaign log history state
   const [campaigns, setCampaigns] = useState(null);
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState({ pages: 1, total: 0 });
+
+  const emailsAudience = targetAudience === 'emails';
+
+  // Debounced copy of the textarea, for the preview only. Re-parsing a
+  // 5,000-line paste on every keystroke is measurable; waiting a beat is not.
+  const [previewText, setPreviewText] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setPreviewText(rawEmails), 200);
+    return () => clearTimeout(timer);
+  }, [rawEmails]);
+
+  // Live counts under the inputs. Advisory only — the authoritative parse
+  // happens at submit (below) and again on the server.
+  const parsedRecipients = useMemo(
+    () => mergeParseResults(parseEmailList(previewText), ...csvFiles.map((file) => file.result)),
+    [previewText, csvFiles]
+  );
+
+  // The parse that decides what is sent: run against the text as it is right
+  // now, not the debounced copy.
+  const buildRecipients = useCallback(
+    () => mergeParseResults(parseEmailList(rawEmails), ...csvFiles.map((file) => file.result)),
+    [rawEmails, csvFiles]
+  );
+
+  // An address with no account cannot receive an in-app notification, so this
+  // audience is email-only. Forced here and shown as forced below, rather than
+  // offering a choice the dispatch would silently override.
+  useEffect(() => {
+    if (targetAudience !== 'emails') return;
+    setInAppChannel(false);
+    setEmailChannel(true);
+  }, [targetAudience]);
 
   const loadCampaigns = useCallback(() => {
     client
@@ -61,6 +113,7 @@ const NotificationsAdmin = () => {
   const handleFormSubmit = (e) => {
     e.preventDefault();
     setStatusMsg(null);
+    setDispatchSummary(null);
     if (!title.trim() || !message.trim()) {
       setStatusMsg({ type: 'error', text: 'Title and message are required.' });
       return;
@@ -72,6 +125,26 @@ const NotificationsAdmin = () => {
     if (targetAudience === 'specific' && !targetUser) {
       setStatusMsg({ type: 'error', text: 'Please select a specific target user.' });
       return;
+    }
+    if (targetAudience === 'emails') {
+      const recipients = buildRecipients();
+      if (!recipients.emails.length) {
+        setStatusMsg({
+          type: 'error',
+          text: recipients.invalidCount
+            ? 'None of the entries are valid email addresses. Check the highlighted rows.'
+            : 'Add at least one email address, or upload a CSV.',
+        });
+        return;
+      }
+      if (recipients.emails.length > MAX_RECIPIENTS) {
+        setStatusMsg({
+          type: 'error',
+          text: `${recipients.emails.length.toLocaleString('en-US')} addresses is over the ${MAX_RECIPIENTS.toLocaleString('en-US')} limit for one campaign. Split it into smaller sends.`,
+        });
+        return;
+      }
+      setPendingRecipients(recipients);
     }
     setShowConfirmModal(true);
   };
@@ -92,8 +165,17 @@ const NotificationsAdmin = () => {
         channels,
       };
 
+      if (targetAudience === 'emails') {
+        payload.emails = (pendingRecipients || buildRecipients()).emails;
+        // Recorded on the campaign so an audit can tell a hand-typed list from
+        // an uploaded one without reading the addresses back.
+        payload.recipientSource =
+          csvFiles.length && rawEmails.trim() ? 'mixed' : csvFiles.length ? 'csv' : 'manual';
+      }
+
       const { data } = await client.post('/admin/notifications/dispatch', payload);
       setStatusMsg({ type: 'success', text: data.message || 'Notification campaign dispatched!' });
+      setDispatchSummary(data.summary || null);
 
       // Reset form
       setTitle('');
@@ -102,6 +184,9 @@ const NotificationsAdmin = () => {
       setTargetAudience('all');
       setTargetUser(null);
       setTargetSearch('');
+      setRawEmails('');
+      setCsvFiles([]);
+      setPendingRecipients(null);
       setInAppChannel(false);
       setEmailChannel(false);
       setShowConfirmModal(false);
@@ -110,6 +195,7 @@ const NotificationsAdmin = () => {
       loadCampaigns();
     } catch (err) {
       setStatusMsg({ type: 'error', text: err.response?.data?.message || 'Failed to dispatch notification.' });
+      setDispatchSummary(null);
     } finally {
       setDispatching(false);
     }
@@ -191,31 +277,47 @@ const NotificationsAdmin = () => {
               <option value="user">Regular Users Only</option>
               <option value="admin">Admin Staff Only</option>
               <option value="specific">Specific User</option>
+              <option value="emails">Custom Email List (incl. non-members)</option>
             </select>
           </div>
 
           <div>
             <span className="mb-1.5 block text-sm font-medium text-silver">Delivery Channels</span>
             <div className="flex items-center gap-4 pt-2">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-silver">
+              <label
+                className={`flex items-center gap-2 text-sm ${
+                  emailsAudience ? 'cursor-not-allowed text-silver-muted/60' : 'cursor-pointer text-silver'
+                }`}
+              >
                 <input
                   type="checkbox"
                   checked={inAppChannel}
+                  disabled={emailsAudience}
                   onChange={(e) => setInAppChannel(e.target.checked)}
                   className="accent-[var(--color-primary)]"
                 />
                 <Bell className="h-4 w-4 text-silver-muted" /> In-App
               </label>
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-silver">
+              <label
+                className={`flex items-center gap-2 text-sm ${
+                  emailsAudience ? 'cursor-not-allowed text-silver-muted/60' : 'cursor-pointer text-silver'
+                }`}
+              >
                 <input
                   type="checkbox"
                   checked={emailChannel}
+                  disabled={emailsAudience}
                   onChange={(e) => setEmailChannel(e.target.checked)}
                   className="accent-[var(--color-primary)]"
                 />
                 <Mail className="h-4 w-4 text-silver-muted" /> Email
               </label>
             </div>
+            {emailsAudience && (
+              <p className="mt-1.5 text-xs text-silver-muted">
+                Email only — an address without an account has no in-app inbox.
+              </p>
+            )}
           </div>
         </div>
 
@@ -268,6 +370,17 @@ const NotificationsAdmin = () => {
           </div>
         )}
 
+        {emailsAudience && (
+          <EmailListRecipients
+            rawEmails={rawEmails}
+            onRawEmailsChange={setRawEmails}
+            csvFiles={csvFiles}
+            onCsvFilesChange={setCsvFiles}
+            parsed={parsedRecipients}
+            inputClass={inputClass}
+          />
+        )}
+
         {statusMsg && (
           <div
             className={`flex items-center gap-2 rounded-lg p-3 text-sm ${
@@ -277,6 +390,23 @@ const NotificationsAdmin = () => {
             {statusMsg.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
             <span>{statusMsg.text}</span>
           </div>
+        )}
+
+        {/* The server's own counts, which are the ones that decided the send. */}
+        {dispatchSummary && (
+          <dl className="grid grid-cols-2 gap-2 rounded-lg border border-line/60 bg-night-surface p-3 text-xs sm:grid-cols-4">
+            {[
+              ['Sent to', dispatchSummary.recipientCount],
+              ['Registered', dispatchSummary.matchedUserCount],
+              ['New contacts', dispatchSummary.externalCount],
+              ['Suppressed', dispatchSummary.suppressedCount],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-[10px] font-semibold uppercase text-silver-muted">{label}</dt>
+                <dd className="font-semibold text-silver">{(value || 0).toLocaleString('en-US')}</dd>
+              </div>
+            ))}
+          </dl>
         )}
 
         <div className="pt-2">
@@ -320,10 +450,21 @@ const NotificationsAdmin = () => {
                       <p className="font-medium text-silver">{camp.title}</p>
                       <p className="truncate text-xs text-silver-muted max-w-xs">{camp.message}</p>
                     </td>
-                    <td className="px-4 py-3 capitalize text-silver-muted">
-                      {camp.targetAudience === 'specific' && camp.targetUser
-                        ? `@${camp.targetUser.username}`
-                        : camp.targetAudience}
+                    <td className="px-4 py-3 text-silver-muted">
+                      {camp.targetAudience === 'specific' && camp.targetUser ? (
+                        `@${camp.targetUser.username}`
+                      ) : camp.targetAudience === 'emails' ? (
+                        <>
+                          <span className="text-silver">Email list</span>
+                          <span className="block text-xs">
+                            {(camp.matchedUserCount || 0).toLocaleString('en-US')} registered ·{' '}
+                            {(camp.externalCount || 0).toLocaleString('en-US')} new
+                            {camp.recipientSource ? ` · ${camp.recipientSource}` : ''}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="capitalize">{camp.targetAudience}</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
@@ -381,14 +522,36 @@ const NotificationsAdmin = () => {
                 )}
               </div>
 
+              {emailsAudience && pendingRecipients && (
+                <div className="space-y-1.5 rounded-xl border border-line/60 bg-night-surface p-3.5">
+                  <span className="text-[10px] font-semibold uppercase text-silver-muted">Recipients:</span>
+                  <p className="break-words font-mono text-[11px] leading-relaxed text-silver">
+                    {pendingRecipients.emails.slice(0, 8).join(', ')}
+                    {pendingRecipients.emails.length > 8 && (
+                      <span className="text-silver-muted">
+                        {' '}
+                        …and {(pendingRecipients.emails.length - 8).toLocaleString('en-US')} more
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[11px] text-silver-muted">
+                    Addresses belonging to a member who turned announcement emails off, or to a banned or
+                    closed account, are skipped automatically.
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-line/60 bg-night-surface p-3">
                   <span className="mb-1 block text-[10px] font-semibold uppercase text-silver-muted">Target Audience:</span>
-                  <span className="font-semibold capitalize text-silver">
-                    {targetAudience === 'all' && 'All Users (Broadcast)'}
-                    {targetAudience === 'user' && 'Regular Users Only'}
-                    {targetAudience === 'admin' && 'Admin Staff Only'}
-                    {targetAudience === 'specific' && targetUser && `@${targetUser.username}`}
+                  <span className="font-semibold text-silver">
+                    {targetAudience === 'specific' && targetUser
+                      ? `@${targetUser.username}`
+                      : emailsAudience && pendingRecipients
+                        ? `${pendingRecipients.emails.length.toLocaleString('en-US')} email address${
+                            pendingRecipients.emails.length === 1 ? '' : 'es'
+                          }`
+                        : AUDIENCE_LABELS[targetAudience]}
                   </span>
                 </div>
 

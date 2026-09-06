@@ -11,6 +11,12 @@ const SiteSettings = require('../models/SiteSettings');
 const Campaign = require('../models/Campaign');
 const { dispatchCampaign, dispatchNotification } = require('../services/notificationService');
 const {
+  parseEmailList,
+  parseEmailCsv,
+  mergeParseResults,
+  MAX_RECIPIENTS,
+} = require('../utils/emailList');
+const {
   guardChapterDeletion,
   guardNovelDeletion,
   guardUserDeletion,
@@ -1067,16 +1073,124 @@ const getChapterSource = asyncHandler(async (req, res) => {
   res.json({ url, name: chapter.sourceFile.name });
 });
 
+/**
+ * Build the recipient list for the 'emails' audience.
+ *
+ * The admin portal parses the paste and the CSV client-side to preview them, so
+ * what usually arrives here is `emails: [...]` already normalized. It is parsed
+ * again regardless — the preview is a convenience, this is the boundary — and
+ * the raw forms are accepted too so the endpoint is usable without the portal.
+ */
+const collectCampaignEmails = ({ emails, rawEmails, csvText }) => {
+  const results = [];
+
+  if (Array.isArray(emails) && emails.length) {
+    // Join and re-parse rather than trusting the array: an element could itself
+    // be "a@x.com, b@x.com" if a caller skipped the client-side split.
+    results.push(parseEmailList(emails.filter((entry) => typeof entry === 'string').join('\n')));
+  }
+  if (typeof rawEmails === 'string' && rawEmails.trim()) {
+    results.push(parseEmailList(rawEmails));
+  }
+  if (typeof csvText === 'string' && csvText.trim()) {
+    results.push(parseEmailCsv(csvText));
+  }
+
+  return mergeParseResults(...results);
+};
+
 const dispatchAdminNotification = asyncHandler(async (req, res) => {
-  const { title, message, link, targetAudience, targetUserId, channels } = req.body;
+  const {
+    title,
+    message,
+    link,
+    targetAudience,
+    targetUserId,
+    channels,
+    emails,
+    rawEmails,
+    csvText,
+    recipientSource,
+  } = req.body;
+
   if (!title || !message) {
     return res.status(400).json({ message: 'Title and message are required' });
   }
+
+  const audience = targetAudience || 'all';
+
+  if (audience === 'emails') {
+    const parsed = collectCampaignEmails({ emails, rawEmails, csvText });
+
+    if (!parsed.emails.length) {
+      return res.status(400).json({
+        message: parsed.invalidCount
+          ? `No valid email addresses found — all ${parsed.invalidCount} entr${parsed.invalidCount === 1 ? 'y was' : 'ies were'} malformed.`
+          : 'Add at least one email address, or upload a CSV.',
+        invalid: parsed.invalid,
+        invalidCount: parsed.invalidCount,
+      });
+    }
+
+    if (parsed.emails.length > MAX_RECIPIENTS) {
+      return res.status(400).json({
+        message:
+          `This list has ${parsed.emails.length.toLocaleString('en-US')} addresses; a single campaign can target ` +
+          `at most ${MAX_RECIPIENTS.toLocaleString('en-US')}. Split it into smaller sends.`,
+        recipientCount: parsed.emails.length,
+        maxRecipients: MAX_RECIPIENTS,
+      });
+    }
+
+    // Email-only, whatever the client asked for. An address with no account
+    // cannot receive an in-app notification, and honouring a mixed selection
+    // would mean the same campaign behaved differently per recipient.
+    const campaign = await dispatchCampaign({
+      title: title.trim(),
+      message: message.trim(),
+      link: (link || '').trim(),
+      targetAudience: 'emails',
+      emails: parsed.emails,
+      recipientSource: ['manual', 'csv', 'mixed'].includes(recipientSource) ? recipientSource : 'manual',
+      channels: ['email'],
+      adminUser: req.user,
+    });
+
+    // dispatchCampaign throws with a status for every refusal on this path, so
+    // reaching here with nothing back would be a bug rather than a bad request.
+    if (!campaign) {
+      return res.status(400).json({ message: 'No eligible recipients found' });
+    }
+
+    const skipped = campaign.suppressedCount;
+    return res.status(201).json({
+      campaign,
+      // Counts the admin cannot get any other way: what the parser dropped and
+      // what the address list actually resolved to.
+      summary: {
+        recipientCount: campaign.recipientCount,
+        matchedUserCount: campaign.matchedUserCount,
+        externalCount: campaign.externalCount,
+        suppressedCount: skipped,
+        duplicatesRemoved: parsed.duplicateCount,
+        invalidCount: parsed.invalidCount,
+        invalid: parsed.invalid,
+      },
+      message:
+        `Sending to ${campaign.recipientCount.toLocaleString('en-US')} address` +
+        `${campaign.recipientCount === 1 ? '' : 'es'}` +
+        `${campaign.matchedUserCount ? ` (${campaign.matchedUserCount.toLocaleString('en-US')} registered)` : ''}` +
+        `${parsed.duplicateCount ? `, ${parsed.duplicateCount} duplicate${parsed.duplicateCount === 1 ? '' : 's'} removed` : ''}` +
+        `${parsed.invalidCount ? `, ${parsed.invalidCount} invalid skipped` : ''}` +
+        `${skipped ? `, ${skipped} suppressed (banned or closed account)` : ''}.`,
+    });
+  }
+
   const campaign = await dispatchCampaign({
     title: title.trim(),
     message: message.trim(),
     link: (link || '').trim(),
-    targetAudience: targetAudience || 'all',
+    targetAudience: audience,
     targetUserId: targetUserId || null,
     channels: Array.isArray(channels) && channels.length > 0 ? channels : ['in_app'],
     adminUser: req.user,

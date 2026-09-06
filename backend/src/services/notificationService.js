@@ -19,6 +19,7 @@ const dispatchNotification = async ({
   link = '',
   channels = [NOTIFICATION_CHANNELS.IN_APP],
   metadata = {},
+  settings: providedSettings = null,
 }) => {
   if (!recipient) return null;
 
@@ -42,8 +43,10 @@ const dispatchNotification = async ({
     return null;
   }
 
-  // 2. Fetch global SiteSettings for admin-controlled switches
-  const settings = await SiteSettings.getSettings();
+  // 2. Global SiteSettings for the admin-controlled switches. A bulk caller
+  // passes its own snapshot: getSettings() is an uncached findOne, and a
+  // 5,000-recipient campaign has no business issuing 5,000 of them.
+  const settings = providedSettings || (await SiteSettings.getSettings());
 
   // Check global toggles
   if (type === NOTIFICATION_TYPES.REPLY && !settings.enableReplyNotifications) return null;
@@ -180,21 +183,237 @@ const notifyCommentActivity = async ({
   }
 };
 
+// ---------------------------------------------------------------- campaigns
+
+const mongoose = require('mongoose');
+const settingsService = require('./settingsService');
+const { normalizeEmail, isValidEmail, MAX_RECIPIENTS } = require('../utils/emailList');
+
+const DEFAULT_BATCH_SIZE = 250;
+
+const badRequest = (message) => Object.assign(new Error(message), { status: 400 });
+
+/**
+ * Recipients per batch, from settings. The setting has always existed; this is
+ * what reads it. Falling back rather than throwing keeps a campaign sendable
+ * when the settings collection is briefly unreachable.
+ */
+const resolveBatchSize = async () => {
+  try {
+    const configured = Number(await settingsService.get('notifications.batchSize'));
+    return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : DEFAULT_BATCH_SIZE;
+  } catch (error) {
+    console.error('[dispatchCampaign] batch size lookup failed, using default:', error.message);
+    return DEFAULT_BATCH_SIZE;
+  }
+};
+
+/**
+ * Sort an explicit address list into the three groups that get different
+ * treatment.
+ *
+ *   members    - the address belongs to a live account, so it goes through
+ *                dispatchNotification and that account's own
+ *                emailAnnouncements preference decides. A member who turned
+ *                announcement email off does not receive marketing just
+ *                because an admin pasted their address.
+ *   suppressed - the address belongs to a banned or closed account. Counted
+ *                and reported, never sent to: a ban or a deletion is an
+ *                opt-out no matter who typed the address back in.
+ *   external   - nobody we know. There is no account to hold a preference, so
+ *                it is sent directly through the email queue.
+ */
+const resolveEmailRecipients = async (emails) => {
+  // Live accounts. The soft-delete plugin adds `deletedAt: null` to any find
+  // that does not mention deletedAt itself, which is exactly right here: it
+  // makes this query eligible for the partial unique index on email.
+  const live = await User.find({ email: { $in: emails } })
+    .select('_id email notificationPreferences banned')
+    .lean();
+
+  const liveByEmail = new Map(live.map((user) => [(user.email || '').toLowerCase(), user]));
+
+  // Of the addresses with no live account, some belong to a closed one. A user
+  // who deleted an account with no financial history keeps their real address
+  // in the row (only anonymization scrubs it), so without this check a closed
+  // account's address would be treated as a stranger's and mailed.
+  //
+  // Naming deletedAt explicitly opts out of the plugin's filter, and its bounds
+  // keep the scan to the deleted rows in the deletedAt index rather than the
+  // whole users collection.
+  const unmatched = emails.filter((email) => !liveByEmail.has(email));
+  const closed = unmatched.length
+    ? await User.find({ email: { $in: unmatched }, deletedAt: { $ne: null } })
+        .select('email')
+        .lean()
+    : [];
+  const closedEmails = new Set(closed.map((user) => (user.email || '').toLowerCase()));
+
+  const members = [];
+  const suppressed = [];
+  const external = [];
+
+  emails.forEach((email) => {
+    const user = liveByEmail.get(email);
+    if (user) {
+      // A ban is an opt-out as much as a preference is.
+      if (user.banned) suppressed.push(email);
+      else members.push(user);
+      return;
+    }
+    if (closedEmails.has(email)) suppressed.push(email);
+    else external.push(email);
+  });
+
+  return { members, suppressed, external };
+};
+
+/**
+ * Campaign to an explicit address list — the marketing path, and the only one
+ * that can reach somebody who has never registered.
+ *
+ * Email-only by design. In-app has no meaning for an address with no account,
+ * and delivering it to the registered half of a list would make the same
+ * campaign mean two different things depending on who received it.
+ */
+const dispatchEmailListCampaign = async ({
+  title,
+  message,
+  link,
+  emails,
+  recipientSource,
+  adminUser,
+  type,
+}) => {
+  // Re-normalize rather than trust the caller. The admin portal parses the same
+  // list client-side to preview it, and this is the parse that counts.
+  const seen = new Set();
+  const list = [];
+  (Array.isArray(emails) ? emails : []).forEach((raw) => {
+    const email = normalizeEmail(raw);
+    if (!isValidEmail(email) || seen.has(email)) return;
+    seen.add(email);
+    list.push(email);
+  });
+
+  if (!list.length) throw badRequest('Add at least one valid email address.');
+  if (list.length > MAX_RECIPIENTS) {
+    throw badRequest(
+      `A campaign can target at most ${MAX_RECIPIENTS.toLocaleString('en-US')} addresses at once ` +
+        `(this list has ${list.length.toLocaleString('en-US')}). Split it into smaller sends.`
+    );
+  }
+
+  // Checked once, up front. dispatchNotification checks it per member anyway,
+  // but external addresses bypass that — without this, a campaign sent while
+  // email is globally off would reach every stranger and no member.
+  const settings = await SiteSettings.getSettings();
+  if (!settings.enableEmailNotifications) {
+    throw Object.assign(
+      new Error('Email notifications are switched off in site settings, so this campaign would reach nobody.'),
+      { status: 409 }
+    );
+  }
+
+  const { members, suppressed, external } = await resolveEmailRecipients(list);
+  const recipientCount = members.length + external.length;
+
+  if (!recipientCount) {
+    throw badRequest(
+      `None of the ${list.length} address(es) can be mailed — every one belongs to a banned or closed account.`
+    );
+  }
+
+  const campaignRecord = await Campaign.create({
+    title,
+    message,
+    link,
+    targetAudience: 'emails',
+    targetUser: null,
+    channels: [NOTIFICATION_CHANNELS.EMAIL],
+    recipientCount,
+    recipientSource: recipientSource || 'manual',
+    recipientEmails: list,
+    matchedUserCount: members.length,
+    externalCount: external.length,
+    suppressedCount: suppressed.length,
+    createdBy: adminUser._id,
+  });
+
+  const batchSize = await resolveBatchSize();
+
+  setImmediate(async () => {
+    try {
+      // Members are batched because each dispatchNotification does its own
+      // database work; `settings` is handed down so the whole campaign costs
+      // one settings read instead of one per recipient.
+      for (let i = 0; i < members.length; i += batchSize) {
+        const chunk = members.slice(i, i + batchSize);
+        await Promise.all(
+          chunk.map((recipient) =>
+            dispatchNotification({
+              recipient,
+              actor: adminUser,
+              type,
+              title,
+              message,
+              link,
+              channels: [NOTIFICATION_CHANNELS.EMAIL],
+              metadata: { campaignId: campaignRecord._id, audience: 'emails' },
+              settings,
+            }).catch((err) =>
+              console.error('[dispatchEmailListCampaign] member dispatch error:', err.message)
+            )
+          )
+        );
+      }
+
+      // External addresses are enqueued in one pass, deliberately not batched:
+      // enqueue() returns immediately and the email queue is already what
+      // bounds concurrency, applies the per-address daily cap and retries.
+      // Chunking here would only delay handing it the work.
+      external.forEach((to) => {
+        sendNotificationEmail({ to, title, message, link }).catch((err) =>
+          console.error('[dispatchEmailListCampaign] external send error:', err.message)
+        );
+      });
+    } catch (err) {
+      console.error('[dispatchEmailListCampaign] batch processing failed:', err.message);
+    }
+  });
+
+  return campaignRecord;
+};
+
 /**
  * Dispatches a bulk campaign / custom notification from Admin Portal.
  */
-const mongoose = require('mongoose');
-
 const dispatchCampaign = async ({
   title,
   message,
   link = '',
   targetAudience = 'all',
   targetUserId = null,
+  emails = null,
+  recipientSource = null,
   channels = [NOTIFICATION_CHANNELS.IN_APP],
   adminUser,
   type = NOTIFICATION_TYPES.CAMPAIGN,
 }) => {
+  // The address-list audience resolves recipients from what the admin typed
+  // rather than from a User query, so it takes its own path.
+  if (targetAudience === 'emails') {
+    return dispatchEmailListCampaign({
+      title,
+      message,
+      link,
+      emails,
+      recipientSource,
+      adminUser,
+      type: type || NOTIFICATION_TYPES.CAMPAIGN,
+    });
+  }
+
   let filter = { banned: false, deletedAt: null };
 
   if (targetAudience === 'specific') {
@@ -221,12 +440,14 @@ const dispatchCampaign = async ({
     createdBy: adminUser._id,
   });
 
-  // Batch process dispatches in chunks of 250 with error resilience
-  const BATCH_SIZE = 250;
+  const batchSize = await resolveBatchSize();
+  const settings = await SiteSettings.getSettings();
+
+  // Batch process dispatches with error resilience
   setImmediate(async () => {
     try {
-      for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
-        const chunk = recipients.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < recipients.length; i += batchSize) {
+        const chunk = recipients.slice(i, i + batchSize);
         await Promise.all(
           chunk.map((recipient) =>
             dispatchNotification({
@@ -238,6 +459,7 @@ const dispatchCampaign = async ({
               link,
               channels,
               metadata: { campaignId: campaignRecord._id },
+              settings,
             }).catch((err) => console.error('[dispatchCampaign] Recipient dispatch error:', err.message))
           )
         );
@@ -254,4 +476,5 @@ module.exports = {
   dispatchNotification,
   notifyCommentActivity,
   dispatchCampaign,
+  resolveEmailRecipients,
 };
