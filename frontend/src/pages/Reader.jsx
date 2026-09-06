@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Home, List, Settings2, X, MessageSquare } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Home, Menu, X } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/Spinner';
@@ -12,6 +12,10 @@ import { stripTextColor } from '../utils/sanitizeContent';
 import { formatRelativeTime, formatExactDateTime } from '../utils/dateUtils';
 import DeletedItemModal from '../components/DeletedItemModal';
 import { ANCHORS, readHashTarget, isTargetInItems } from '../utils/hashTarget';
+import ReaderToolbar from '../components/reader/ReaderToolbar';
+import ReaderSettingsPopover from '../components/reader/ReaderSettingsPopover';
+import useTextToSpeech from '../components/reader/useTextToSpeech';
+import useFullscreen from '../components/reader/useFullscreen';
 
 const SETTINGS_KEY = 'novelhub_reader_settings';
 
@@ -26,11 +30,17 @@ const applyReaction = (item, reaction, userId) => ({
   dislikes: withUser(item.dislikes, userId, reaction.disliked),
 });
 
+// `surface` is the raised colour behind the chapter card and the two bars;
+// `border` is the hairline between them. Both are spelled out per theme rather
+// than layered as one translucent white: an overlay that reads as "lifted" on
+// the dark themes reads as grubby on sepia and disappears entirely on light.
+// Light's page colour is a shade darker than it used to be for the same reason
+// — a white card needs something to sit on.
 const READER_THEMES = {
-  dark: { background: '#0a0507', text: '#d6d3d1', name: 'Dark' },
-  black: { background: '#000000', text: '#c7c7c7', name: 'Black' },
-  sepia: { background: '#f4ecd8', text: '#433422', name: 'Sepia' },
-  light: { background: '#fafafa', text: '#1c1917', name: 'Light' },
+  dark: { background: '#0a0507', surface: '#150c10', border: 'rgba(255,255,255,0.08)', text: '#d6d3d1', name: 'Dark' },
+  black: { background: '#000000', surface: '#111111', border: 'rgba(255,255,255,0.09)', text: '#c7c7c7', name: 'Black' },
+  sepia: { background: '#f4ecd8', surface: '#fbf5e6', border: 'rgba(67,52,34,0.16)', text: '#433422', name: 'Sepia' },
+  light: { background: '#f1f1f0', surface: '#ffffff', border: 'rgba(28,25,23,0.12)', text: '#1c1917', name: 'Light' },
 };
 
 const FONTS = {
@@ -58,12 +68,11 @@ const Reader = () => {
   const [gatePayload, setGatePayload] = useState(null);
   const [settings, setSettings] = useState(loadSettings);
   const [panel, setPanel] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [chapters, setChapters] = useState([]);
   const [comments, setComments] = useState(null);
   const [commentError, setCommentError] = useState('');
-  const [panelCommentText, setPanelCommentText] = useState('');
   const [bottomCommentText, setBottomCommentText] = useState('');
-  const [isPanelCommentFocused, setIsPanelCommentFocused] = useState(false);
   const [isBottomCommentFocused, setIsBottomCommentFocused] = useState(false);
   const [activeTab, setActiveTab] = useState('comments');
   const [userReview, setUserReview] = useState(null);
@@ -112,7 +121,6 @@ const Reader = () => {
     setGatePayload(null);
     setComments(null);
     setCommentError('');
-    setPanelCommentText('');
     setBottomCommentText('');
     setChapterReview(null);
     setChapterReviews(null);
@@ -354,6 +362,11 @@ const Reader = () => {
     [data?.chapter?.content]
   );
 
+  // Both of these have to be called before the error and gate returns below —
+  // a hook skipped on a gated chapter changes the hook order between renders.
+  const fullscreen = useFullscreen();
+  const speech = useTextToSpeech(contentHtml);
+
   if (error) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-night text-silver-muted">
@@ -375,32 +388,73 @@ const Reader = () => {
     <div className="min-h-dvh transition-colors duration-300" style={{ backgroundColor: theme.background, color: theme.text }}>
       <header
         className="sticky top-0 z-30 border-b backdrop-blur"
-        style={{ backgroundColor: `${theme.background}ee`, borderColor: 'rgba(128,128,128,0.2)' }}
+        style={{ backgroundColor: `${theme.surface}f2`, borderColor: theme.border }}
       >
-        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-2 px-4">
-          <div className="flex min-w-0 items-center gap-1">
-            <Link to={`/novel/${slug}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100" aria-label="Back to novel">
-              <Home className="h-5 w-5" aria-hidden="true" />
+        <div className="mx-auto flex h-14 max-w-4xl items-center gap-2 px-3">
+          <div className="flex shrink-0 items-center gap-1">
+            <Link
+              to="/"
+              className="flex h-10 w-10 items-center justify-center rounded-lg border opacity-70 transition-opacity hover:opacity-100"
+              style={{ borderColor: theme.border }}
+              aria-label="Home"
+            >
+              <Home className="h-[18px] w-[18px]" aria-hidden="true" />
             </Link>
+            <Link
+              to={`/novel/${slug}`}
+              className="flex h-10 w-10 items-center justify-center rounded-lg border opacity-70 transition-opacity hover:opacity-100"
+              style={{ borderColor: theme.border }}
+              aria-label="Back to novel"
+            >
+              <ArrowLeft className="h-[18px] w-[18px]" aria-hidden="true" />
+            </Link>
+          </div>
+
+          {/* Chapter number on top, novel title beneath. Side by side, a long
+              title pushes the chapter number — the one thing a reader checks
+              mid-scroll — off the end of the bar. */}
+          <div className="min-w-0 flex-1 text-center">
             {data && (
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{data.novel.title}</p>
-                <p className="truncate text-xs opacity-60">
-                  Ch. {data.chapter.number}: {data.chapter.title}
-                </p>
-              </div>
+              <>
+                <p className="truncate text-sm font-semibold">Chapter {data.chapter.number}</p>
+                <p className="truncate text-[11px] opacity-55">{data.novel.title}</p>
+              </>
             )}
           </div>
-          <div className="flex shrink-0 items-center">
-            <button type="button" onClick={() => setPanel(panel === 'chapters' ? '' : 'chapters')} className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100" aria-label="Chapter list">
-              <List className="h-5 w-5" aria-hidden="true" />
+
+          <div className="relative flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              data-reader-settings-toggle=""
+              onClick={() => setSettingsOpen((open) => !open)}
+              aria-expanded={settingsOpen}
+              aria-label="Text and background"
+              title="Text and background"
+              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border text-sm font-semibold opacity-70 transition-opacity hover:opacity-100"
+              style={{ borderColor: theme.border }}
+            >
+              Aa
             </button>
-            <button type="button" onClick={() => setPanel(panel === 'comments' ? '' : 'comments')} className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100" aria-label="Comments">
-              <MessageSquare className="h-5 w-5" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={() => setPanel(panel === 'chapters' ? '' : 'chapters')}
+              aria-label="Chapter list"
+              title="Chapter list"
+              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border opacity-70 transition-opacity hover:opacity-100"
+              style={{ borderColor: theme.border }}
+            >
+              <Menu className="h-[18px] w-[18px]" aria-hidden="true" />
             </button>
-            <button type="button" onClick={() => setPanel(panel === 'settings' ? '' : 'settings')} className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100" aria-label="Reading settings">
-              <Settings2 className="h-5 w-5" aria-hidden="true" />
-            </button>
+
+            {settingsOpen && (
+              <ReaderSettingsPopover
+                settings={settings}
+                onChange={setSettings}
+                themes={READER_THEMES}
+                fonts={FONTS}
+                onClose={() => setSettingsOpen(false)}
+              />
+            )}
           </div>
         </div>
       </header>
@@ -421,88 +475,19 @@ const Reader = () => {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.25, ease: 'easeOut' }}
-              className="fixed right-0 top-0 z-50 flex h-dvh w-full max-w-sm flex-col overflow-hidden border-l border-line bg-night-raised text-silver shadow-card"
+              className="fixed right-0 top-0 z-50 flex h-dvh w-full max-w-sm flex-col overflow-hidden border-l shadow-card"
+              style={{ backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }}
               role="dialog"
-              aria-label={panel}
+              aria-label="Chapter list"
             >
-              <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <h2 className="font-display text-lg font-bold capitalize">{panel}</h2>
-                <button type="button" onClick={() => setPanel('')} className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-md text-silver-muted hover:text-silver" aria-label="Close panel">
+              <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: theme.border }}>
+                <h2 className="font-display text-lg font-bold">Chapters</h2>
+                <button type="button" onClick={() => setPanel('')} className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-md opacity-60 transition-opacity hover:opacity-100" aria-label="Close panel">
                   <X className="h-5 w-5" aria-hidden="true" />
                 </button>
               </div>
 
               <div className="flex-1 overflow-y-auto p-4">
-                {panel === 'settings' && (
-                  <div className="space-y-6">
-                    <div>
-                      <p className="mb-2 text-sm font-medium">Theme</p>
-                      <div className="grid grid-cols-4 gap-2">
-                        {Object.entries(READER_THEMES).map(([key, t]) => (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => setSettings((s) => ({ ...s, theme: key }))}
-                            className={`cursor-pointer rounded-lg border-2 p-2 text-center text-xs font-medium transition-colors ${
-                              settings.theme === key ? 'border-crimson' : 'border-line'
-                            }`}
-                            style={{ backgroundColor: t.background, color: t.text }}
-                          >
-                            {t.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="mb-2 text-sm font-medium">Font</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {Object.entries(FONTS).map(([key, f]) => (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => setSettings((s) => ({ ...s, font: key }))}
-                            className={`cursor-pointer rounded-lg border-2 py-2 text-sm transition-colors ${
-                              settings.font === key ? 'border-crimson text-crimson-soft' : 'border-line text-silver-muted'
-                            }`}
-                            style={{ fontFamily: f.css }}
-                          >
-                            {f.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="font-size" className="mb-2 block text-sm font-medium">
-                        Font size: {settings.fontSize}px
-                      </label>
-                      <input
-                        id="font-size"
-                        type="range"
-                        min="14"
-                        max="28"
-                        value={settings.fontSize}
-                        onChange={(e) => setSettings((s) => ({ ...s, fontSize: Number(e.target.value) }))}
-                        className="w-full accent-[var(--color-primary)]"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="line-height" className="mb-2 block text-sm font-medium">
-                        Line height: {settings.lineHeight}
-                      </label>
-                      <input
-                        id="line-height"
-                        type="range"
-                        min="1.4"
-                        max="2.4"
-                        step="0.1"
-                        value={settings.lineHeight}
-                        onChange={(e) => setSettings((s) => ({ ...s, lineHeight: Number(e.target.value) }))}
-                        className="w-full accent-[var(--color-primary)]"
-                      />
-                    </div>
-                  </div>
-                )}
-
                 {panel === 'chapters' && (
                   <div className="space-y-1">
                     {chapters.map((chapter) => (
@@ -514,7 +499,9 @@ const Reader = () => {
                           navigate(`/novel/${slug}/chapter/${chapter.number}`);
                         }}
                         className={`block w-full cursor-pointer rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
-                          chapter.number === Number(number) ? 'bg-crimson/20 text-crimson-soft' : 'hover:bg-night-surface'
+                          chapter.number === Number(number)
+                            ? 'bg-crimson/20 text-crimson-soft'
+                            : 'hover:bg-crimson/10'
                         }`}
                       >
                         <span className="mr-2 font-semibold">#{chapter.number}</span>
@@ -524,96 +511,6 @@ const Reader = () => {
                   </div>
                 )}
 
-                {panel === 'comments' && (
-                  <div className="space-y-4">
-                    {user ? (
-                      <div className="flex gap-2.5 items-start">
-                        {user.avatarUrl ? (
-                          <img
-                            src={user.avatarUrl}
-                            alt={user.username}
-                            className="h-8 w-8 shrink-0 rounded-full object-cover border border-line shadow-sm"
-                          />
-                        ) : (
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-crimson/20 text-xs font-bold uppercase text-crimson-soft border border-crimson/30 shadow-sm">
-                            {(user.fullName || user.username)?.slice(0, 2) || '??'}
-                          </span>
-                        )}
-                        <form
-                          onSubmit={postComment(panelCommentText, () => {
-                            setPanelCommentText('');
-                            setIsPanelCommentFocused(false);
-                          })}
-                          className="flex-1 space-y-2"
-                        >
-                          <div className="relative group">
-                            <textarea
-                              id="comment-input"
-                              value={panelCommentText}
-                              onChange={(e) => setPanelCommentText(e.target.value)}
-                              onFocus={() => setIsPanelCommentFocused(true)}
-                              placeholder="Add a comment..."
-                              rows={2}
-                              className="w-full rounded-xl border border-line bg-night px-3 py-2.5 text-xs text-silver placeholder:text-silver-muted/80 focus:border-crimson focus:outline-none focus:ring-1 focus:ring-crimson/40 transition-all duration-200 resize-none shadow-inner"
-                            />
-                          </div>
-                          {(isPanelCommentFocused || panelCommentText.trim() !== '') && (
-                            <div className="flex justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setIsPanelCommentFocused(false);
-                                  setPanelCommentText('');
-                                }}
-                                className="rounded-full px-3 py-1 text-[11px] font-semibold text-silver hover:bg-white/10 transition-colors"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="submit"
-                                disabled={!panelCommentText.trim()}
-                                className="rounded-full bg-crimson px-3 py-1 text-[11px] font-semibold text-white transition-all hover:bg-crimson-soft disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
-                              >
-                                Comment
-                              </button>
-                            </div>
-                          )}
-                        </form>
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-line bg-night p-3 text-xs text-silver">
-                        <Link to="/login" className="font-semibold text-crimson-soft hover:underline">Log in</Link> to comment.
-                      </div>
-                    )}
-                    {commentError && <p className="text-xs text-crimson-soft" role="alert">{commentError}</p>}
-                    {comments === null ? (
-                      <Spinner />
-                    ) : comments.length === 0 ? (
-                      <p className="text-sm text-silver-muted">No comments yet.</p>
-                    ) : (
-                      comments.map((comment) => (
-                        <CommentCard
-                          key={comment._id}
-                          item={comment}
-                          currentUser={user}
-                          isAdmin={isAdmin}
-                          anchorPrefix={ANCHORS.COMMENT}
-                          targetId={commentTarget}
-                          onLike={likeComment}
-                          onDislike={dislikeComment}
-                          onEdit={editComment}
-                          onDelete={deleteComment}
-                          onPin={pinComment}
-                          onReplySubmit={postReply}
-                          onLikeReply={(_parentId, replyId) => likeComment(replyId)}
-                          onDislikeReply={(_parentId, replyId) => dislikeComment(replyId)}
-                          onEditReply={(_parentId, replyId, text) => editComment(replyId, { content: text })}
-                          onDeleteReply={(_parentId, replyId) => deleteComment(replyId)}
-                        />
-                      ))
-                    )}
-                  </div>
-                )}
               </div>
             </motion.aside>
           </>
@@ -630,27 +527,35 @@ const Reader = () => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="mx-auto max-w-3xl px-4 py-10"
+          className="mx-auto max-w-4xl px-3 pb-28 pt-8 sm:px-4 sm:pt-10"
         >
-          <h1 className="mb-8 text-center font-display text-2xl font-bold">
+          <h1 className="mb-6 text-center font-display text-2xl font-bold">
             Chapter {data.chapter.number}: {data.chapter.title}
           </h1>
+          {/* The prose sits on its own raised card, so the floating control bar
+              overlaps a surface instead of hovering on bare background. The
+              bottom padding above is what keeps the bar off the last line. */}
           <div
-            className="reading-content"
-            style={{
-              fontSize: `${settings.fontSize}px`,
-              lineHeight: settings.lineHeight,
-              fontFamily: FONTS[settings.font]?.css || FONTS.serif.css,
-            }}
-            dangerouslySetInnerHTML={{ __html: contentHtml }}
-          />
+            className="rounded-2xl border px-5 py-8 sm:px-10 sm:py-12"
+            style={{ backgroundColor: theme.surface, borderColor: theme.border }}
+          >
+            <div
+              className="reading-content"
+              style={{
+                fontSize: `${settings.fontSize}px`,
+                lineHeight: settings.lineHeight,
+                fontFamily: FONTS[settings.font]?.css || FONTS.serif.css,
+              }}
+              dangerouslySetInnerHTML={{ __html: contentHtml }}
+            />
+          </div>
 
-          <nav className="mt-12 flex items-center justify-between gap-3 border-t pt-6" style={{ borderColor: 'rgba(128,128,128,0.2)' }} aria-label="Chapter navigation">
+          <nav className="mt-12 flex items-center justify-between gap-3 border-t pt-6" style={{ borderColor: theme.border }} aria-label="Chapter navigation">
             {data.prev ? (
               <Link
                 to={`/novel/${slug}/chapter/${data.prev.number}`}
                 className="flex items-center gap-1.5 rounded-full border px-5 py-2.5 text-sm font-medium opacity-80 transition-opacity hover:opacity-100"
-                style={{ borderColor: 'rgba(128,128,128,0.35)' }}
+                style={{ borderColor: theme.border }}
               >
                 <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Previous
               </Link>
@@ -672,7 +577,7 @@ const Reader = () => {
           </nav>
 
           {/* End of Chapter Comments and Review Section */}
-          <section className="mt-14 border-t pt-8" style={{ borderColor: 'rgba(128,128,128,0.2)' }} aria-label="End of chapter feedback">
+          <section className="mt-14 border-t pt-8" style={{ borderColor: theme.border }} aria-label="End of chapter feedback">
             <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="font-display text-xl font-bold">Chapter Feedback & Review</h2>
@@ -921,6 +826,15 @@ const Reader = () => {
             )}
           </section>
         </motion.main>
+      )}
+      {data && (
+        <ReaderToolbar
+          theme={theme}
+          fullscreen={fullscreen}
+          speech={speech}
+          prevTo={data.prev ? `/novel/${slug}/chapter/${data.prev.number}` : null}
+          nextTo={data.next ? `/novel/${slug}/chapter/${data.next.number}` : null}
+        />
       )}
       <DeletedItemModal
         isOpen={showDeletedModal}
