@@ -50,14 +50,7 @@ const ToolbarButton = ({ label, onClick, disabled, children }) => (
   </button>
 );
 
-const ReaderToolbar = ({
-  theme,
-  fullscreen,
-  speech,
-  prevTo,
-  nextTo,
-  onEndReached,
-}) => {
+const ReaderToolbar = ({ theme, fullscreen, speech, prevTo, nextTo }) => {
   const visible = useAutoHide();
 
   const pagingLink = (to, label, children) =>
@@ -87,7 +80,7 @@ const ReaderToolbar = ({
         // Putting `pointer-events-none` in the hidden branch alongside a
         // constant `pointer-events-auto` would do nothing: Tailwind emits the
         // -auto rule last, so it wins regardless of the order written here.
-        className={`flex items-center gap-0.5 rounded-full border px-2 py-1.5 shadow-card backdrop-blur transition-all duration-300 ${
+        className={`flex items-center gap-0.5 rounded-full border px-2 py-1.5 backdrop-blur transition-all duration-300 ${
           visible
             ? 'pointer-events-auto translate-y-0 opacity-100'
             : 'pointer-events-none translate-y-24 opacity-0'
@@ -96,6 +89,7 @@ const ReaderToolbar = ({
           backgroundColor: `${theme.surface}f2`,
           borderColor: theme.border,
           color: theme.text,
+          boxShadow: theme.shadow,
         }}
       >
         {fullscreen.supported && (
@@ -140,13 +134,7 @@ const ReaderToolbar = ({
         <span className="mx-1 h-6 w-px shrink-0" style={{ backgroundColor: theme.border }} aria-hidden="true" />
 
         {pagingLink(prevTo, 'Previous chapter', <ChevronLeft className="h-5 w-5" aria-hidden="true" />)}
-        {nextTo
-          ? pagingLink(nextTo, 'Next chapter', <ChevronRight className="h-5 w-5" aria-hidden="true" />)
-          : (
-            <ToolbarButton label="End of published chapters" onClick={onEndReached} disabled={!onEndReached}>
-              <ChevronRight className="h-5 w-5" aria-hidden="true" />
-            </ToolbarButton>
-          )}
+        {pagingLink(nextTo, 'Next chapter', <ChevronRight className="h-5 w-5" aria-hidden="true" />)}
       </nav>
     </div>
   );

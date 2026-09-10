@@ -43,8 +43,13 @@ const ReaderSettingsPopover = ({ settings, onChange, themes, fonts, onClose }) =
       ref={ref}
       role="dialog"
       aria-label="Reading settings"
-      className="absolute right-0 top-full z-50 mt-2 w-[min(20rem,calc(100vw-1.5rem))] space-y-5 rounded-2xl border p-4 shadow-card"
-      style={{ backgroundColor: active.surface, borderColor: active.border, color: active.text }}
+      className="absolute right-0 top-full z-50 mt-2 w-[min(20rem,calc(100vw-1.5rem))] space-y-5 rounded-2xl border p-4"
+      style={{
+        backgroundColor: active.surface,
+        borderColor: active.border,
+        color: active.text,
+        boxShadow: active.shadow,
+      }}
     >
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide opacity-60">Background</p>
@@ -82,7 +87,7 @@ const ReaderSettingsPopover = ({ settings, onChange, themes, fonts, onClose }) =
               onClick={() => set({ font: key })}
               aria-pressed={settings.font === key}
               className={`cursor-pointer rounded-lg border-2 py-2 text-sm transition-colors ${
-                settings.font === key ? 'border-crimson text-crimson-soft' : 'border-transparent opacity-70'
+                settings.font === key ? 'border-crimson font-semibold' : 'border-transparent opacity-70'
               }`}
               style={{
                 fontFamily: value.css,

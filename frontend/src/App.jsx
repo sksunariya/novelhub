@@ -35,6 +35,7 @@ const Subscribe = lazy(() => import('./pages/Subscribe'));
 const AdminLayout = lazy(() => import('./admin/AdminLayout'));
 const Dashboard = lazy(() => import('./admin/Dashboard'));
 const CarouselAdmin = lazy(() => import('./admin/CarouselAdmin'));
+const SpotlightAdmin = lazy(() => import('./admin/SpotlightAdmin'));
 const NovelsAdmin = lazy(() => import('./admin/NovelsAdmin'));
 const ChaptersAdmin = lazy(() => import('./admin/ChaptersAdmin'));
 const UsersAdmin = lazy(() => import('./admin/UsersAdmin'));
@@ -269,6 +270,14 @@ const App = () => {
             element={
               <AdminRoute module="carousel">
                 <CarouselAdmin />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="spotlight"
+            element={
+              <AdminRoute module="spotlight">
+                <SpotlightAdmin />
               </AdminRoute>
             }
           />

@@ -50,6 +50,9 @@ export const SETTING_TABS = [
     groups: [
       { section: 'platform.ranking', title: 'Ranking' },
       { section: 'platform.discovery', title: 'Homepage and browse' },
+      // The rails themselves live under Content → Homepage rails; these are the
+      // values that govern the surface as a whole rather than any one row.
+      { section: 'platform.homepage', title: 'Homepage rails and activity strip' },
       { section: 'platform.views', title: 'View counting' },
     ],
   },

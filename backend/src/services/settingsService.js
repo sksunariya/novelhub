@@ -84,7 +84,12 @@ const snapshot = async () => {
   return {
     version,
     get: (key) => {
-      if (!registry.has(key)) throw new Error(`Unknown setting: ${key}`);
+      // Typed, so a caller that swallows per-item failures can tell a
+      // configuration mistake — which will fail every item alike — from one
+      // bad row. Message kept identical for anything matching on it.
+      if (!registry.has(key)) {
+        throw Object.assign(new Error(`Unknown setting: ${key}`), { code: 'UNKNOWN_SETTING' });
+      }
       return values[key];
     },
     section: (section) =>

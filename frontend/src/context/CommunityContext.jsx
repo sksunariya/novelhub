@@ -34,6 +34,9 @@ export const CommunityProvider = ({ children }) => {
   const [voteDeltas, setVoteDeltas] = useState({});
   const [voteError, setVoteError] = useState(null);
   const [joined, setJoined] = useState(null);
+  // Slugs with a join request in flight, so a button can show progress without
+  // every consumer keeping its own copy of that state.
+  const [joining, setJoining] = useState({});
 
   // Lazy initialisers. Called bare, loadPrefs() ran a localStorage read and a
   // JSON.parse on EVERY render of a provider that sits above the whole
@@ -113,6 +116,59 @@ export const CommunityProvider = ({ children }) => {
     }
   }, [user]);
 
+  /**
+   * Join a space from wherever the user happens to be looking at it.
+   *
+   * Lives here rather than in a page because joining is now offered from three
+   * surfaces — the space page, the directory, and the homepage rails — and the
+   * optimistic-then-reconcile handling should not be written three times. The
+   * failure path reuses the vote error toast this provider already renders, so
+   * a refused join explains itself instead of appearing to do nothing.
+   *
+   * Optimistic on the way in, authoritative on the way out: a space with
+   * joinPolicy `request` does not add a member, it adds a PENDING one, and the
+   * server response is the only thing that knows which happened.
+   */
+  const join = useCallback(async (space) => {
+    const slug = space.slug;
+    if (!user) {
+      setVoteError('Sign in to join');
+      return null;
+    }
+    setJoining((prev) => ({ ...prev, [slug]: true }));
+    try {
+      const result = await api.joinSpace(slug);
+      if (result && result.status === 'pending') {
+        setVoteError('Your request to join was sent for approval');
+      } else {
+        setJoined((prev) => (prev ? [...prev, { ...space, slug }] : [{ ...space, slug }]));
+      }
+      return result;
+    } catch (error) {
+      setVoteError(error?.response?.data?.message || 'Could not join that space');
+      return null;
+    } finally {
+      setJoining((prev) => {
+        const next = { ...prev };
+        delete next[slug];
+        return next;
+      });
+    }
+  }, [user]);
+
+  /**
+   * Is the viewer a member?
+   *
+   * `joined` is null before it loads and for logged-out visitors, which is NOT
+   * the same as "no". Callers get false either way, so a Join button shows
+   * rather than flickering — pressing it while already a member is idempotent
+   * server-side.
+   */
+  const isJoined = useCallback(
+    (slug) => Boolean(joined && joined.some((space) => space.slug === slug)),
+    [joined]
+  );
+
   /** Merge the local delta over whatever the server last said. */
   const viewOf = useCallback((post) => {
     const delta = voteDeltas[post.id || post._id];
@@ -156,9 +212,9 @@ export const CommunityProvider = ({ children }) => {
     showNsfw, setShowNsfw,
 
     vote, viewOf, voteError, clearVoteError: () => setVoteError(null),
-    joined, refreshJoined,
+    joined, refreshJoined, join, isJoined, joining,
   }), [settings, density, setDensity, sort, setSort, showNsfw, setShowNsfw,
-       vote, viewOf, voteError, joined, refreshJoined]);
+       vote, viewOf, voteError, joined, refreshJoined, join, isJoined, joining]);
 
   return (
     <CommunityContext.Provider value={value}>

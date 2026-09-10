@@ -72,6 +72,17 @@ const {
   reorderSlides,
 } = require('../controllers/carouselController');
 
+const {
+  listRails,
+  getTypes,
+  searchEntities,
+  previewSpotlight,
+  createRail,
+  updateRail,
+  reorderRails,
+  deleteRail,
+} = require('../controllers/spotlightController');
+
 const router = express.Router();
 
 router.use(protect, adminOnly);
@@ -110,6 +121,18 @@ router.post('/carousel', imageUpload.single('image'), createSlide);
 router.put('/carousel/reorder', reorderSlides);
 router.put('/carousel/:id', imageUpload.single('image'), updateSlide);
 router.delete('/carousel/:id', deleteSlide);
+
+// Homepage rails. Static segments are declared before `/:id` so "reorder",
+// "types", "search" and "preview" are never read as a rail id.
+router.use('/spotlight', requireModule('spotlight'));
+router.get('/spotlight/types', getTypes);
+router.get('/spotlight/search', searchEntities);
+router.get('/spotlight/preview', previewSpotlight);
+router.put('/spotlight/reorder', reorderRails);
+router.get('/spotlight', listRails);
+router.post('/spotlight', createRail);
+router.put('/spotlight/:id', updateRail);
+router.delete('/spotlight/:id', deleteRail);
 
 router.use('/novels', requireModule('novels'));
 router.use('/chapters', requireModule('novels'));

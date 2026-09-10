@@ -3,6 +3,8 @@ const Space = require('../models/Space');
 const spaceService = require('../services/community/spaceService');
 const postService = require('../services/community/postService');
 const voteService = require('../services/community/voteService');
+const pollService = require('../services/community/pollService');
+const PollVote = require('../models/PollVote');
 const feedService = require('../services/community/feedService');
 const permissions = require('../services/community/spacePermissionService');
 const settingsService = require('../services/settingsService');
@@ -271,6 +273,53 @@ const votePost = asyncHandler(async (req, res) => {
   return res.json(result);
 });
 
+/**
+ * POST /api/posts/:id/poll
+ *
+ * Answer a poll.
+ *
+ * services/community/pollService has existed since rich content shipped, fully
+ * written and fully tested, with nothing routed to it — so every poll on the
+ * site rendered as a list of options that could not be answered. This is that
+ * route.
+ *
+ * Reads from the primary. A poll answer that appears not to have registered
+ * because the read came from a stale secondary produces a second vote attempt,
+ * and the rules below are the only thing that makes that harmless.
+ */
+const votePollPost = asyncHandler(async (req, res) => {
+  await requireCommunityEnabled();
+  const post = await Post.findById(req.params.id).populate('space').read('primary');
+  if (!post) return res.status(404).json({ message: 'Post not found' });
+
+  const membership = await spaceService.membershipFor(post.space, req.user);
+  const perms = permissions.resolve(req.user, post.space, membership);
+
+  const { optionIds } = req.body || {};
+  await pollService.vote({
+    post,
+    user: req.user,
+    optionIds: Array.isArray(optionIds) ? optionIds : [optionIds].filter(Boolean),
+    perms,
+  });
+
+  // Re-read so the response carries the authoritative tallies rather than the
+  // caller's optimistic arithmetic — the same reconciliation the vote endpoint
+  // performs, and for the same reason.
+  const [updated, response] = await Promise.all([
+    Post.findById(post._id).select('poll').lean().read('primary'),
+    PollVote.findOne({ post: post._id, user: req.user._id }).lean().read('primary'),
+  ]);
+
+  // The re-read runs through the soft-delete plugin, so a moderator deleting
+  // the post between the write and this line returns null — and serializePoll
+  // dereferences `post.poll`. Without this the vote succeeds and the caller is
+  // told it failed.
+  if (!updated) return res.status(404).json({ message: 'Not found' });
+
+  return res.json({ poll: pollService.serializePoll(updated, response) });
+});
+
 // -------------------------------------------------------- moderator actions
 
 const moderatePost = asyncHandler(async (req, res) => {
@@ -335,5 +384,6 @@ module.exports = {
   deletePost,
   votePost,
   moderatePost,
+  votePollPost,
   serializePost,
 };

@@ -130,6 +130,21 @@ const discoverableSpaceIds = async (settings, { minMembers = 0 } = {}) => {
 };
 
 /**
+ * Narrow a discoverable set to an explicit list of spaces.
+ *
+ * Always the INTERSECTION, never the caller's list on its own. A curated
+ * homepage rail naming a space that has since gone private, been quarantined or
+ * set excludeFromAll must not become a way to publish that space's posts on the
+ * front page. The discoverable set stays the authority; a caller's list can
+ * only subtract from it.
+ */
+const restrictTo = (discoverable, requested) => {
+  if (!requested || !requested.length) return discoverable;
+  const wanted = new Set(requested.map(String));
+  return discoverable.filter((id) => wanted.has(String(id)));
+};
+
+/**
  * Hydrate a page of lean post documents.
  *
  * Two batched queries plus one vote lookup, regardless of page size. That
@@ -219,6 +234,12 @@ const fetch = async ({
   authorId = null,
   linkedRef = null,
   includeNsfw = null,
+  // Curation options. Used by the homepage rails; every one of them narrows
+  // the result and none of them widens it, which is what makes them safe to
+  // accept from an admin-authored query.
+  spaceIds = null,
+  postType = null,
+  minScore = null,
 }) => {
   const pageSize = Math.min(
     limit || settings.get('spaces.feed.pageSize'),
@@ -237,6 +258,16 @@ const fetch = async ({
   } else if (type === 'linked' && linkedRef) {
     filter['linkedRefs.type'] = linkedRef.type;
     filter['linkedRefs.id'] = linkedRef.id;
+    // A linked feed is "posts about this novel", and it renders on public
+    // surfaces — the novel page's Discussion tab and the homepage. It used to
+    // set no space filter at all, so it answered from EVERY space including
+    // private, quarantined and excludeFromAll ones: the linkedRefs index says
+    // what a post is about and nothing about who may see it.
+    //
+    // The residual space check costs little here. The candidate set is "posts
+    // linked to one entity", which is small by construction, so this stays a
+    // bounded scan of that sparse index rather than a new access pattern.
+    filter.space = { $in: restrictTo(await discoverableSpaceIds(settings), spaceIds) };
   } else if (type === 'home') {
     const ids = await homeSpaceIds(viewer, settings);
     // A home feed built from one or two spaces is worse than Popular.
@@ -248,17 +279,25 @@ const fetch = async ({
     filter.space = { $in: ids };
   } else if (type === 'popular') {
     filter.space = {
-      $in: await discoverableSpaceIds(settings, {
-        minMembers: settings.get('spaces.feed.popularMinMembers'),
-      }),
+      $in: restrictTo(
+        await discoverableSpaceIds(settings, {
+          minMembers: settings.get('spaces.feed.popularMinMembers'),
+        }),
+        spaceIds
+      ),
     };
   } else {
-    filter.space = { $in: await discoverableSpaceIds(settings) };
+    filter.space = { $in: restrictTo(await discoverableSpaceIds(settings), spaceIds) };
   }
 
   // --- filters ------------------------------------------------------------
   const showNsfw = includeNsfw === null ? settings.get('spaces.feed.showNsfwByDefault') : includeNsfw;
   if (!showNsfw) filter.nsfw = { $ne: true };
+
+  if (postType) filter.type = postType;
+  // A floor, never a ceiling: `rising` sets its own minimum below and the
+  // stricter of the two must win, or a curated floor could loosen a built-in one.
+  if (minScore) filter.score = { $gte: minScore };
 
   if (sortKey === POST_SORTS.TOP && TIMEFRAME_MS[timeframe]) {
     filter.createdAt = { $gte: new Date(Date.now() - TIMEFRAME_MS[timeframe]) };
@@ -267,7 +306,9 @@ const fetch = async ({
   if (sortKey === POST_SORTS.RISING) {
     const windowHours = settings.get('spaces.ranking.risingWindowHours');
     filter.createdAt = { $gte: new Date(Date.now() - windowHours * 3600_000) };
-    filter.score = { $gte: settings.get('spaces.ranking.risingMinScore') };
+    filter.score = {
+      $gte: Math.max(settings.get('spaces.ranking.risingMinScore'), minScore || 0),
+    };
   }
 
   const parsedCursor = decodeCursor(cursor);
@@ -334,6 +375,7 @@ module.exports = {
   hydrate,
   homeSpaceIds,
   discoverableSpaceIds,
+  restrictTo,
   encodeCursor,
   decodeCursor,
   cursorClause,

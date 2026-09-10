@@ -85,6 +85,16 @@ const ADMIN_MODULES = [
     description: 'Homepage carousel slides.',
   },
   {
+    id: 'spotlight',
+    label: 'Homepage rails',
+    group: ADMIN_MODULE_GROUPS.CONTENT,
+    description:
+      'Curate the homepage: build, order, schedule and target the rows, and pin any novel, '
+      + 'space or post into them. This is a publishing power, not a moderation one — it decides '
+      + 'what reaches the front page, and confers no authority over the content itself. '
+      + 'Featuring can only ever surface what is already public.',
+  },
+  {
     id: 'monetization_config',
     label: 'Monetization settings',
     group: ADMIN_MODULE_GROUPS.MONETIZATION,

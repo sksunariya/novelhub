@@ -20,6 +20,7 @@ const storeRoutes = require('./routes/storeRoutes');
 const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const carouselRoutes = require('./routes/carouselRoutes');
+const spotlightRoutes = require('./routes/spotlightRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const webhookRoutes = require('./routes/webhookRoutes');
 const maintenanceGuard = require('./middlewares/maintenance');
@@ -99,6 +100,8 @@ app.use('/api/store', storeRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/carousel', carouselRoutes);
+// The curated homepage. One composed payload rather than a call per section.
+app.use('/api/spotlight', spotlightRoutes);
 app.use('/api/admin', adminRoutes);
 
 app.use(notFound);

@@ -5,6 +5,7 @@ const {
   updatePost,
   deletePost,
   votePost,
+  votePollPost,
   moderatePost,
 } = require('../controllers/postController');
 const {
@@ -27,6 +28,11 @@ router.delete('/:id', protect, deletePost);
 // The highest-frequency write on the site. Rate limited per user per minute
 // from spaces.voting.perMinuteLimit.
 router.post('/:id/vote', protect, voteLimiter, votePost);
+
+// Answering a poll. Shares the vote limiter: it is the same shape of write
+// from an abuse point of view, and a poll with a million answers from one
+// account is the same problem as a post with a million upvotes.
+router.post('/:id/poll', protect, voteLimiter, votePollPost);
 
 router.post('/:id/moderate', protect, moderatePost);
 

@@ -13,6 +13,7 @@ const SECTIONS = {
   VIEWS: 'platform.views',
   AUTH: 'platform.auth',
   COMMUNITY: 'platform.community',
+  HOMEPAGE: 'platform.homepage',
 };
 
 const settings = [
@@ -641,6 +642,64 @@ const settings = [
     label: 'Reports before auto-hiding',
     help: '0 disables auto-hide.',
   },
+  // --------------------------------------------------------------- homepage
+  // The curated homepage. Rails themselves are documents (models/SpotlightRail)
+  // rather than settings — they are content, they are ordered, and there are an
+  // unbounded number of them. What lives here is the handful of values that
+  // govern the surface as a whole.
+  {
+    key: 'homepage.cacheSeconds',
+    section: SECTIONS.HOMEPAGE,
+    type: 'integer',
+    default: 60,
+    min: 0,
+    max: 3600,
+    label: 'Homepage cache',
+    unit: 'seconds',
+    help: 'How long a resolved rail is reused. 0 disables caching, which makes every visit re-run every rail query.',
+  },
+  {
+    key: 'homepage.pulseEnabled',
+    section: SECTIONS.HOMEPAGE,
+    type: 'boolean',
+    default: true,
+    label: 'Show the live activity strip',
+    help: 'The ticker of what is being read, posted and voted on right now. Turn it off on a quiet site — an empty pulse is worse than none.',
+    public: true,
+  },
+  {
+    key: 'homepage.pulseCacheSeconds',
+    section: SECTIONS.HOMEPAGE,
+    type: 'integer',
+    default: 45,
+    min: 10,
+    max: 600,
+    label: 'Activity strip refresh',
+    unit: 'seconds',
+    help: 'The strip is an aggregate over recent activity. Refreshing it faster costs a query per interval and buys very little.',
+  },
+  {
+    key: 'homepage.pulseMinActivity',
+    section: SECTIONS.HOMEPAGE,
+    type: 'integer',
+    default: 3,
+    min: 0,
+    max: 100,
+    label: 'Minimum activity to show the strip',
+    unit: 'events',
+    help: 'Below this the strip hides itself. Social proof that reads "1 person is here" is anti-proof.',
+  },
+  {
+    key: 'homepage.maxRails',
+    section: SECTIONS.HOMEPAGE,
+    type: 'integer',
+    default: 12,
+    min: 1,
+    max: 40,
+    label: 'Maximum rails rendered',
+    help: 'A hard ceiling on how much work one homepage request can ask for, whatever the admin has configured.',
+  },
 ];
+
 
 module.exports = { settings, SECTIONS };

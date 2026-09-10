@@ -3,7 +3,7 @@ import { NavLink, Outlet, Link } from 'react-router-dom';
 import {
   LayoutDashboard, Images, BookOpen, Users, ShieldAlert, Bell, Settings, ArrowLeft,
   Tags, Clock, ChevronDown, Globe, Gift, TrendingUp, Repeat, MessagesSquare, Flag,
-  ScrollText, ShieldCheck, Inbox, FileText, KeyRound, Crown,
+  ScrollText, ShieldCheck, Inbox, FileText, KeyRound, Crown, LayoutList,
 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { useAdminAccess } from '../context/AdminAccessContext';
@@ -29,6 +29,7 @@ const GROUPS = [
     links: [
       { to: '/admin/novels', label: 'Novels', icon: BookOpen, module: 'novels' },
       { to: '/admin/carousel', label: 'Hero carousel', icon: Images, module: 'carousel' },
+      { to: '/admin/spotlight', label: 'Homepage rails', icon: LayoutList, module: 'spotlight' },
     ],
   },
   {

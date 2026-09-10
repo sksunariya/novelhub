@@ -37,10 +37,10 @@ const applyReaction = (item, reaction, userId) => ({
 // Light's page colour is a shade darker than it used to be for the same reason
 // — a white card needs something to sit on.
 const READER_THEMES = {
-  dark: { background: '#0a0507', surface: '#150c10', border: 'rgba(255,255,255,0.08)', text: '#d6d3d1', name: 'Dark' },
-  black: { background: '#000000', surface: '#111111', border: 'rgba(255,255,255,0.09)', text: '#c7c7c7', name: 'Black' },
-  sepia: { background: '#f4ecd8', surface: '#fbf5e6', border: 'rgba(67,52,34,0.16)', text: '#433422', name: 'Sepia' },
-  light: { background: '#f1f1f0', surface: '#ffffff', border: 'rgba(28,25,23,0.12)', text: '#1c1917', name: 'Light' },
+  dark: { background: '#0a0507', surface: '#150c10', border: 'rgba(255,255,255,0.08)', text: '#d6d3d1', shadow: '0 8px 30px rgba(0,0,0,0.55)', name: 'Dark' },
+  black: { background: '#000000', surface: '#111111', border: 'rgba(255,255,255,0.09)', text: '#c7c7c7', shadow: '0 8px 30px rgba(0,0,0,0.7)', name: 'Black' },
+  sepia: { background: '#f4ecd8', surface: '#fbf5e6', border: 'rgba(67,52,34,0.16)', text: '#433422', shadow: '0 6px 24px rgba(67,52,34,0.16)', name: 'Sepia' },
+  light: { background: '#f1f1f0', surface: '#ffffff', border: 'rgba(28,25,23,0.12)', text: '#1c1917', shadow: '0 6px 24px rgba(28,25,23,0.13)', name: 'Light' },
 };
 
 const FONTS = {
@@ -387,7 +387,7 @@ const Reader = () => {
   return (
     <div className="min-h-dvh transition-colors duration-300" style={{ backgroundColor: theme.background, color: theme.text }}>
       <header
-        className="sticky top-0 z-30 border-b backdrop-blur"
+        className="sticky top-0 z-40 border-b backdrop-blur"
         style={{ backgroundColor: `${theme.surface}f2`, borderColor: theme.border }}
       >
         <div className="mx-auto flex h-14 max-w-4xl items-center gap-2 px-3">
@@ -426,7 +426,10 @@ const Reader = () => {
             <button
               type="button"
               data-reader-settings-toggle=""
-              onClick={() => setSettingsOpen((open) => !open)}
+              onClick={() => {
+                setPanel('');
+                setSettingsOpen((open) => !open);
+              }}
               aria-expanded={settingsOpen}
               aria-label="Text and background"
               title="Text and background"
@@ -437,7 +440,10 @@ const Reader = () => {
             </button>
             <button
               type="button"
-              onClick={() => setPanel(panel === 'chapters' ? '' : 'chapters')}
+              onClick={() => {
+                setSettingsOpen(false);
+                setPanel(panel === 'chapters' ? '' : 'chapters');
+              }}
               aria-label="Chapter list"
               title="Chapter list"
               className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border opacity-70 transition-opacity hover:opacity-100"
@@ -475,8 +481,13 @@ const Reader = () => {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.25, ease: 'easeOut' }}
-              className="fixed right-0 top-0 z-50 flex h-dvh w-full max-w-sm flex-col overflow-hidden border-l shadow-card"
-              style={{ backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }}
+              className="fixed right-0 top-0 z-50 flex h-dvh w-full max-w-sm flex-col overflow-hidden border-l"
+              style={{
+                backgroundColor: theme.surface,
+                color: theme.text,
+                borderColor: theme.border,
+                boxShadow: theme.shadow,
+              }}
               role="dialog"
               aria-label="Chapter list"
             >
@@ -500,7 +511,7 @@ const Reader = () => {
                         }}
                         className={`block w-full cursor-pointer rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
                           chapter.number === Number(number)
-                            ? 'bg-crimson/20 text-crimson-soft'
+                            ? 'bg-crimson font-semibold text-white'
                             : 'hover:bg-crimson/10'
                         }`}
                       >
@@ -766,7 +777,7 @@ const Reader = () => {
                         }
                         placeholder="What worked in this chapter?"
                         rows={2}
-                        className="w-full rounded-xl border border-line bg-night px-4 py-3 text-sm placeholder:text-silver-muted focus:border-crimson focus:outline-none"
+                        className="w-full rounded-xl border border-line bg-night px-4 py-3 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none"
                       />
                       {chapterReviewMsg && <p className="text-xs font-medium text-crimson-soft">{chapterReviewMsg}</p>}
                       <div className="flex items-center justify-between">
