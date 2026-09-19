@@ -194,7 +194,7 @@ const BulkPricingDialog = ({ novelId, chapters, onClose, onDone }) => {
               type="button"
               onClick={apply}
               disabled={busy || !affected}
-              className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-soft disabled:opacity-60"
+              className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-hover disabled:opacity-60"
             >
               {busy ? 'Applying...' : 'Apply'}
             </button>
@@ -335,7 +335,7 @@ const ChaptersAdmin = () => {
         >
           <Coins className="h-4 w-4" aria-hidden="true" /> Set prices
         </button>
-        <button type="button" onClick={openCreate} className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft">
+        <button type="button" onClick={openCreate} className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover">
           <Plus className="h-4 w-4" aria-hidden="true" /> Write Chapter
         </button>
       </div>
@@ -495,7 +495,7 @@ const ChaptersAdmin = () => {
                   <button type="button" onClick={() => setEditing(null)} className="cursor-pointer rounded-full border border-line px-5 py-2 text-sm text-silver-muted hover:text-silver">
                     Cancel
                   </button>
-                  <button type="submit" disabled={saving} className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-soft disabled:opacity-60">
+                  <button type="submit" disabled={saving} className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-hover disabled:opacity-60">
                     {saving ? 'Saving...' : 'Save Chapter'}
                   </button>
                 </div>

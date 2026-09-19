@@ -5,9 +5,9 @@ import { Eye, EyeOff, KeyRound, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import client from '../api/client';
 import PageTransition from '../components/PageTransition';
 import OtpInput from '../components/OtpInput';
+import AuthShell from '../components/AuthShell';
 
-const inputClass =
-  'w-full rounded-lg border border-line bg-night px-4 py-2.5 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none';
+const inputClass = 'field';
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
@@ -85,30 +85,24 @@ const ForgotPassword = () => {
 
   return (
     <PageTransition>
-      <div className="mx-auto mt-10 max-w-md">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3 }}
-          className="rounded-2xl border border-line bg-night-surface p-8 shadow-card"
-        >
-          <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border shadow-glow ${
-            phase === 'done' ? 'border-green-500/40 bg-green-500/10' : 'border-crimson/40 bg-crimson/10'
+      <AuthShell>
+          <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border ${
+            phase === 'done' ? 'border-emerald-400/30 bg-emerald-500/10' : 'border-crimson-soft/30 bg-crimson/15 shadow-glow'
           }`}
           >
             {phase === 'done'
-              ? <CheckCircle2 className="h-8 w-8 text-green-400" aria-hidden="true" />
+              ? <CheckCircle2 className="h-8 w-8 text-emerald-400" aria-hidden="true" />
               : <KeyRound className="h-8 w-8 text-crimson-soft" aria-hidden="true" />}
           </div>
 
           <AnimatePresence mode="wait">
             {phase === 'request' && (
               <motion.div key="request" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
-                <h1 className="text-center font-display text-2xl font-bold text-silver">Reset password</h1>
+                <h1 className="text-center font-display text-2xl font-extrabold text-silver">Reset password</h1>
                 <p className="mt-2 text-center text-sm text-silver-muted">Enter your email and we&apos;ll send a reset code</p>
                 <form onSubmit={requestCode} className="mt-6 space-y-4">
                   <div>
-                    <label htmlFor="fp-email" className="mb-1.5 block text-sm font-medium text-silver">Email</label>
+                    <label htmlFor="fp-email" className="field-label">Email</label>
                     <input
                       id="fp-email"
                       type="email"
@@ -120,11 +114,11 @@ const ForgotPassword = () => {
                       placeholder="you@example.com"
                     />
                   </div>
-                  {error && <p className="rounded-lg bg-crimson/15 px-3 py-2 text-sm text-crimson-soft" role="alert">{error}</p>}
+                  {error && <p className="alert-error" role="alert">{error}</p>}
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full cursor-pointer rounded-full bg-crimson py-2.5 font-semibold text-white shadow-glow transition-colors hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btn btn-primary btn-lg w-full"
                   >
                     {loading ? 'Sending...' : 'Send reset code'}
                   </button>
@@ -134,13 +128,13 @@ const ForgotPassword = () => {
 
             {phase === 'reset' && (
               <motion.div key="reset" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }} transition={{ duration: 0.2 }}>
-                <h1 className="text-center font-display text-2xl font-bold text-silver">Enter reset code</h1>
+                <h1 className="text-center font-display text-2xl font-extrabold text-silver">Enter reset code</h1>
                 <p className="mt-2 text-center text-sm text-silver-muted">We sent a 6-digit code to</p>
                 <p className="text-center text-sm font-medium text-silver">{email}</p>
                 <form onSubmit={reset} className="mt-6 space-y-5">
                   <OtpInput value={code} onChange={setCode} disabled={loading} />
                   <div>
-                    <label htmlFor="fp-password" className="mb-1.5 block text-sm font-medium text-silver">New password</label>
+                    <label htmlFor="fp-password" className="field-label">New password</label>
                     <div className="relative">
                       <input
                         id="fp-password"
@@ -164,7 +158,7 @@ const ForgotPassword = () => {
                     </div>
                   </div>
                   <div>
-                    <label htmlFor="fp-confirm" className="mb-1.5 block text-sm font-medium text-silver">Confirm new password</label>
+                    <label htmlFor="fp-confirm" className="field-label">Confirm new password</label>
                     <input
                       id="fp-confirm"
                       type={showPassword ? 'text' : 'password'}
@@ -173,18 +167,18 @@ const ForgotPassword = () => {
                       autoComplete="new-password"
                       value={confirm}
                       onChange={(e) => setConfirm(e.target.value)}
-                      className={`${inputClass} ${confirm && confirm !== newPassword ? 'border-crimson' : ''}`}
+                      className={`${inputClass} ${confirm && confirm !== newPassword ? 'border-rose-400/60 focus:border-rose-400/70 focus:ring-rose-500/20' : ''}`}
                       placeholder="Re-enter your password"
                     />
                     {confirm && confirm !== newPassword && (
-                      <p className="mt-1 text-xs text-crimson-soft">Passwords do not match</p>
+                      <p className="mt-1.5 text-xs text-rose-300">Passwords do not match</p>
                     )}
                   </div>
-                  {error && <p className="rounded-lg bg-crimson/15 px-3 py-2 text-center text-sm text-crimson-soft" role="alert">{error}</p>}
+                  {error && <p className="alert-error text-center" role="alert">{error}</p>}
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full cursor-pointer rounded-full bg-crimson py-2.5 font-semibold text-white shadow-glow transition-colors hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btn btn-primary btn-lg w-full"
                   >
                     {loading ? 'Updating...' : 'Update password'}
                   </button>
@@ -211,12 +205,12 @@ const ForgotPassword = () => {
 
             {phase === 'done' && (
               <motion.div key="done" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.25 }} className="text-center">
-                <h1 className="font-display text-2xl font-bold text-silver">All set</h1>
+                <h1 className="font-display text-2xl font-extrabold text-silver">All set</h1>
                 <p className="mt-2 text-sm text-silver-muted">{notice}</p>
                 <button
                   type="button"
                   onClick={() => navigate('/login')}
-                  className="mt-6 w-full cursor-pointer rounded-full bg-crimson py-2.5 font-semibold text-white shadow-glow transition-colors hover:bg-crimson-soft"
+                  className="btn btn-primary btn-lg mt-6 w-full"
                 >
                   Go to login
                 </button>
@@ -230,8 +224,7 @@ const ForgotPassword = () => {
               <Link to="/login" className="font-medium text-crimson-soft hover:underline">Log in</Link>
             </p>
           )}
-        </motion.div>
-      </div>
+      </AuthShell>
     </PageTransition>
   );
 };

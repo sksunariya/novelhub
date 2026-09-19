@@ -152,7 +152,7 @@ const EditForm = ({ initialContent, initialRating, onCancel, onSave }) => {
           type="button"
           onClick={save}
           disabled={saving || (!ratingEditable && !content.trim())}
-          className="rounded-full bg-crimson px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-full bg-crimson px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-crimson-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save'}
         </button>
@@ -200,7 +200,7 @@ const ReplyForm = ({ username, onCancel, onSend }) => {
           type="button"
           onClick={send}
           disabled={sending || !content.trim()}
-          className="rounded-full bg-crimson px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-full bg-crimson px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-crimson-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           {sending ? 'Sending...' : 'Send reply'}
         </button>

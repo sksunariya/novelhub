@@ -69,7 +69,7 @@ const WalletPanel = () => {
           <button
             type="button"
             onClick={() => setBuying(true)}
-            className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft"
+            className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover"
           >
             <Coins className="h-4 w-4" aria-hidden="true" /> Get credits
           </button>
@@ -104,7 +104,7 @@ const WalletPanel = () => {
             checked={Boolean(wallet?.autoUnlock?.enabled)}
             onChange={toggleAuto}
             disabled={savingAuto}
-            className="mt-0.5"
+            className="mt-0.5 accent-[var(--color-primary)]"
           />
           <span>
             Unlock the next chapter automatically

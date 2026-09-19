@@ -54,7 +54,7 @@ const LinkPopover = ({ editor, open, onOpenChange }) => {
             Remove
           </button>
         )}
-        <button type="button" onClick={apply} className="cursor-pointer rounded-full bg-crimson px-3 py-1 text-xs font-semibold text-white hover:bg-crimson-soft">
+        <button type="button" onClick={apply} className="cursor-pointer rounded-full bg-crimson px-3 py-1 text-xs font-semibold text-white hover:bg-crimson-hover">
           Apply
         </button>
       </div>

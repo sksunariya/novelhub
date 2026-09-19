@@ -26,7 +26,7 @@ const renderContent = (content) => {
   return content.split(MENTION_PATTERN).map((part, index) => {
     if (part.startsWith('@')) {
       return (
-        <span key={index} className="font-medium text-blue-400">
+        <span key={index} className="font-medium text-crimson-soft">
           {part}
         </span>
       );
@@ -211,10 +211,10 @@ const CommentCard = ({
       <form onSubmit={handleSendReply} className="flex-1 space-y-2">
         <div className="flex items-center justify-between text-xs text-silver-muted">
           <span>
-            Replying to <strong className="text-blue-400">@{targetUsername}</strong>
+            Replying to <strong className="text-crimson-soft">@{targetUsername}</strong>
           </span>
         </div>
-        {replyError && <p className="text-xs text-crimson-soft">{replyError}</p>}
+        {replyError && <p className="text-xs text-rose-300">{replyError}</p>}
         <div className="group relative">
           <textarea
             ref={textareaRef}
@@ -244,7 +244,7 @@ const CommentCard = ({
           <button
             type="submit"
             disabled={!replyText.trim() || submittingReply}
-            className="rounded-full bg-crimson px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-full bg-crimson px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-crimson-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submittingReply ? 'Replying...' : 'Reply'}
           </button>
@@ -266,7 +266,7 @@ const CommentCard = ({
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-2.5">
             {item.isPinned && <PinnedBadge />}
-            <span className="truncate text-sm font-semibold text-blue-400" title={item.user?.username ? `@${item.user.username}` : ''}>
+            <span className="truncate text-sm font-semibold text-silver" title={item.user?.username ? `@${item.user.username}` : ''}>
               {item.user?.fullName || item.user?.username || 'Deleted user'}
             </span>
             {item.user?.role === ADMIN_ROLE && <StaffBadge />}
@@ -321,7 +321,7 @@ const CommentCard = ({
 
         {isEditing ? (
           <form onSubmit={handleSaveEdit} className="mt-2 space-y-3">
-            {editError && <p className="text-xs text-crimson-soft">{editError}</p>}
+            {editError && <p className="text-xs text-rose-300">{editError}</p>}
             {item.rating != null && (
               <div className="flex items-center gap-2 text-xs text-silver-muted">
                 <span>Rating:</span>
@@ -350,7 +350,7 @@ const CommentCard = ({
               <button
                 type="submit"
                 disabled={savingEdit || (!editContent.trim() && !editRating)}
-                className="rounded-full bg-crimson px-4 py-1.5 text-xs font-semibold text-white hover:bg-crimson-soft disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="rounded-full bg-crimson px-4 py-1.5 text-xs font-semibold text-white hover:bg-crimson-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 {savingEdit ? 'Saving...' : 'Save'}
               </button>
@@ -438,7 +438,7 @@ const CommentCard = ({
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <div className="flex items-center justify-between">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <span className="truncate text-xs font-semibold text-blue-400" title={reply.user?.username ? `@${reply.user.username}` : ''}>
+                          <span className="truncate text-xs font-semibold text-silver" title={reply.user?.username ? `@${reply.user.username}` : ''}>
                             {reply.user?.fullName || reply.user?.username || 'Deleted user'}
                           </span>
                           {reply.user?.role === ADMIN_ROLE && <StaffBadge />}
@@ -478,7 +478,7 @@ const CommentCard = ({
 
                       {editingReplyId === reply._id ? (
                         <form onSubmit={(e) => handleSaveReplyEdit(e, reply._id)} className="mt-2 space-y-2">
-                          {editReplyError && <p className="text-xs text-crimson-soft">{editReplyError}</p>}
+                          {editReplyError && <p className="text-xs text-rose-300">{editReplyError}</p>}
                           <textarea
                             value={editReplyText}
                             onChange={(e) => setEditReplyText(e.target.value)}
@@ -500,7 +500,7 @@ const CommentCard = ({
                             <button
                               type="submit"
                               disabled={savingReplyEdit || !editReplyText.trim()}
-                              className="rounded-full bg-crimson px-3 py-1 text-[10px] font-semibold text-white hover:bg-crimson-soft disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                              className="rounded-full bg-crimson px-3 py-1 text-[10px] font-semibold text-white hover:bg-crimson-hover disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                             >
                               {savingReplyEdit ? 'Saving...' : 'Save'}
                             </button>

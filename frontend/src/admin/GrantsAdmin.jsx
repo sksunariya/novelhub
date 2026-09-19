@@ -186,7 +186,7 @@ const GrantsAdmin = () => {
             <button
               type="button"
               onClick={start}
-              className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white hover:bg-crimson-soft"
+              className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white hover:bg-crimson-hover"
             >
               <Gift className="h-4 w-4" aria-hidden="true" /> New campaign
             </button>
@@ -273,7 +273,7 @@ const GrantsAdmin = () => {
               type="button"
               onClick={sendQuick}
               disabled={busy === 'quick' || !picked.length || !(quick.amount > 0)}
-              className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-soft disabled:opacity-50"
+              className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-hover disabled:opacity-50"
             >
               <Send className="h-4 w-4" aria-hidden="true" />
               {busy === 'quick' ? 'Sending...' : 'Send credits'}
@@ -481,7 +481,7 @@ const GrantsAdmin = () => {
               type="button"
               onClick={save}
               disabled={busy === 'save' || !draft.name || !audience.total}
-              className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-soft disabled:opacity-50"
+              className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-hover disabled:opacity-50"
             >
               {busy === 'save' ? 'Creating...' : 'Create campaign'}
             </button>
@@ -544,7 +544,7 @@ const GrantsAdmin = () => {
                     onClick={() => execute(campaign)}
                     disabled={busy === campaign._id || !canExecute}
                     title={canExecute ? '' : 'Dry run first'}
-                    className="flex cursor-pointer items-center gap-1.5 rounded-full bg-crimson px-3 py-1.5 text-xs font-semibold text-white hover:bg-crimson-soft disabled:opacity-40"
+                    className="flex cursor-pointer items-center gap-1.5 rounded-full bg-crimson px-3 py-1.5 text-xs font-semibold text-white hover:bg-crimson-hover disabled:opacity-40"
                   >
                     <PlayCircle className="h-3.5 w-3.5" aria-hidden="true" /> Execute
                   </button>

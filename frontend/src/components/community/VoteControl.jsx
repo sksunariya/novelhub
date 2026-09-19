@@ -53,7 +53,7 @@ const VoteControl = ({ post, orientation = 'vertical', size = 'md', target = 'po
         aria-label={active ? `Remove ${action.toLowerCase()}` : action}
         className={`cursor-pointer rounded p-1 transition-colors ${
           active
-            ? direction === 1 ? 'text-crimson' : 'text-sky-400'
+            ? direction === 1 ? 'text-crimson-soft' : 'text-sky-400'
             : 'text-silver-muted hover:bg-night-raised hover:text-silver'
         }`}
       >
@@ -68,7 +68,7 @@ const VoteControl = ({ post, orientation = 'vertical', size = 'md', target = 'po
 
       <span
         className={`min-w-[2ch] text-center text-xs font-semibold tabular-nums ${
-          value === 1 ? 'text-crimson' : value === -1 ? 'text-sky-400' : 'text-silver'
+          value === 1 ? 'text-crimson-soft' : value === -1 ? 'text-sky-400' : 'text-silver'
         }`}
         // The number is decorative for assistive tech — the live region below
         // announces it, and announcing it twice is worse than once.

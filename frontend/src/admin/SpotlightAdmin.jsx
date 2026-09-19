@@ -157,7 +157,7 @@ const SpotlightAdmin = () => {
             View homepage
           </a>
           <button type="button" onClick={() => setEditing({})}
-            className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-crimson px-3 py-2 text-sm font-semibold text-white hover:bg-crimson-soft">
+            className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-crimson px-3 py-2 text-sm font-semibold text-white hover:bg-crimson-hover">
             <Plus className="h-4 w-4" aria-hidden="true" />
             New rail
           </button>

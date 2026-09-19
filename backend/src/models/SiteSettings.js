@@ -8,12 +8,15 @@ const siteSettingsSchema = new mongoose.Schema(
     tagline: { type: String, default: 'Where dark tales come alive' },
     logoUrl: { type: String, default: '' },
     faviconUrl: { type: String, default: '' },
+    // a2zNovel "Aurora Violet". Must match frontend/src/theme/palette.js; an
+    // existing settings document keeps whatever it saved, which is what
+    // scripts/applyAuroraTheme.js is for.
     themeColors: {
-      primary: { type: String, default: '#dc2626' },
-      accent: { type: String, default: '#ef4444' },
-      background: { type: String, default: '#0a0507' },
-      surface: { type: String, default: '#140a0e' },
-      text: { type: String, default: '#e7e5e4' },
+      primary: { type: String, default: '#7c3aed' },
+      accent: { type: String, default: '#a78bfa' },
+      background: { type: String, default: '#0c0a13' },
+      surface: { type: String, default: '#14111d' },
+      text: { type: String, default: '#f2eff9' },
     },
     announcement: { type: String, default: '' },
     footerText: { type: String, default: '' },

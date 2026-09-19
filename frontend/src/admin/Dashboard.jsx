@@ -83,7 +83,7 @@ const Dashboard = () => {
       </div>
 
       <div className="mt-8 flex flex-wrap gap-3">
-        <Link to="/admin/novels" className="rounded-full bg-crimson px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft">
+        <Link to="/admin/novels" className="rounded-full bg-crimson px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover">
           Manage Novels
         </Link>
         <Link to="/admin/settings" className="rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-silver transition-colors hover:border-crimson/60">

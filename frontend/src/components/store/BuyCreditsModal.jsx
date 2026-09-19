@@ -114,7 +114,7 @@ const BuyCreditsModal = ({ open, onClose, shortfall = 0, reason = '', onPurchase
           <button
             type="button"
             onClick={onClose}
-            className="mt-6 cursor-pointer rounded-full bg-crimson px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft"
+            className="mt-6 cursor-pointer rounded-full bg-crimson px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover"
           >
             Keep reading
           </button>

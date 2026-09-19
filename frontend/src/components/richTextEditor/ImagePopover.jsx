@@ -78,7 +78,7 @@ const ImagePopover = ({ editor, open, onOpenChange }) => {
         className={inputClass}
       />
       <div className="mt-2 flex justify-end">
-        <button type="button" onClick={insertFromUrl} className="cursor-pointer rounded-full bg-crimson px-3 py-1 text-xs font-semibold text-white hover:bg-crimson-soft">
+        <button type="button" onClick={insertFromUrl} className="cursor-pointer rounded-full bg-crimson px-3 py-1 text-xs font-semibold text-white hover:bg-crimson-hover">
           Insert
         </button>
       </div>

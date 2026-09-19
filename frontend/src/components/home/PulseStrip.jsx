@@ -17,7 +17,7 @@ import { compact } from './railStyle';
 
 const Item = ({ icon: Icon, children }) => (
   <span className="flex shrink-0 items-center gap-1.5">
-    <Icon className="h-3.5 w-3.5 text-crimson" aria-hidden="true" />
+    <Icon className="h-3.5 w-3.5 text-crimson-soft" aria-hidden="true" />
     {children}
   </span>
 );
@@ -28,7 +28,7 @@ const PulseStrip = ({ pulse }) => {
 
   return (
     <div
-      className="flex items-center gap-3 overflow-x-auto rounded-xl border border-line bg-night-surface/70 px-4 py-2.5 text-xs text-silver-muted [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="no-scrollbar flex items-center gap-4 overflow-x-auto rounded-2xl border border-line bg-night-surface/70 px-4 py-3 text-xs text-silver-muted backdrop-blur"
       // A live region would re-announce the whole strip on every refresh, which
       // is noise, not information. It is labelled as a summary instead and read
       // on demand.

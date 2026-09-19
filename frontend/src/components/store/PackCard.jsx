@@ -15,14 +15,15 @@ const PackCard = ({ pack, selected, onSelect }) => {
     <button
       type="button"
       onClick={() => onSelect(pack)}
-      className={`relative flex w-full cursor-pointer flex-col gap-3 rounded-2xl border p-5 text-left transition-colors ${
+      aria-pressed={selected}
+      className={`relative flex w-full cursor-pointer flex-col gap-3 rounded-2xl border p-5 text-left transition duration-200 ${
         selected
-          ? 'border-crimson bg-crimson/10'
-          : 'border-line bg-night-surface hover:border-crimson/60'
+          ? 'border-crimson-soft/60 bg-crimson/10 shadow-glow ring-1 ring-inset ring-crimson-soft/40'
+          : 'border-line bg-night-surface/80 hover:-translate-y-0.5 hover:border-crimson-soft/40'
       }`}
     >
       {pack.badge && (
-        <span className="absolute -top-2.5 left-5 rounded-full bg-crimson px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white">
+        <span className="absolute -top-2.5 left-5 rounded-full bg-gradient-to-r from-crimson to-crimson-alt px-3 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-glow">
           {pack.badge}
         </span>
       )}

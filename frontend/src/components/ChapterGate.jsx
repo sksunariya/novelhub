@@ -67,7 +67,7 @@ const RatingForm = ({ title, submitLabel, onSubmit }) => {
       <button
         type="submit"
         disabled={!rating || busy}
-        className="w-full cursor-pointer rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full cursor-pointer rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? 'Saving...' : submitLabel}
       </button>
@@ -109,7 +109,7 @@ const CommentForm = ({ title, onSubmit }) => {
       <button
         type="submit"
         disabled={!content.trim() || busy}
-        className="w-full cursor-pointer rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full cursor-pointer rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? 'Posting...' : 'Post comment'}
       </button>
@@ -179,7 +179,7 @@ const ChapterGate = ({ payload, user, onSatisfied }) => {
             <div className="flex flex-wrap gap-2">
               <Link
                 to={`/login?${redirect}`}
-                className="flex items-center gap-2 rounded-full bg-crimson px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft"
+                className="flex items-center gap-2 rounded-full bg-crimson px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover"
               >
                 <LogIn className="h-4 w-4" aria-hidden="true" /> Log in
               </Link>

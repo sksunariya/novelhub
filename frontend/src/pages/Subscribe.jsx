@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Check, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Check, AlertTriangle, CheckCircle2, Crown } from 'lucide-react';
 import {
   getPlans,
   subscribe,
@@ -44,15 +44,22 @@ const PlanCard = ({ plan, creditLabel, current, busy, onChoose }) => {
 
   return (
     <div
-      className={`flex flex-col rounded-2xl border p-6 ${
-        isCurrent ? 'border-crimson bg-crimson/5' : 'border-line bg-night-surface'
+      className={`relative flex flex-col rounded-2xl border p-6 shadow-card transition duration-200 ${
+        isCurrent
+          ? 'border-crimson-soft/60 bg-crimson/10 ring-1 ring-inset ring-crimson-soft/40'
+          : 'border-line bg-night-surface/80 hover:-translate-y-0.5 hover:border-crimson-soft/40'
       }`}
     >
-      <h3 className="text-lg font-semibold text-silver">{plan.name}</h3>
+      {isCurrent && (
+        <span className="absolute -top-2.5 left-6 rounded-full bg-gradient-to-r from-crimson to-crimson-alt px-3 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-glow">
+          Current plan
+        </span>
+      )}
+      <h3 className="font-display text-lg font-bold text-silver">{plan.name}</h3>
       {plan.description && <p className="mt-1 text-sm text-silver-muted">{plan.description}</p>}
 
       <p className="mt-4">
-        <span className="text-3xl font-semibold text-silver">{usd(plan.priceUsdCents)}</span>
+        <span className="font-display text-4xl font-extrabold text-silver">{usd(plan.priceUsdCents)}</span>
         <span className="text-sm text-silver-muted">/{plan.interval}</span>
       </p>
       {plan.trialDays > 0 && (
@@ -62,7 +69,7 @@ const PlanCard = ({ plan, creditLabel, current, busy, onChoose }) => {
       <ul className="mt-5 flex-1 space-y-2 text-sm text-silver">
         {lines.map((line) => (
           <li key={line} className="flex gap-2">
-            <Check size={16} className="mt-0.5 shrink-0 text-crimson" />
+            <Check size={16} className="mt-0.5 shrink-0 text-crimson-soft" />
             {line}
           </li>
         ))}
@@ -72,7 +79,7 @@ const PlanCard = ({ plan, creditLabel, current, busy, onChoose }) => {
         type="button"
         disabled={busy || isCurrent}
         onClick={() => onChoose(plan)}
-        className="mt-6 rounded-lg bg-crimson px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+        className={`btn btn-md mt-6 w-full ${isCurrent ? 'btn-secondary' : 'btn-primary'}`}
       >
         {isCurrent ? 'Your current plan' : `Subscribe for ${usd(plan.priceUsdCents)}`}
       </button>
@@ -198,9 +205,9 @@ const Subscribe = () => {
   if (!data.enabled) {
     return (
       <div className="mx-auto max-w-2xl p-8 text-center">
-        <h1 className="text-xl font-semibold text-silver">Subscriptions are not available yet</h1>
+        <h1 className="font-display text-xl font-bold text-silver">Subscriptions are not available yet</h1>
         <p className="mt-2 text-sm text-silver-muted">
-          You can still buy credits from the <Link to="/store" className="text-crimson">store</Link>.
+          You can still buy credits from the <Link to="/store" className="font-semibold text-crimson-soft hover:underline">store</Link>.
         </p>
       </div>
     );
@@ -209,27 +216,28 @@ const Subscribe = () => {
   const current = data.current;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+    <div className="mx-auto max-w-5xl space-y-8">
       <header>
-        <h1 className="text-2xl font-semibold text-silver">{subscriptionHeading}</h1>
-        <p className="mt-1 text-sm text-silver-muted">
+        <p className="eyebrow"><Crown className="h-3.5 w-3.5" aria-hidden="true" /> Membership</p>
+        <h1 className="mt-3 font-display text-3xl font-extrabold text-silver sm:text-4xl">{subscriptionHeading}</h1>
+        <p className="mt-2 text-sm text-silver-muted">
           A recurring plan is the cheapest way to read a lot. Cancel any time.
         </p>
       </header>
 
       {notice && (
-        <p className="flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+        <p className="alert-success flex items-center gap-2">
           <CheckCircle2 size={16} /> {notice}
         </p>
       )}
       {error && (
-        <p className="flex items-center gap-2 rounded-lg border border-crimson/40 bg-crimson/10 p-3 text-sm text-crimson">
+        <p className="alert-error flex items-center gap-2">
           <AlertTriangle size={16} /> {error}
         </p>
       )}
 
       {current && (
-        <div className="rounded-xl border border-line bg-night-surface p-5">
+        <div className="panel p-5">
           <p className="text-sm text-silver">
             You are on <strong>{current.plan?.name}</strong>
             {current.status === 'past_due' && ' — payment failed, retrying'}
@@ -252,7 +260,7 @@ const Subscribe = () => {
               type="button"
               onClick={stopSubscription}
               disabled={busy}
-              className="mt-3 rounded-lg border border-line px-3 py-2 text-sm text-silver-muted disabled:opacity-50"
+              className="btn btn-ghost btn-sm mt-3 hover:text-rose-200"
             >
               Cancel subscription
             </button>
@@ -260,7 +268,7 @@ const Subscribe = () => {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-5 pt-2 md:grid-cols-3">
         {data.plans.map((plan) => (
           <PlanCard
             key={plan.id}

@@ -37,10 +37,44 @@ const applyReaction = (item, reaction, userId) => ({
 // Light's page colour is a shade darker than it used to be for the same reason
 // — a white card needs something to sit on.
 const READER_THEMES = {
-  dark: { background: '#0a0507', surface: '#150c10', border: 'rgba(255,255,255,0.08)', text: '#d6d3d1', shadow: '0 8px 30px rgba(0,0,0,0.55)', name: 'Dark' },
+  dark: { background: '#0c0a13', surface: '#15121f', border: 'rgba(255,255,255,0.08)', text: '#dcd7e8', shadow: '0 8px 30px rgba(0,0,0,0.55)', name: 'Dark' },
   black: { background: '#000000', surface: '#111111', border: 'rgba(255,255,255,0.09)', text: '#c7c7c7', shadow: '0 8px 30px rgba(0,0,0,0.7)', name: 'Black' },
   sepia: { background: '#f4ecd8', surface: '#fbf5e6', border: 'rgba(67,52,34,0.16)', text: '#433422', shadow: '0 6px 24px rgba(67,52,34,0.16)', name: 'Sepia' },
   light: { background: '#f1f1f0', surface: '#ffffff', border: 'rgba(28,25,23,0.12)', text: '#1c1917', shadow: '0 6px 24px rgba(28,25,23,0.13)', name: 'Light' },
+};
+
+// Link colour inside the prose. The light brand shade reads on the dark pages
+// and washes out on sepia/light, where the deeper brand shade is used instead.
+const LINK_COLOR = {
+  dark: 'var(--color-accent)',
+  black: 'var(--color-accent)',
+  sepia: 'var(--color-primary)',
+  light: 'var(--color-primary)',
+};
+
+/** Share of the page scrolled, 0-100, for the progress bar under the top bar. */
+const useScrollProgress = () => {
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      setProgress(max > 0 ? Math.min(100, Math.max(0, (window.scrollY / max) * 100)) : 0);
+    };
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, []);
+  return progress;
 };
 
 const FONTS = {
@@ -366,12 +400,13 @@ const Reader = () => {
   // a hook skipped on a gated chapter changes the hook order between renders.
   const fullscreen = useFullscreen();
   const speech = useTextToSpeech(contentHtml);
+  const scrollProgress = useScrollProgress();
 
   if (error) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-night text-silver-muted">
         <p>{error}</p>
-        <Link to={`/novel/${slug}`} className="text-crimson-soft hover:underline">Back to novel</Link>
+        <Link to={`/novel/${slug}`} className="btn btn-secondary btn-md">Back to novel</Link>
       </div>
     );
   }
@@ -463,6 +498,15 @@ const Reader = () => {
             )}
           </div>
         </div>
+        <div
+          className="absolute inset-x-0 bottom-0 h-0.5 origin-left bg-gradient-to-r from-crimson to-crimson-alt transition-transform duration-150 ease-out"
+          style={{ transform: `scaleX(${scrollProgress / 100})` }}
+          role="progressbar"
+          aria-label="Reading progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(scrollProgress)}
+        />
       </header>
 
       <AnimatePresence>
@@ -511,7 +555,7 @@ const Reader = () => {
                         }}
                         className={`block w-full cursor-pointer rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
                           chapter.number === Number(number)
-                            ? 'bg-crimson font-semibold text-white'
+                            ? 'bg-gradient-to-r from-crimson to-crimson-alt font-semibold text-white shadow-glow'
                             : 'hover:bg-crimson/10'
                         }`}
                       >
@@ -540,9 +584,15 @@ const Reader = () => {
           transition={{ duration: 0.3 }}
           className="mx-auto max-w-4xl px-3 pb-28 pt-8 sm:px-4 sm:pt-10"
         >
-          <h1 className="mb-6 text-center font-display text-2xl font-bold">
-            Chapter {data.chapter.number}: {data.chapter.title}
-          </h1>
+          <header className="mb-8 text-center">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-crimson-soft">Chapter {data.chapter.number}</p>
+            <h1 className="mx-auto mt-2 max-w-2xl font-display text-2xl font-extrabold leading-tight sm:text-3xl">
+              {data.chapter.title}
+            </h1>
+            <Link to={`/novel/${slug}`} className="mt-2 inline-block text-sm opacity-60 transition-opacity hover:opacity-100">
+              {data.novel.title}
+            </Link>
+          </header>
           {/* The prose sits on its own raised card, so the floating control bar
               overlaps a surface instead of hovering on bare background. The
               bottom padding above is what keeps the bar off the last line. */}
@@ -556,6 +606,7 @@ const Reader = () => {
                 fontSize: `${settings.fontSize}px`,
                 lineHeight: settings.lineHeight,
                 fontFamily: FONTS[settings.font]?.css || FONTS.serif.css,
+                '--reader-link': LINK_COLOR[settings.theme] || LINK_COLOR.dark,
               }}
               dangerouslySetInnerHTML={{ __html: contentHtml }}
             />
@@ -576,9 +627,9 @@ const Reader = () => {
             {data.next ? (
               <Link
                 to={`/novel/${slug}/chapter/${data.next.number}`}
-                className="flex items-center gap-1.5 rounded-full bg-crimson px-5 py-2.5 text-sm font-semibold text-white shadow-glow transition-transform hover:scale-[1.03]"
+                className="btn btn-primary btn-md"
               >
-                Next <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                Next chapter <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             ) : (
               <Link to={`/novel/${slug}`} className="text-sm opacity-70 transition-opacity hover:opacity-100">
@@ -594,22 +645,22 @@ const Reader = () => {
                 <h2 className="font-display text-xl font-bold">Chapter Feedback & Review</h2>
                 <p className="text-xs opacity-75">Share your thoughts on Chapter {data.chapter.number} or review the novel.</p>
               </div>
-              <div className="flex gap-2">
+              <div className="segmented self-start" role="tablist" aria-label="Chapter feedback">
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'comments'}
                   onClick={() => setActiveTab('comments')}
-                  className={`cursor-pointer rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
-                    activeTab === 'comments' ? 'bg-crimson text-white shadow-glow' : 'border border-line opacity-75 hover:opacity-100'
-                  }`}
+                  className={`segment h-8 text-xs ${activeTab === 'comments' ? 'segment-active' : ''}`}
                 >
                   Comments ({commentCount})
                 </button>
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'review'}
                   onClick={() => setActiveTab('review')}
-                  className={`cursor-pointer rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
-                    activeTab === 'review' ? 'bg-crimson text-white shadow-glow' : 'border border-line opacity-75 hover:opacity-100'
-                  }`}
+                  className={`segment h-8 text-xs ${activeTab === 'review' ? 'segment-active' : ''}`}
                 >
                   Reviews ({chapterReviews?.length ?? 0})
                 </button>
@@ -628,7 +679,7 @@ const Reader = () => {
                         className="h-10 w-10 shrink-0 rounded-full object-cover border border-line shadow-sm"
                       />
                     ) : (
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-crimson/20 text-sm font-bold uppercase text-crimson-soft border border-crimson/30 shadow-sm">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-crimson to-crimson-alt text-sm font-bold uppercase text-white shadow-sm">
                         {(user.fullName || user.username)?.slice(0, 2) || '??'}
                       </span>
                     )}
@@ -647,7 +698,7 @@ const Reader = () => {
                           onFocus={() => setIsBottomCommentFocused(true)}
                           placeholder={`What did you think of Chapter ${data.chapter.number}? Add a public comment...`}
                           rows={3}
-                          className="w-full rounded-xl border border-line bg-night px-4 py-3 text-sm text-silver placeholder:text-silver-muted/80 focus:border-crimson focus:outline-none focus:ring-1 focus:ring-crimson/40 transition-all duration-200 resize-none shadow-inner"
+                          className="field resize-none py-3"
                         />
                       </div>
                       {(isBottomCommentFocused || bottomCommentText.trim() !== '') && (
@@ -658,14 +709,14 @@ const Reader = () => {
                               setIsBottomCommentFocused(false);
                               setBottomCommentText('');
                             }}
-                            className="rounded-full px-4 py-1.5 text-xs font-semibold text-silver hover:bg-white/10 transition-colors"
+                            className="btn btn-ghost btn-sm"
                           >
                             Cancel
                           </button>
                           <button
                             type="submit"
                             disabled={!bottomCommentText.trim()}
-                            className="rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white transition-all hover:bg-crimson-soft disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                            className="btn btn-primary btn-sm"
                           >
                             Comment
                           </button>
@@ -679,7 +730,7 @@ const Reader = () => {
                   </div>
                 )}
 
-                {commentError && <p className="text-sm text-crimson-soft" role="alert">{commentError}</p>}
+                {commentError && <p className="alert-error" role="alert">{commentError}</p>}
 
                 {comments === null ? (
                   <Spinner />
@@ -728,7 +779,7 @@ const Reader = () => {
                       onChange={(e) => setReviewForm((f) => ({ ...f, content: e.target.value }))}
                       placeholder="Write your review for this novel..."
                       rows={3}
-                      className="w-full rounded-xl border border-line bg-night px-4 py-3 text-sm text-silver placeholder:text-silver-muted/80 focus:border-crimson focus:outline-none focus:ring-1 focus:ring-crimson/40 transition-all duration-200 resize-none shadow-inner"
+                      className="field resize-none py-3"
                     />
                     {reviewMsg && (
                       <p className="text-xs font-medium text-crimson-soft">{reviewMsg}</p>
@@ -738,7 +789,7 @@ const Reader = () => {
                       <button
                         type="submit"
                         disabled={submittingReview || !reviewForm.rating}
-                        className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white transition-opacity hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50 shadow-md"
+                        className="btn btn-primary btn-sm"
                       >
                         {submittingReview ? 'Submitting...' : userReview ? 'Update Novel Review' : 'Submit Review'}
                       </button>
@@ -777,7 +828,7 @@ const Reader = () => {
                         }
                         placeholder="What worked in this chapter?"
                         rows={2}
-                        className="w-full rounded-xl border border-line bg-night px-4 py-3 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none"
+                        className="field resize-none py-3"
                       />
                       {chapterReviewMsg && <p className="text-xs font-medium text-crimson-soft">{chapterReviewMsg}</p>}
                       <div className="flex items-center justify-between">
@@ -785,7 +836,7 @@ const Reader = () => {
                         <button
                           type="submit"
                           disabled={savingChapterReview || !chapterReviewForm.rating}
-                          className="cursor-pointer rounded-full border border-crimson px-5 py-2 text-xs font-semibold text-crimson-soft transition-colors hover:bg-crimson hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          className="btn btn-secondary btn-sm"
                         >
                           {savingChapterReview ? 'Saving...' : chapterReview ? 'Update Chapter Rating' : 'Submit Chapter Rating'}
                         </button>

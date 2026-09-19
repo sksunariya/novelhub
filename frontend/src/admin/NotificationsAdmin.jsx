@@ -413,7 +413,7 @@ const NotificationsAdmin = () => {
           <button
             type="submit"
             disabled={dispatching}
-            className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft disabled:opacity-60"
+            className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover disabled:opacity-60"
           >
             <Send className="h-4 w-4" aria-hidden="true" />
             {dispatching ? 'Dispatching...' : 'Dispatch Notification'}
@@ -589,7 +589,7 @@ const NotificationsAdmin = () => {
                 type="button"
                 onClick={executeDispatch}
                 disabled={dispatching}
-                className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white shadow-glow transition-colors hover:bg-crimson-soft disabled:opacity-50"
+                className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-5 py-2 text-xs font-semibold text-white shadow-glow transition-colors hover:bg-crimson-hover disabled:opacity-50"
               >
                 <Send className="h-3.5 w-3.5" />
                 {dispatching ? 'Sending...' : 'Confirm & Dispatch'}

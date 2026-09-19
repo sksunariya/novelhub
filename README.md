@@ -1,6 +1,6 @@
 # NovelHub
 
-A novel reading platform with a full admin portal. Dark gothic theme derived from the site logo.
+A novel reading platform with a full admin portal. The `a2znovel` branch ships the "Aurora Violet" theme: a near-black violet UI with a violet-to-magenta brand gradient and Plus Jakarta Sans.
 
 ## Stack
 
@@ -66,6 +66,22 @@ OTP_TTL_MINUTES=10
   signups must confirm a 6-digit code before the account is created. Google
   sign-ins skip this. When SMTP is not configured, codes are logged to the
   server console instead of sent (useful for local development).
+
+### Theme colours
+
+The five brand colours (primary, accent, background, surface, text) live in the
+database and can be changed in Admin → Settings → Theme colors; the frontend
+derives the remaining shades from them. A database created before the Aurora
+Violet theme still holds the old red values, so switch it once after deploying:
+
+```bash
+cd backend
+npm run theme:aurora -- --dry-run   # show what would change
+npm run theme:aurora                # apply (idempotent, recorded in the audit log)
+```
+
+The shipped palette is defined in `frontend/src/index.css` and
+`frontend/src/theme/palette.js`; keep those and `backend/scripts/applyAuroraTheme.js` in sync.
 
 ### Tests
 

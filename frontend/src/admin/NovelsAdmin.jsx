@@ -138,7 +138,7 @@ const NovelsAdmin = () => {
         <button
           type="button"
           onClick={openCreate}
-          className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft"
+          className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover"
         >
           <Plus className="h-4 w-4" aria-hidden="true" /> New Novel
         </button>
@@ -309,7 +309,7 @@ const NovelsAdmin = () => {
                   <button type="button" onClick={() => setEditing(null)} className="cursor-pointer rounded-full border border-line px-5 py-2 text-sm text-silver-muted hover:text-silver">
                     Cancel
                   </button>
-                  <button type="submit" disabled={saving} className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-soft disabled:opacity-60">
+                  <button type="submit" disabled={saving} className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-hover disabled:opacity-60">
                     {saving ? 'Saving...' : 'Save'}
                   </button>
                 </div>

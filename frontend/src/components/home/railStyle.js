@@ -24,9 +24,10 @@ export const iconFor = (name) => RAIL_ICONS[name] || Sparkles;
 
 // The theme is CSS-variable driven and only defines one brand colour, so the
 // other accents map onto fixed palette values that hold up on the dark ground.
-// `crimson` stays a variable so it follows the admin's theme colour.
+// `crimson` is the historical name of the brand accent: it stays a variable so
+// it follows the admin's theme colour (violet in the a2zNovel palette).
 export const ACCENTS = {
-  crimson: { text: 'text-crimson', border: 'border-crimson/50', bg: 'bg-crimson/10', ring: 'ring-crimson/30' },
+  crimson: { text: 'text-crimson-soft', border: 'border-crimson-soft/40', bg: 'bg-crimson/15', ring: 'ring-crimson/30' },
   violet: { text: 'text-violet-400', border: 'border-violet-400/50', bg: 'bg-violet-400/10', ring: 'ring-violet-400/30' },
   amber: { text: 'text-amber-400', border: 'border-amber-400/50', bg: 'bg-amber-400/10', ring: 'ring-amber-400/30' },
   emerald: { text: 'text-emerald-400', border: 'border-emerald-400/50', bg: 'bg-emerald-400/10', ring: 'ring-emerald-400/30' },

@@ -6,7 +6,7 @@ import Spinner from '../components/Spinner';
 import HeroCarousel from '../components/HeroCarousel';
 
 const THEME_OPTIONS = [
-  { id: 'dark-crimson', name: 'Crimson Blood (Red)' },
+  { id: 'dark-crimson', name: 'Brand gradient (default)' },
   { id: 'dark-violet', name: 'Midnight Violet (Purple)' },
   { id: 'dark-gold', name: 'Shadow Gold (Amber)' },
   { id: 'dark-emerald', name: 'Emerald Forest (Green)' },
@@ -281,7 +281,7 @@ const CarouselAdmin = () => {
           <button
             type="button"
             onClick={openCreate}
-            className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft shadow-glow"
+            className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover shadow-glow"
           >
             <Plus className="h-4 w-4" /> New Slide
           </button>
@@ -308,7 +308,7 @@ const CarouselAdmin = () => {
           <button
             type="button"
             onClick={openCreate}
-            className="mt-5 inline-flex items-center gap-2 rounded-full bg-crimson px-5 py-2.5 text-sm font-semibold text-white hover:bg-crimson-soft"
+            className="mt-5 inline-flex items-center gap-2 rounded-full bg-crimson px-5 py-2.5 text-sm font-semibold text-white hover:bg-crimson-hover"
           >
             <Plus className="h-4 w-4" /> Add Custom Slide
           </button>
@@ -760,7 +760,7 @@ const CarouselAdmin = () => {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="rounded-full bg-crimson px-6 py-2 text-sm font-semibold text-white hover:bg-crimson-soft disabled:opacity-50 shadow-glow"
+                    className="rounded-full bg-crimson px-6 py-2 text-sm font-semibold text-white hover:bg-crimson-hover disabled:opacity-50 shadow-glow"
                   >
                     {saving ? 'Saving Slide...' : 'Save Slide'}
                   </button>
@@ -852,7 +852,7 @@ const CarouselAdmin = () => {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-soft disabled:opacity-50"
+                    className="rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white hover:bg-crimson-hover disabled:opacity-50"
                   >
                     {saving ? 'Saving...' : 'Save Settings'}
                   </button>

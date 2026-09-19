@@ -1,107 +1,102 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Sparkles, BookOpen, Star, Layers, Flame } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, Star, Layers, Sparkles, ArrowRight } from 'lucide-react';
 import client from '../api/client';
 import { useSettings } from '../context/SettingsContext';
-import HeroEmbers from './HeroEmbers';
 
+// The homepage hero: a full-width stage lit by the current slide's own cover,
+// blurred into an ambient backdrop, with the copy on the left and the cover
+// "held up" on the right. On phones the two sit side by side in a compact row
+// so the first screen still shows what the slide is and how to start reading.
+//
+// Also rendered by the carousel editor as a live preview (slidesProp), so it
+// must look right inside a narrow framed container as well as edge to edge.
+
+// Per-slide colour moods from the carousel editor. 'dark-crimson' is the
+// historical id of the default mood; it follows the brand colours, so a slide
+// left on the default always matches the rest of the site.
 const THEME_STYLES = {
   'dark-crimson': {
-    glow: 'radial-gradient(ellipse at 50% 10%, rgba(220,38,38,0.35), transparent 70%)',
-    border: 'border-crimson/30 hover:border-crimson/60',
-    badgeBg: 'bg-crimson/20 text-crimson-soft border-crimson/40',
-    buttonPrimary: 'bg-crimson hover:bg-crimson-soft text-white shadow-glow',
-    glowColor: 'rgba(220, 38, 38, 0.4)',
+    glow: 'radial-gradient(48% 70% at 80% 45%, rgb(var(--rgb-primary) / 0.42), transparent 70%), radial-gradient(38% 60% at 100% 0%, rgb(var(--rgb-primary-2) / 0.32), transparent 70%)',
+    aura: 'rgb(var(--rgb-primary) / 0.55)',
   },
   'dark-violet': {
-    glow: 'radial-gradient(ellipse at 50% 10%, rgba(147,51,234,0.35), transparent 70%)',
-    border: 'border-purple-500/30 hover:border-purple-500/60',
-    badgeBg: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
-    buttonPrimary: 'bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(147,51,234,0.4)]',
-    glowColor: 'rgba(147, 51, 234, 0.4)',
+    glow: 'radial-gradient(48% 70% at 80% 45%, rgba(147, 51, 234, 0.4), transparent 70%)',
+    aura: 'rgba(147, 51, 234, 0.5)',
   },
   'dark-gold': {
-    glow: 'radial-gradient(ellipse at 50% 10%, rgba(217,119,6,0.35), transparent 70%)',
-    border: 'border-amber-500/30 hover:border-amber-500/60',
-    badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-    buttonPrimary: 'bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_20px_rgba(217,119,6,0.4)]',
-    glowColor: 'rgba(217, 119, 6, 0.4)',
+    glow: 'radial-gradient(48% 70% at 80% 45%, rgba(217, 119, 6, 0.36), transparent 70%)',
+    aura: 'rgba(217, 119, 6, 0.5)',
   },
   'dark-emerald': {
-    glow: 'radial-gradient(ellipse at 50% 10%, rgba(16,185,129,0.35), transparent 70%)',
-    border: 'border-emerald-500/30 hover:border-emerald-500/60',
-    badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-    buttonPrimary: 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]',
-    glowColor: 'rgba(16, 185, 129, 0.4)',
+    glow: 'radial-gradient(48% 70% at 80% 45%, rgba(16, 185, 129, 0.32), transparent 70%)',
+    aura: 'rgba(16, 185, 129, 0.45)',
   },
   'dark-obsidian': {
-    glow: 'radial-gradient(ellipse at 50% 10%, rgba(71,85,105,0.35), transparent 70%)',
-    border: 'border-slate-600/40 hover:border-slate-500',
-    badgeBg: 'bg-slate-700/40 text-slate-200 border-slate-600',
-    buttonPrimary: 'bg-slate-700 hover:bg-slate-600 text-white shadow-[0_0_20px_rgba(71,85,105,0.4)]',
-    glowColor: 'rgba(71, 85, 105, 0.4)',
+    glow: 'radial-gradient(48% 70% at 80% 45%, rgba(100, 116, 139, 0.35), transparent 70%)',
+    aura: 'rgba(100, 116, 139, 0.5)',
   },
   'dark-cyber': {
-    glow: 'radial-gradient(ellipse at 50% 10%, rgba(6,182,212,0.35), transparent 70%)',
-    border: 'border-cyan-500/30 hover:border-cyan-500/60',
-    badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
-    buttonPrimary: 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)]',
-    glowColor: 'rgba(6, 182, 212, 0.4)',
+    glow: 'radial-gradient(48% 70% at 80% 45%, rgba(6, 182, 212, 0.34), transparent 70%)',
+    aura: 'rgba(6, 182, 212, 0.45)',
   },
 };
 
 const BADGE_COLORS = {
-  crimson: 'bg-crimson/20 text-crimson-soft border-crimson/40',
-  amber: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-  emerald: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-  azure: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
-  violet: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
-  gold: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
-  rose: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
-  cyber: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+  crimson: 'border-crimson-soft/30 bg-crimson/15 text-crimson-soft',
+  amber: 'border-amber-400/30 bg-amber-400/10 text-amber-200',
+  emerald: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200',
+  azure: 'border-sky-400/30 bg-sky-400/10 text-sky-200',
+  violet: 'border-violet-400/30 bg-violet-400/10 text-violet-200',
+  gold: 'border-yellow-400/30 bg-yellow-400/10 text-yellow-200',
+  rose: 'border-rose-400/30 bg-rose-400/10 text-rose-200',
+  cyber: 'border-cyan-400/30 bg-cyan-400/10 text-cyan-200',
 };
 
 const slideVariants = {
-  enter: (direction) => ({
-    x: direction > 0 ? 120 : -120,
-    opacity: 0,
-    scale: 0.96,
-  }),
-  center: {
-    x: 0,
-    opacity: 1,
-    scale: 1,
-    transition: {
-      duration: 0.55,
-      ease: [0.25, 1, 0.5, 1],
-    },
-  },
-  exit: (direction) => ({
-    x: direction < 0 ? 120 : -120,
-    opacity: 0,
-    scale: 0.96,
-    transition: {
-      duration: 0.4,
-      ease: 'easeIn',
-    },
-  }),
+  enter: (direction) => ({ x: direction > 0 ? 48 : -48, opacity: 0 }),
+  center: { x: 0, opacity: 1, transition: { duration: 0.5, ease: [0.25, 1, 0.5, 1] } },
+  exit: (direction) => ({ x: direction < 0 ? 48 : -48, opacity: 0, transition: { duration: 0.28, ease: 'easeIn' } }),
 };
 
 const contentContainer = {
   hidden: {},
-  show: {
-    transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.1,
-    },
-  },
+  show: { transition: { staggerChildren: 0.07, delayChildren: 0.08 } },
 };
 
 const contentItem = {
-  hidden: { opacity: 0, y: 16 },
+  hidden: { opacity: 0, y: 14 },
   show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
 };
+
+/** Internal paths route in-app; anything else is an outbound link. */
+const CtaLink = ({ url, className, children, ...rest }) =>
+  url?.startsWith('/') ? (
+    <Link to={url} className={className} {...rest}>
+      {children}
+    </Link>
+  ) : (
+    <a href={url || '#'} target="_blank" rel="noreferrer" className={className} {...rest}>
+      {children}
+    </a>
+  );
+
+const slideImage = (slide) => slide?.imageUrl || slide?.novel?.coverUrl || '';
+
+const HeroSkeleton = () => (
+  <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" aria-hidden="true">
+    <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-5 pb-10 pt-8 sm:grid-cols-[9rem_minmax(0,1fr)] md:grid-cols-12 md:gap-10 md:pb-16 md:pt-14">
+      <div className="skeleton aspect-[2/3] w-full md:order-2 md:col-span-4 md:col-start-9 md:w-56 md:justify-self-end lg:w-64" />
+      <div className="space-y-4 md:order-1 md:col-span-7">
+        <div className="skeleton h-6 w-32 rounded-full" />
+        <div className="skeleton h-9 w-4/5 md:h-14" />
+        <div className="skeleton hidden h-4 w-3/5 sm:block" />
+        <div className="skeleton h-10 w-36 rounded-full md:h-12 md:w-44" />
+      </div>
+    </div>
+  </div>
+);
 
 const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6 }) => {
   const { settings } = useSettings();
@@ -195,25 +190,23 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
     return () => clearInterval(timer);
   }, [enableAutoPlay, isPaused, slides.length, autoPlayInterval, handleNext]);
 
-  if (loading) {
-    return (
-      <div className="relative h-72 sm:h-96 w-full animate-pulse rounded-2xl border border-line bg-night-surface p-8 shadow-card flex items-center justify-center">
-        <div className="flex items-center gap-3 text-silver-muted">
-          <Sparkles className="h-6 w-6 animate-spin text-crimson" />
-          <span className="font-medium text-sm">Loading Hero Carousel...</span>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <HeroSkeleton />;
 
   if (slides.length === 0) return null;
 
   const currentSlide = slides[currentIndex] || slides[0];
   const theme = THEME_STYLES[currentSlide.themeStyle] || THEME_STYLES['dark-crimson'];
-  const badgeStyle = BADGE_COLORS[currentSlide.badgeColor] || THEME_STYLES['dark-crimson'].badgeBg;
+  const badgeStyle = BADGE_COLORS[currentSlide.badgeColor] || BADGE_COLORS.crimson;
+  const image = !imgError ? slideImage(currentSlide) : '';
+  const primaryUrl = currentSlide.primaryButtonUrl;
+  const showSecondary =
+    currentSlide.secondaryButtonText &&
+    currentSlide.secondaryButtonUrl &&
+    currentSlide.secondaryButtonUrl !== primaryUrl;
+  const rating = currentSlide.novel?.ratingAvg > 0 ? currentSlide.novel.ratingAvg.toFixed(1) : null;
 
   return (
-    <div
+    <section
       ref={containerRef}
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
@@ -221,23 +214,37 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
       onBlur={() => setIsPaused(false)}
       onKeyDown={handleKeyDown}
       tabIndex={0}
-      className="group relative overflow-hidden rounded-2xl border border-line bg-night-surface shadow-card transition-all focus:outline-none focus:ring-1 focus:ring-crimson/50"
-      aria-label="Featured Novels Carousel"
+      className="relative isolate overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-crimson-soft/60"
+      aria-roledescription="carousel"
+      aria-label="Featured novels"
     >
-      {/* Dynamic Radial Ambient Backdrop */}
-      <motion.div
-        className="pointer-events-none absolute inset-0 opacity-60 transition-opacity duration-700"
-        style={{ background: theme.glow }}
-        animate={shouldReduceMotion ? { opacity: 0.6 } : { opacity: [0.4, 0.65, 0.4] }}
-        transition={shouldReduceMotion ? undefined : { duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-        aria-hidden="true"
-      />
+      {/* Ambient backdrop: the slide's own art, blown up and blurred, plus the
+          slide's colour mood. Cross-fades between slides. */}
+      <div className="absolute inset-0 -z-10" aria-hidden="true">
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={currentSlide._id || currentIndex}
+            className="absolute inset-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: shouldReduceMotion ? 0 : 0.8 }}
+          >
+            {image && (
+              <img
+                src={image}
+                alt=""
+                className="h-full w-full scale-125 object-cover opacity-40 blur-3xl saturate-150"
+              />
+            )}
+            <div className="absolute inset-0" style={{ background: theme.glow }} />
+          </motion.div>
+        </AnimatePresence>
+        <div className="absolute inset-0 bg-gradient-to-r from-night via-night/85 to-night/30" />
+        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-night to-transparent" />
+      </div>
 
-      {/* Floating Ember Particles */}
-      {!shouldReduceMotion && <HeroEmbers />}
-
-      {/* Main Slide Track & Animations */}
-      <div className="relative min-h-0 md:min-h-[440px] w-full px-4 py-7 sm:px-6 sm:py-9 md:px-12 md:py-12 lg:px-16 lg:py-14 flex items-center justify-center">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
             key={currentSlide._id || currentIndex}
@@ -253,223 +260,171 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
               if (offset.x < -50) handleNext();
               else if (offset.x > 50) handlePrev();
             }}
-            className="flex flex-col items-center justify-center md:grid md:grid-cols-12 md:items-center md:gap-8 w-full"
+            role="group"
+            aria-roledescription="slide"
+            aria-label={`${currentIndex + 1} of ${slides.length}`}
+            className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-center gap-5 pb-6 pt-8 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-7 md:grid-cols-12 md:gap-10 md:pb-10 md:pt-14 lg:pt-16"
           >
-            {/* Left Content Side (Desktop & Tablet only) */}
-            <motion.div
-              variants={contentContainer}
-              initial="hidden"
-              animate="show"
-              className="hidden md:flex md:flex-col md:items-start md:text-left md:col-span-7 z-10"
-            >
-              {/* Badge */}
-              <motion.div variants={contentItem} className="mb-3 md:mb-4">
+            {/* Cover, held up on the right from md; beside the copy on phones. */}
+            <div className="md:order-2 md:col-span-5 md:flex md:justify-end md:pr-3 lg:pr-8">
+              <CtaLink url={primaryUrl} className="group/poster relative block" aria-label={`Read ${currentSlide.title}`}>
+                <div
+                  className="absolute -inset-4 rounded-[2rem] opacity-60 blur-2xl transition-opacity duration-500 group-hover/poster:opacity-100"
+                  style={{ background: theme.aura }}
+                  aria-hidden="true"
+                />
+                <div className="relative aspect-[2/3] w-[6.5rem] overflow-hidden rounded-xl bg-night-raised shadow-2xl ring-1 ring-white/15 transition duration-500 ease-out sm:w-36 md:w-56 md:rotate-[2deg] md:group-hover/poster:-translate-y-2 md:group-hover/poster:rotate-0 lg:w-64">
+                  {image ? (
+                    <img
+                      src={image}
+                      alt={currentSlide.title}
+                      onError={() => setImgError(true)}
+                      className="h-full w-full object-cover transition-transform duration-700 group-hover/poster:scale-105"
+                      loading="eager"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-night-raised via-night-surface to-crimson/25 p-3 text-center">
+                      <Layers className="mb-2 h-8 w-8 text-silver-muted/60 md:h-12 md:w-12" aria-hidden="true" />
+                      <p className="line-clamp-3 font-display text-[11px] font-bold text-silver md:text-sm">{currentSlide.title}</p>
+                      <p className="mt-1 text-[10px] text-crimson-soft md:text-xs">{settings?.siteName || ''}</p>
+                    </div>
+                  )}
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-white/[0.06]" />
+                  {rating && (
+                    <div className="absolute right-2 top-2 hidden items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-xs font-bold text-amber-300 backdrop-blur-md md:flex">
+                      <Star className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                      {rating}
+                    </div>
+                  )}
+                </div>
+              </CtaLink>
+            </div>
+
+            {/* Copy */}
+            <motion.div variants={contentContainer} initial="hidden" animate="show" className="min-w-0 md:order-1 md:col-span-7">
+              <motion.div variants={contentItem}>
                 <span
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1 text-xs font-bold tracking-wider uppercase backdrop-blur-md shadow-sm ${badgeStyle}`}
+                  className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] backdrop-blur-md sm:px-3 sm:text-[11px] ${badgeStyle}`}
                 >
-                  <Flame className="h-3.5 w-3.5" />
-                  {currentSlide.badgeText || 'FEATURED'}
+                  <Sparkles className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" aria-hidden="true" />
+                  <span className="truncate">{currentSlide.badgeText || 'Featured'}</span>
                 </span>
               </motion.div>
 
-              {/* Title */}
               <motion.h1
                 variants={contentItem}
-                className="font-display text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-silver line-clamp-2 leading-tight"
+                className="mt-3 line-clamp-2 font-display text-2xl font-extrabold leading-[1.08] text-silver sm:text-4xl md:mt-5 md:line-clamp-3 md:text-5xl lg:text-6xl"
               >
                 {currentSlide.title}
               </motion.h1>
 
-              {/* Subtitle / Author Tagline */}
               {currentSlide.subtitle && (
-                <motion.p variants={contentItem} className="mt-2 text-sm md:text-base font-semibold text-crimson-soft">
+                <motion.p
+                  variants={contentItem}
+                  className="mt-2 line-clamp-1 text-xs font-semibold text-crimson-soft sm:text-sm md:mt-4 md:text-base"
+                >
                   {currentSlide.subtitle}
                 </motion.p>
               )}
 
-              {/* Description */}
-              <motion.p
-                variants={contentItem}
-                className="mt-3 max-w-xl text-sm md:text-base leading-relaxed text-silver-muted line-clamp-3"
-              >
-                {currentSlide.description}
-              </motion.p>
+              {currentSlide.description && (
+                <motion.p
+                  variants={contentItem}
+                  className="mt-3 hidden max-w-xl text-sm leading-relaxed text-silver-muted sm:line-clamp-2 md:mt-4 md:line-clamp-3 md:text-base"
+                >
+                  {currentSlide.description}
+                </motion.p>
+              )}
 
-              {/* CTA Button */}
-              <motion.div
-                variants={contentItem}
-                className="mt-6 md:mt-7 flex items-center justify-start"
-              >
-                {currentSlide.primaryButtonUrl?.startsWith('/') ? (
-                  <Link
-                    to={currentSlide.primaryButtonUrl}
-                    className={`inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-bold transition-all transform hover:scale-105 active:scale-95 ${theme.buttonPrimary}`}
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    {currentSlide.primaryButtonText || 'Start Reading'}
-                  </Link>
-                ) : (
-                  <a
-                    href={currentSlide.primaryButtonUrl || '#'}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={`inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-bold transition-all transform hover:scale-105 active:scale-95 ${theme.buttonPrimary}`}
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    {currentSlide.primaryButtonText || 'Start Reading'}
-                  </a>
+              <motion.div variants={contentItem} className="mt-4 flex flex-wrap items-center gap-3 md:mt-8">
+                <CtaLink url={primaryUrl} className="btn btn-primary btn-sm md:btn-lg">
+                  <BookOpen className="h-4 w-4" aria-hidden="true" />
+                  {currentSlide.primaryButtonText || 'Start Reading'}
+                </CtaLink>
+                {showSecondary && (
+                  <CtaLink url={currentSlide.secondaryButtonUrl} className="btn btn-secondary btn-lg hidden backdrop-blur-md md:inline-flex">
+                    {currentSlide.secondaryButtonText}
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </CtaLink>
                 )}
               </motion.div>
             </motion.div>
-
-            {/* Right Side / Mobile Center: 3D Animated Cover Poster Card */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.15 }}
-              className="flex justify-center md:col-span-5 z-10"
-            >
-              {currentSlide.primaryButtonUrl?.startsWith('/') ? (
-                <Link
-                  to={currentSlide.primaryButtonUrl}
-                  className="relative group/poster cursor-pointer block"
-                  aria-label={`Read ${currentSlide.title}`}
-                >
-                  {/* Glowing Aura Ring */}
-                  <div
-                    className="absolute -inset-1.5 rounded-2xl opacity-60 blur-xl transition-all duration-500 group-hover/poster:opacity-100 group-hover/poster:blur-2xl"
-                    style={{ background: theme.glowColor }}
-                  />
-
-                  {/* Poster Frame Container */}
-                  <div
-                    className={`relative overflow-hidden rounded-xl sm:rounded-2xl border bg-night-surface/90 shadow-2xl transition-all duration-300 transform group-hover/poster:-translate-y-2 group-hover/poster:rotate-1 ${theme.border}`}
-                  >
-                    {currentSlide.imageUrl && !imgError ? (
-                      <img
-                        src={currentSlide.imageUrl}
-                        alt={currentSlide.title}
-                        onError={() => setImgError(true)}
-                        className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 object-cover transition-transform duration-700 group-hover/poster:scale-105"
-                        loading="eager"
-                      />
-                    ) : (
-                      <div className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
-                        <Layers className="h-10 w-10 sm:h-12 sm:w-12 text-silver-muted/50 mb-2 sm:mb-3" />
-                        <p className="font-display font-bold text-silver text-xs sm:text-sm line-clamp-3">{currentSlide.title}</p>
-                        <p className="text-[10px] sm:text-xs text-crimson-soft mt-1">{settings?.siteName || ''}</p>
-                      </div>
-                    )}
-
-                    {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-night/80 via-transparent to-transparent opacity-70" />
-
-                    {/* Live Rating Pill */}
-                    {currentSlide.novel?.ratingAvg > 0 && (
-                      <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 rounded-full bg-night/80 border border-amber-500/40 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-xs font-bold text-amber-400 backdrop-blur-md flex items-center gap-1 shadow-md">
-                        <Star className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-amber-400" />
-                        <span>{currentSlide.novel.ratingAvg.toFixed(1)}</span>
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              ) : (
-                <a
-                  href={currentSlide.primaryButtonUrl || '#'}
-                  className="relative group/poster cursor-pointer block"
-                  aria-label={`Read ${currentSlide.title}`}
-                >
-                  {/* Glowing Aura Ring */}
-                  <div
-                    className="absolute -inset-1.5 rounded-2xl opacity-60 blur-xl transition-all duration-500 group-hover/poster:opacity-100 group-hover/poster:blur-2xl"
-                    style={{ background: theme.glowColor }}
-                  />
-
-                  {/* Poster Frame Container */}
-                  <div
-                    className={`relative overflow-hidden rounded-xl sm:rounded-2xl border bg-night-surface/90 shadow-2xl transition-all duration-300 transform group-hover/poster:-translate-y-2 group-hover/poster:rotate-1 ${theme.border}`}
-                  >
-                    {currentSlide.imageUrl && !imgError ? (
-                      <img
-                        src={currentSlide.imageUrl}
-                        alt={currentSlide.title}
-                        onError={() => setImgError(true)}
-                        className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 object-cover transition-transform duration-700 group-hover/poster:scale-105"
-                        loading="eager"
-                      />
-                    ) : (
-                      <div className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
-                        <Layers className="h-10 w-10 sm:h-12 sm:w-12 text-silver-muted/50 mb-2 sm:mb-3" />
-                        <p className="font-display font-bold text-silver text-xs sm:text-sm line-clamp-3">{currentSlide.title}</p>
-                        <p className="text-[10px] sm:text-xs text-crimson-soft mt-1">{settings?.siteName || ''}</p>
-                      </div>
-                    )}
-
-                    {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-night/80 via-transparent to-transparent opacity-70" />
-
-                    {/* Live Rating Pill */}
-                    {currentSlide.novel?.ratingAvg > 0 && (
-                      <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 rounded-full bg-night/80 border border-amber-500/40 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-xs font-bold text-amber-400 backdrop-blur-md flex items-center gap-1 shadow-md">
-                        <Star className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-amber-400" />
-                        <span>{currentSlide.novel.ratingAvg.toFixed(1)}</span>
-                      </div>
-                    )}
-                  </div>
-                </a>
-              )}
-            </motion.div>
           </motion.div>
         </AnimatePresence>
+
+        {/* Controls: cover thumbnails from md, dots on phones. */}
+        {slides.length > 1 && (
+          <div className="flex items-center justify-between gap-4 pb-7 md:pb-12">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
+              {slides.map((slide, idx) => {
+                const active = idx === currentIndex;
+                const thumb = slideImage(slide);
+                return (
+                  <button
+                    key={slide._id || idx}
+                    type="button"
+                    onClick={() => handleGoTo(idx)}
+                    aria-label={`Go to slide ${idx + 1}: ${slide.title}`}
+                    aria-current={active ? 'true' : undefined}
+                    className="group/thumb cursor-pointer"
+                  >
+                    <span
+                      className={`block h-1.5 rounded-full transition-all duration-300 md:hidden ${
+                        active ? 'w-6 bg-gradient-to-r from-crimson-soft to-crimson-alt' : 'w-1.5 bg-silver-muted/40'
+                      }`}
+                    />
+                    <span
+                      className={`hidden h-14 w-10 overflow-hidden rounded-md ring-2 ring-offset-2 ring-offset-night transition duration-300 md:block ${
+                        active ? 'opacity-100 ring-crimson-soft' : 'opacity-45 ring-transparent group-hover/thumb:opacity-90'
+                      }`}
+                    >
+                      {thumb ? (
+                        <img src={thumb} alt="" className="h-full w-full object-cover" loading="lazy" />
+                      ) : (
+                        <span className="block h-full w-full bg-gradient-to-br from-night-raised to-crimson/30" />
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+              <span className="ml-2 text-xs font-semibold tabular-nums text-silver-muted">
+                {currentIndex + 1} / {slides.length}
+              </span>
+            </div>
+            <div className="hidden shrink-0 items-center gap-2 sm:flex">
+              <button
+                type="button"
+                onClick={handlePrev}
+                aria-label="Previous slide"
+                className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-silver backdrop-blur-md transition hover:border-crimson-soft/40 hover:bg-white/10"
+              >
+                <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                aria-label="Next slide"
+                className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-silver backdrop-blur-md transition hover:border-crimson-soft/40 hover:bg-white/10"
+              >
+                <ChevronRight className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Navigation Arrows */}
-      {slides.length > 1 && (
-        <>
-          <button
-            onClick={handlePrev}
-            aria-label="Previous Slide"
-            className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-20 rounded-full border border-line bg-night/70 p-1.5 sm:p-2.5 text-silver backdrop-blur-md transition-all hover:bg-crimson hover:border-crimson hover:text-white hover:scale-110 active:scale-90"
-          >
-            <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
-          </button>
-          <button
-            onClick={handleNext}
-            aria-label="Next Slide"
-            className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 z-20 rounded-full border border-line bg-night/70 p-1.5 sm:p-2.5 text-silver backdrop-blur-md transition-all hover:bg-crimson hover:border-crimson hover:text-white hover:scale-110 active:scale-90"
-          >
-            <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
-          </button>
-        </>
-      )}
-
-      {/* Dot Indicators & Slide Counter */}
-      {slides.length > 1 && (
-        <div className="absolute bottom-2 sm:bottom-3 md:bottom-4 left-0 right-0 z-20 flex items-center justify-center gap-1.5 sm:gap-2">
-          {slides.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleGoTo(idx)}
-              aria-label={`Go to slide ${idx + 1}`}
-              className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 ${
-                idx === currentIndex ? 'w-6 sm:w-8 bg-crimson shadow-glow' : 'w-1.5 sm:w-2 bg-silver-muted/30 hover:bg-silver-muted/60'
-              }`}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Animated Countdown Progress Bar */}
-      {enableAutoPlay && slides.length > 1 && !isPaused && (
+      {/* Countdown to the next slide. */}
+      {enableAutoPlay && slides.length > 1 && !isPaused && !shouldReduceMotion && (
         <motion.div
           key={`progress-${currentIndex}`}
-          className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-crimson to-amber-500 z-30"
+          className="absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-crimson to-crimson-alt"
           initial={{ width: '0%' }}
           animate={{ width: '100%' }}
           transition={{ duration: autoPlayInterval, ease: 'linear' }}
+          aria-hidden="true"
         />
       )}
-    </div>
+    </section>
   );
 };
 

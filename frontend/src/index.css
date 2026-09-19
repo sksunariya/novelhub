@@ -3,42 +3,192 @@
 @tailwind utilities;
 
 :root {
-  --color-primary: #dc2626;
-  --color-accent: #ef4444;
-  --color-background: #0a0507;
-  --color-surface: #140a0e;
-  --color-surface-raised: #1e1015;
-  --color-text: #e7e5e4;
-  --color-text-muted: #a8a29e;
-  --color-border: #2c1a20;
+  /* a2zNovel "Aurora Violet". Channel triplets ("r g b") so Tailwind can apply
+     opacity modifiers; see tailwind.config.js. The five admin-editable colours
+     (primary, accent, background, surface, text) are overwritten at runtime
+     from Admin -> Settings -> Theme colors by SettingsContext; the rest are
+     derived there when an admin moves away from this palette.
+     Keep these in sync with src/theme/palette.js. */
+  --rgb-primary: 124 58 237; /* #7c3aed */
+  --rgb-primary-hover: 139 92 246; /* #8b5cf6 */
+  --rgb-primary-2: 192 38 211; /* #c026d3 - gradient partner */
+  --rgb-accent: 167 139 250; /* #a78bfa - brand text on dark */
+  --rgb-background: 12 10 19; /* #0c0a13 */
+  --rgb-surface: 20 17 29; /* #14111d */
+  --rgb-surface-raised: 28 24 41; /* #1c1829 */
+  --rgb-text: 242 239 249; /* #f2eff9 */
+  --rgb-text-muted: 164 157 184; /* #a49db8 */
+  --rgb-border: 42 36 59; /* #2a243b */
+
+  /* Plain colour aliases for CSS and inline styles that cannot use channels. */
+  --color-primary: rgb(var(--rgb-primary));
+  --color-primary-2: rgb(var(--rgb-primary-2));
+  --color-accent: rgb(var(--rgb-accent));
+  --color-background: rgb(var(--rgb-background));
+  --color-surface: rgb(var(--rgb-surface));
+  --color-surface-raised: rgb(var(--rgb-surface-raised));
+  --color-text: rgb(var(--rgb-text));
+  --color-text-muted: rgb(var(--rgb-text-muted));
+  --color-border: rgb(var(--rgb-border));
+
+  color-scheme: dark;
 }
 
 html {
   scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
   @apply bg-night text-silver font-body antialiased;
   min-height: 100dvh;
+  text-rendering: optimizeLegibility;
+}
+
+/* The aurora: two soft brand-coloured glows pinned to the top of the viewport.
+   Fixed and behind everything, so it costs one paint and never scrolls. Pages
+   that paint their own background (the reader) simply cover it. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(56rem 28rem at 8% -12%, rgb(var(--rgb-primary) / 0.16), transparent 62%),
+    radial-gradient(44rem 24rem at 96% -8%, rgb(var(--rgb-primary-2) / 0.1), transparent 60%);
+}
+
+.font-display {
+  letter-spacing: -0.02em;
 }
 
 ::selection {
-  background: var(--color-primary);
+  background: rgb(var(--rgb-primary) / 0.85);
   color: #fff;
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--rgb-accent));
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {
   width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: var(--color-background);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--color-border);
-  border-radius: 6px;
+  border-radius: 999px;
+  border: 2px solid var(--color-background);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-primary);
+}
+
+@layer components {
+  /* Buttons. One primary action per view; everything else is secondary/ghost. */
+  .btn {
+    @apply inline-flex cursor-pointer select-none items-center justify-center gap-2 whitespace-nowrap rounded-full font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson-soft/70 focus-visible:ring-offset-2 focus-visible:ring-offset-night disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-sm {
+    @apply h-9 px-4 text-xs;
+  }
+  .btn-md {
+    @apply h-11 px-5 text-sm;
+  }
+  .btn-lg {
+    @apply h-12 px-7 text-[15px];
+  }
+  .btn-primary {
+    @apply bg-gradient-to-r from-crimson to-crimson-alt text-white shadow-glow hover:brightness-110 active:scale-[0.98] disabled:hover:brightness-100;
+  }
+  .btn-secondary {
+    @apply border border-line bg-white/[0.04] text-silver hover:border-crimson-soft/40 hover:bg-white/[0.08];
+  }
+  .btn-ghost {
+    @apply text-silver-muted hover:bg-white/[0.06] hover:text-silver;
+  }
+
+  /* Form fields. */
+  .field {
+    @apply w-full rounded-xl border border-line bg-night/60 px-4 py-2.5 text-sm text-silver transition placeholder:text-silver-muted/70 focus:border-crimson-soft/60 focus:outline-none focus:ring-2 focus:ring-crimson/25;
+  }
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-silver;
+  }
+
+  /* Surfaces. */
+  .panel {
+    @apply rounded-2xl border border-line bg-night-surface/80 shadow-card;
+  }
+
+  /* Filter chips and segmented controls. */
+  .chip {
+    @apply inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-night-surface/60 px-4 text-sm font-medium text-silver-muted transition-colors hover:border-crimson-soft/40 hover:text-silver;
+  }
+  .chip-active {
+    @apply border-transparent bg-silver text-night hover:border-transparent hover:text-night;
+  }
+  .segmented {
+    @apply inline-flex items-center gap-1 rounded-full border border-line bg-night-surface/70 p-1;
+  }
+  .segment {
+    @apply inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-4 text-sm font-medium text-silver-muted transition-colors hover:text-silver;
+  }
+  .segment-active {
+    @apply bg-gradient-to-r from-crimson to-crimson-alt text-white shadow-glow hover:text-white;
+  }
+
+  /* Small uppercase label above a heading. */
+  .eyebrow {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-crimson-soft/30 bg-crimson/15 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-crimson-soft;
+  }
+
+  .section-title {
+    @apply font-display text-xl font-bold text-silver sm:text-2xl;
+  }
+
+  .text-gradient {
+    background-image: linear-gradient(90deg, rgb(var(--rgb-accent)), #f0abfc 55%, rgb(var(--rgb-accent)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Status messages. Errors are rose, not brand violet: a violet error reads as
+     a highlight, not a problem. */
+  .alert-error {
+    @apply rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-sm text-rose-200;
+  }
+  .alert-success {
+    @apply rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-sm text-emerald-200;
+  }
+
+  /* Loading placeholder with a moving sheen. */
+  .skeleton {
+    @apply relative overflow-hidden rounded-xl bg-night-raised/80;
+  }
+  .skeleton::after {
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/[0.05] to-transparent;
+    content: '';
+  }
+}
+
+@layer utilities {
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 .reading-content p {
@@ -94,8 +244,10 @@ body {
   margin-bottom: 0.4em;
 }
 .reading-content a {
-  color: var(--color-primary);
+  /* The reader sets --reader-link per page theme; elsewhere the brand colour. */
+  color: var(--reader-link, var(--color-accent));
   text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .reading-content img {
   max-width: 100%;
@@ -151,7 +303,7 @@ body {
   pointer-events: none;
 }
 .tiptap.ProseMirror .selectedCell {
-  background: rgba(220, 38, 38, 0.12);
+  background: rgb(var(--rgb-primary) / 0.14);
 }
 .tiptap.ProseMirror .column-resize-handle {
   background-color: var(--color-primary);

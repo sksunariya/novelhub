@@ -222,7 +222,7 @@ const ConfigPage = () => {
                   type="button"
                   onClick={requestSave}
                   disabled={config.saving || config.blockedKeys.length > 0}
-                  className="flex cursor-pointer items-center gap-1.5 rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex cursor-pointer items-center gap-1.5 rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Save className="h-4 w-4" aria-hidden="true" />
                   {config.saving ? 'Saving...' : 'Save changes'}

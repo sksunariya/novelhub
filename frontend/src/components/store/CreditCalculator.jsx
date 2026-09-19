@@ -16,15 +16,15 @@ const CreditCalculator = () => {
   const credits = Math.floor(amount * creditsPerUsd);
 
   return (
-    <div className="rounded-2xl border border-line bg-night-surface p-5">
-      <p className="text-sm font-semibold text-silver">Credit calculator</p>
+    <div className="panel p-5 sm:p-6">
+      <p className="font-display text-base font-bold text-silver">Credit calculator</p>
       <p className="mt-1 text-xs text-silver-muted">
         $1 is <CreditAmount value={creditsPerUsd} showIcon={false} />. Bonus credits in the packs above
         make the effective rate better.
       </p>
 
       <div className="mt-4 flex items-center gap-3">
-        <div className="flex items-center gap-1.5 rounded-lg border border-line bg-night px-3 py-2">
+        <div className="flex items-center gap-1.5 rounded-xl border border-line bg-night/60 px-3 py-2 focus-within:border-crimson-soft/60 focus-within:ring-2 focus-within:ring-crimson/25">
           <span className="text-sm text-silver-muted">$</span>
           <input
             type="number"

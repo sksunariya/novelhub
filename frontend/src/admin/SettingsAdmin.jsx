@@ -305,7 +305,7 @@ const SettingsAdmin = () => {
             {message.text}
           </p>
         )}
-        <button type="submit" disabled={saving} className="cursor-pointer rounded-full bg-crimson px-6 py-2.5 font-semibold text-white shadow-glow transition-colors hover:bg-crimson-soft disabled:opacity-60">
+        <button type="submit" disabled={saving} className="cursor-pointer rounded-full bg-crimson px-6 py-2.5 font-semibold text-white shadow-glow transition-colors hover:bg-crimson-hover disabled:opacity-60">
           {saving ? 'Saving...' : 'Save Settings'}
         </button>
       </form>

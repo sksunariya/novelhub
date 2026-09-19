@@ -6,11 +6,11 @@ import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import PageTransition from '../components/PageTransition';
 import GoogleButton from '../components/GoogleButton';
+import AuthShell from '../components/AuthShell';
 import OtpInput from '../components/OtpInput';
 import { REDIRECT_PARAM } from '../utils/readingGate';
 
-const inputClass =
-  'w-full rounded-lg border border-line bg-night px-4 py-2.5 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none';
+const inputClass = 'field';
 
 const Signup = () => {
   const { signup, verifySignup, resendSignupOtp } = useAuth();
@@ -94,7 +94,7 @@ const Signup = () => {
   if (settings && settings.allowSignups === false) {
     return (
       <PageTransition>
-        <div className="mx-auto mt-16 max-w-md rounded-2xl border border-line bg-night-surface p-8 text-center">
+        <div className="panel mx-auto mt-16 max-w-md p-8 text-center">
           <h1 className="font-display text-xl font-bold text-silver">Signups are closed</h1>
           <p className="mt-2 text-sm text-silver-muted">New registrations are currently disabled by the administrators.</p>
           <Link to={`/login${redirectQuery}`} className="mt-4 inline-block text-sm text-crimson-soft hover:underline">Log in instead</Link>
@@ -105,13 +105,7 @@ const Signup = () => {
 
   return (
     <PageTransition>
-      <div className="mx-auto mt-10 max-w-md">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3 }}
-          className="rounded-2xl border border-line bg-night-surface p-8 shadow-card"
-        >
+      <AuthShell>
           <AnimatePresence mode="wait">
             {phase === 'form' ? (
               <motion.div
@@ -121,11 +115,11 @@ const Signup = () => {
                 exit={{ opacity: 0, x: -12 }}
                 transition={{ duration: 0.2 }}
               >
-                <h1 className="text-center font-display text-2xl font-bold text-silver">Join the Hub</h1>
-                <p className="mt-1 text-center text-sm text-silver-muted">Create an account to build your library</p>
+                <h1 className="font-display text-2xl font-extrabold text-silver sm:text-3xl">Create your account</h1>
+                <p className="mt-1.5 text-sm text-silver-muted">Free forever. Build your library and never lose your place.</p>
                 <form onSubmit={submit} className="mt-6 space-y-4">
                   <div>
-                    <label htmlFor="fullName" className="mb-1.5 block text-sm font-medium text-silver">Full Name</label>
+                    <label htmlFor="fullName" className="field-label">Full Name</label>
                     <input
                       id="fullName"
                       type="text"
@@ -138,7 +132,7 @@ const Signup = () => {
                     />
                   </div>
                   <div>
-                    <label htmlFor="username" className="mb-1.5 block text-sm font-medium text-silver">Username</label>
+                    <label htmlFor="username" className="field-label">Username</label>
                     <input
                       id="username"
                       type="text"
@@ -149,11 +143,11 @@ const Signup = () => {
                       value={form.username}
                       onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
                       className={inputClass}
-                      placeholder="darkreader"
+                      placeholder="yourname"
                     />
                   </div>
                   <div>
-                    <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-silver">Email</label>
+                    <label htmlFor="email" className="field-label">Email</label>
                     <input
                       id="email"
                       type="email"
@@ -166,7 +160,7 @@ const Signup = () => {
                     />
                   </div>
                   <div>
-                    <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-silver">Password</label>
+                    <label htmlFor="password" className="field-label">Password</label>
                     <div className="relative">
                       <input
                         id="password"
@@ -190,7 +184,7 @@ const Signup = () => {
                     </div>
                   </div>
                   <div>
-                    <label htmlFor="confirm" className="mb-1.5 block text-sm font-medium text-silver">Confirm password</label>
+                    <label htmlFor="confirm" className="field-label">Confirm password</label>
                     <input
                       id="confirm"
                       type={showPassword ? 'text' : 'password'}
@@ -199,26 +193,26 @@ const Signup = () => {
                       autoComplete="new-password"
                       value={form.confirm}
                       onChange={(e) => setForm((f) => ({ ...f, confirm: e.target.value }))}
-                      className={`${inputClass} ${form.confirm && form.confirm !== form.password ? 'border-crimson' : ''}`}
+                      className={`${inputClass} ${form.confirm && form.confirm !== form.password ? 'border-rose-400/60 focus:border-rose-400/70 focus:ring-rose-500/20' : ''}`}
                       placeholder="Re-enter your password"
                     />
                     {form.confirm && form.confirm !== form.password && (
-                      <p className="mt-1 text-xs text-crimson-soft">Passwords do not match</p>
+                      <p className="mt-1.5 text-xs text-rose-300">Passwords do not match</p>
                     )}
                   </div>
                   {error && (
-                    <p className="rounded-lg bg-crimson/15 px-3 py-2 text-sm text-crimson-soft" role="alert">{error}</p>
+                    <p className="alert-error" role="alert">{error}</p>
                   )}
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full cursor-pointer rounded-full bg-crimson py-2.5 font-semibold text-white shadow-glow transition-colors hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btn btn-primary btn-lg w-full"
                   >
                     {loading ? 'Creating account...' : 'Create Account'}
                   </button>
                 </form>
                 <GoogleButton onError={setError} />
-                <p className="mt-5 text-center text-sm text-silver-muted">
+                <p className="mt-6 text-center text-sm text-silver-muted">
                   Already a member?{' '}
                   <Link to={`/login${redirectQuery}`} className="font-medium text-crimson-soft hover:underline">Log in</Link>
                 </p>
@@ -231,10 +225,10 @@ const Signup = () => {
                 exit={{ opacity: 0, x: 12 }}
                 transition={{ duration: 0.2 }}
               >
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-crimson/40 bg-crimson/10 shadow-glow">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-crimson-soft/30 bg-crimson/15 shadow-glow">
                   <MailCheck className="h-8 w-8 text-crimson-soft" aria-hidden="true" />
                 </div>
-                <h1 className="text-center font-display text-2xl font-bold text-silver">Verify your email</h1>
+                <h1 className="text-center font-display text-2xl font-extrabold text-silver">Verify your email</h1>
                 <p className="mt-2 text-center text-sm text-silver-muted">
                   Enter the 6-digit code we sent to
                 </p>
@@ -246,12 +240,12 @@ const Signup = () => {
                 >
                   <OtpInput value={code} onChange={setCode} onComplete={(c) => verify(c)} disabled={loading} />
                   {error && (
-                    <p className="rounded-lg bg-crimson/15 px-3 py-2 text-center text-sm text-crimson-soft" role="alert">{error}</p>
+                    <p className="alert-error text-center" role="alert">{error}</p>
                   )}
                   <button
                     type="submit"
                     disabled={loading || code.length < 6}
-                    className="w-full cursor-pointer rounded-full bg-crimson py-2.5 font-semibold text-white shadow-glow transition-colors hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btn btn-primary btn-lg w-full"
                   >
                     {loading ? 'Verifying...' : 'Verify & Continue'}
                   </button>
@@ -277,8 +271,7 @@ const Signup = () => {
               </motion.div>
             )}
           </AnimatePresence>
-        </motion.div>
-      </div>
+      </AuthShell>
     </PageTransition>
   );
 };

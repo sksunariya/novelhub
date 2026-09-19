@@ -36,24 +36,29 @@ const RailHeader = ({ rail, actions = null }) => {
   const Icon = iconFor(rail.icon);
   const accent = accentFor(rail.accent);
   return (
-    <div className="mb-4 flex items-end justify-between gap-3">
-      <div className="min-w-0 flex-1">
-        <h2 className="flex min-w-0 items-center gap-2 font-display text-xl font-bold text-silver">
-          <Icon className={`h-5 w-5 shrink-0 ${accent.text}`} aria-hidden="true" />
-          <span className="truncate">{rail.title}</span>
-        </h2>
-        {rail.subtitle && (
-          <p className="mt-0.5 truncate text-sm text-silver-muted">{rail.subtitle}</p>
-        )}
+    <div className="mb-5 flex items-end justify-between gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <span
+          className={`hidden h-10 w-10 shrink-0 place-items-center rounded-xl ring-1 ring-inset ring-white/[0.06] sm:grid ${accent.bg} ${accent.text}`}
+          aria-hidden="true"
+        >
+          <Icon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="section-title truncate">{rail.title}</h2>
+          {rail.subtitle && (
+            <p className="mt-0.5 truncate text-sm text-silver-muted">{rail.subtitle}</p>
+          )}
+        </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {rail.viewAllUrl && (
           <Link
             to={rail.viewAllUrl}
-            className="flex items-center gap-1 whitespace-nowrap text-sm text-silver-muted transition-colors hover:text-crimson-soft"
+            className="group/va flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-sm font-semibold text-crimson-soft transition-colors hover:text-silver"
           >
             {rail.viewAllLabel || 'View all'}
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover/va:translate-x-0.5" aria-hidden="true" />
           </Link>
         )}
         {actions}
@@ -72,8 +77,8 @@ const RailHeader = ({ rail, actions = null }) => {
  * directly, so the buttons are a mouse affordance and nothing more.
  */
 const WIDTHS = {
-  novel: 'w-36 sm:w-40 md:w-44',
-  chapter: 'w-36 sm:w-40 md:w-44',
+  novel: 'w-[8.75rem] sm:w-40 md:w-44 lg:w-[11.25rem]',
+  chapter: 'w-[8.75rem] sm:w-40 md:w-44 lg:w-[11.25rem]',
   space: 'w-56 sm:w-60',
   post: 'w-72 sm:w-80',
 };
@@ -106,13 +111,13 @@ const Carousel = ({ rail }) => {
     <div className="hidden items-center gap-2 sm:flex">
       <button
         type="button" onClick={() => scrollBy(-1)} disabled={!canScroll.left} aria-hidden="true" tabIndex={-1}
-        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-line text-silver-muted transition-colors hover:border-crimson/60 hover:text-silver disabled:cursor-not-allowed disabled:opacity-30"
+        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-line bg-night-surface/70 text-silver-muted transition-colors hover:border-crimson-soft/40 hover:text-silver disabled:cursor-not-allowed disabled:opacity-30"
       >
         <ChevronLeft className="h-4 w-4" />
       </button>
       <button
         type="button" onClick={() => scrollBy(1)} disabled={!canScroll.right} aria-hidden="true" tabIndex={-1}
-        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-line text-silver-muted transition-colors hover:border-crimson/60 hover:text-silver disabled:cursor-not-allowed disabled:opacity-30"
+        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-line bg-night-surface/70 text-silver-muted transition-colors hover:border-crimson-soft/40 hover:text-silver disabled:cursor-not-allowed disabled:opacity-30"
       >
         <ChevronRight className="h-4 w-4" />
       </button>
@@ -125,7 +130,7 @@ const Carousel = ({ rail }) => {
       <div
         ref={scrollRef}
         onScroll={updateScrollState}
-        className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="no-scrollbar -mx-1 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-3 pt-1 sm:gap-5"
       >
         {rail.cards.map((card, index) => (
           <div key={`${card.type}:${card.id}`} className={`${width} shrink-0 snap-start`}>
@@ -143,7 +148,7 @@ const Grid = ({ rail }) => (
     {/* Post cards are wide and read as a list; everything else tiles. */}
     <div className={rail.cards[0]?.type === 'post'
       ? 'grid gap-3 sm:grid-cols-2'
-      : 'grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6'}>
+      : 'grid grid-cols-2 gap-x-4 gap-y-8 min-[480px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-6 sm:gap-x-5'}>
       {rail.cards.map((card, index) => (
         <Card key={`${card.type}:${card.id}`} card={card} index={index} />
       ))}
@@ -160,29 +165,33 @@ const Spotlight = ({ rail }) => {
   return (
     <>
       <RailHeader rail={rail} />
-      <div className={`overflow-hidden rounded-xl border bg-night-surface shadow-card ${accent.border}`}>
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-6">
+      <div className={`relative isolate overflow-hidden rounded-3xl border bg-night-surface shadow-card ${accent.border}`}>
+        {card.image && (
+          <img
+            src={card.image} alt="" aria-hidden="true" loading="lazy"
+            className="absolute inset-0 -z-10 h-full w-full scale-125 object-cover opacity-25 blur-3xl saturate-150"
+          />
+        )}
+        <div className="absolute inset-0 -z-10 bg-gradient-to-r from-night-surface via-night-surface/90 to-night-surface/50" aria-hidden="true" />
+        <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:gap-8 sm:p-8">
           {card.image && (
             <img
               src={card.image} alt=""
               aria-hidden="true" loading="lazy"
-              className="h-40 w-28 shrink-0 rounded-lg object-cover shadow-card"
+              className="h-44 w-[7.5rem] shrink-0 rounded-xl object-cover shadow-card ring-1 ring-white/10 sm:h-52 sm:w-36"
             />
           )}
           <div className="min-w-0 flex-1">
             {card.badge && (
-              <span className={`inline-block rounded px-2 py-0.5 text-xs font-semibold ${accent.bg} ${accent.text}`}>
+              <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] ${accent.bg} ${accent.text}`}>
                 {card.badge}
               </span>
             )}
-            <h3 className="mt-2 font-display text-2xl font-bold text-silver">{card.title}</h3>
-            {card.subtitle && <p className="mt-1 text-sm text-silver-muted">{card.subtitle}</p>}
-            {card.note && <p className="mt-2 text-sm italic text-silver">{card.note}</p>}
+            <h3 className="mt-3 font-display text-2xl font-extrabold text-silver sm:text-3xl">{card.title}</h3>
+            {card.subtitle && <p className="mt-1.5 text-sm text-silver-muted">{card.subtitle}</p>}
+            {card.note && <p className="mt-3 max-w-2xl text-sm italic leading-relaxed text-silver/90">{card.note}</p>}
             {card.href && (
-              <Link
-                to={card.href}
-                className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-crimson px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft"
-              >
+              <Link to={card.href} className="btn btn-primary btn-md mt-5">
                 {rail.viewAllLabel || 'Read more'}
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
@@ -200,9 +209,11 @@ const Banner = ({ rail }) => {
   const accent = accentFor(rail.accent);
   const Icon = iconFor(rail.icon);
   return (
-    <div className={`flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 ${accent.border} ${accent.bg}`}>
-      <div className="flex min-w-0 items-start gap-3">
-        <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${accent.text}`} aria-hidden="true" />
+    <div className={`relative flex flex-col gap-4 overflow-hidden rounded-2xl border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6 ${accent.border} ${accent.bg}`}>
+      <div className="flex min-w-0 items-start gap-3.5">
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-night/40 ring-1 ring-inset ring-white/10 ${accent.text}`} aria-hidden="true">
+          <Icon className="h-5 w-5" />
+        </span>
         <div className="min-w-0">
           <h2 className="font-display text-lg font-bold text-silver">{rail.title}</h2>
           {rail.subtitle && <p className="mt-0.5 text-sm text-silver-muted">{rail.subtitle}</p>}
@@ -212,7 +223,7 @@ const Banner = ({ rail }) => {
       {(card?.href || rail.viewAllUrl) && (
         <Link
           to={card?.href || rail.viewAllUrl}
-          className="shrink-0 rounded-lg bg-crimson px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-crimson-soft"
+          className="btn btn-primary btn-md shrink-0"
         >
           {card?.title || rail.viewAllLabel || 'Find out more'}
         </Link>
@@ -233,7 +244,7 @@ const Subject = ({ subject }) => {
   return (
     <Link
       to={subject.href}
-      className="mb-3 flex items-center gap-3 rounded-lg border border-line bg-night-surface/60 p-2 transition-colors hover:border-crimson/50"
+      className="mb-4 flex items-center gap-3 rounded-xl border border-line bg-night-surface/60 p-2.5 transition-colors hover:border-crimson-soft/40"
     >
       {subject.image && (
         <img src={subject.image} alt="" aria-hidden="true" loading="lazy"

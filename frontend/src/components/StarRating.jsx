@@ -23,7 +23,7 @@ const StarRating = ({ value = 0, onChange, size = 'h-5 w-5' }) => {
         >
           <Star
             className={`${size} transition-colors duration-150 ${
-              star <= shown ? 'fill-crimson text-crimson' : 'text-silver-muted'
+              star <= shown ? 'fill-amber-400 text-amber-400' : 'text-silver-muted/60'
             }`}
             aria-hidden="true"
           />

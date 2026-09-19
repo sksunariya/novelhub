@@ -118,7 +118,7 @@ const ImpactDialog = ({ pending, onConfirm, onCancel }) => {
             type="button"
             onClick={onConfirm}
             disabled={!previews}
-            className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft disabled:opacity-50"
+            className="cursor-pointer rounded-full bg-crimson px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover disabled:opacity-50"
           >
             Save anyway
           </button>

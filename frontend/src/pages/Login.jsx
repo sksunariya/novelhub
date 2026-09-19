@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import PageTransition from '../components/PageTransition';
 import GoogleButton from '../components/GoogleButton';
+import AuthShell from '../components/AuthShell';
 import { REDIRECT_PARAM } from '../utils/readingGate';
 
 const Login = () => {
@@ -32,23 +32,16 @@ const Login = () => {
     }
   };
 
-  const inputClass =
-    'w-full rounded-lg border border-line bg-night px-4 py-2.5 text-sm text-silver placeholder:text-silver-muted focus:border-crimson focus:outline-none';
+  const inputClass = 'field';
 
   return (
     <PageTransition>
-      <div className="mx-auto mt-10 max-w-md">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3 }}
-          className="rounded-2xl border border-line bg-night-surface p-8 shadow-card"
-        >
-          <h1 className="text-center font-display text-2xl font-bold text-silver">Welcome Back</h1>
-          <p className="mt-1 text-center text-sm text-silver-muted">Sign in to continue your journey</p>
+      <AuthShell>
+          <h1 className="font-display text-2xl font-extrabold text-silver sm:text-3xl">Welcome back</h1>
+          <p className="mt-1.5 text-sm text-silver-muted">Log in to pick up right where you left off.</p>
           <form onSubmit={submit} className="mt-6 space-y-4">
             <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-silver">Email</label>
+              <label htmlFor="email" className="field-label">Email</label>
               <input
                 id="email"
                 type="email"
@@ -61,7 +54,7 @@ const Login = () => {
               />
             </div>
             <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-silver">Password</label>
+              <label htmlFor="password" className="field-label">Password</label>
               <div className="relative">
                 <input
                   id="password"
@@ -84,30 +77,29 @@ const Login = () => {
               </div>
             </div>
             <div className="text-right -mt-1">
-              <Link to="/forgot-password" className="text-xs text-crimson-soft hover:underline">Forgot password?</Link>
+              <Link to="/forgot-password" className="text-xs font-medium text-crimson-soft hover:underline">Forgot password?</Link>
             </div>
             {error && (
-              <p className="rounded-lg bg-crimson/15 px-3 py-2 text-sm text-crimson-soft" role="alert">
+              <p className="alert-error" role="alert">
                 {error}
               </p>
             )}
             <button
               type="submit"
               disabled={loading}
-              className="w-full cursor-pointer rounded-full bg-crimson py-2.5 font-semibold text-white shadow-glow transition-colors hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn btn-primary btn-lg w-full"
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
           <GoogleButton onError={setError} />
-          <p className="mt-5 text-center text-sm text-silver-muted">
+          <p className="mt-6 text-center text-sm text-silver-muted">
             No account?{' '}
             <Link to={`/signup${redirectQuery}`} className="font-medium text-crimson-soft hover:underline">
               Sign up
             </Link>
           </p>
-        </motion.div>
-      </div>
+      </AuthShell>
     </PageTransition>
   );
 };

@@ -34,7 +34,7 @@ export default function DeletedItemModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-full rounded-xl bg-crimson px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-crimson/20 transition-all hover:bg-crimson-soft active:scale-[0.98]"
+            className="w-full rounded-xl bg-crimson px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-crimson/20 transition-all hover:bg-crimson-hover active:scale-[0.98]"
           >
             Got it
           </button>

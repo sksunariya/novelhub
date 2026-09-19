@@ -93,7 +93,7 @@ const SpaceCard = ({ card, index = 0 }) => {
             className={`relative z-10 mt-3 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-default ${
               joined
                 ? 'border border-line bg-transparent text-silver-muted'
-                : 'bg-crimson text-white hover:bg-crimson-soft disabled:opacity-60'
+                : 'bg-crimson text-white hover:bg-crimson-hover disabled:opacity-60'
             }`}
           >
             {joined ? (<><Check className="h-3.5 w-3.5" aria-hidden="true" />Joined</>) : busy ? 'Joining…' : 'Join'}

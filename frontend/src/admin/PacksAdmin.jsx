@@ -103,7 +103,7 @@ const PackForm = ({ pack, baseline, onSave, onCancel, onDelete }) => {
           type="button"
           onClick={submit}
           disabled={busy || !draft.name}
-          className="flex cursor-pointer items-center gap-1.5 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white hover:bg-crimson-soft disabled:opacity-50"
+          className="flex cursor-pointer items-center gap-1.5 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white hover:bg-crimson-hover disabled:opacity-50"
         >
           <Save className="h-4 w-4" aria-hidden="true" /> {busy ? 'Saving...' : 'Save'}
         </button>
@@ -171,7 +171,7 @@ const PacksAdmin = () => {
         <button
           type="button"
           onClick={() => setEditing({ ...BLANK })}
-          className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white hover:bg-crimson-soft"
+          className="flex cursor-pointer items-center gap-2 rounded-full bg-crimson px-4 py-2 text-sm font-semibold text-white hover:bg-crimson-hover"
         >
           <Plus className="h-4 w-4" aria-hidden="true" /> New pack
         </button>

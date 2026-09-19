@@ -87,7 +87,7 @@ const UnlockPanel = ({ gate, novel, chapter, user, onUnlocked }) => {
         <div className="flex flex-wrap gap-2">
           <Link
             to={`/login?${redirect}`}
-            className="flex items-center gap-2 rounded-full bg-crimson px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft"
+            className="flex items-center gap-2 rounded-full bg-crimson px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover"
           >
             <LogIn className="h-4 w-4" aria-hidden="true" /> Log in
           </Link>
@@ -126,7 +126,7 @@ const UnlockPanel = ({ gate, novel, chapter, user, onUnlocked }) => {
           type="button"
           onClick={unlock}
           disabled={busy}
-          className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-crimson px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-crimson px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Lock className="h-4 w-4" aria-hidden="true" />
           {busy ? 'Unlocking...' : `Unlock for ${price}`}
@@ -140,7 +140,7 @@ const UnlockPanel = ({ gate, novel, chapter, user, onUnlocked }) => {
             <button
               type="button"
               onClick={() => setBuying(true)}
-              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-crimson px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-crimson-soft"
+              className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-crimson px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-crimson-hover"
             >
               <Coins className="h-4 w-4" aria-hidden="true" /> Get credits
             </button>
