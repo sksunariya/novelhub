@@ -59,6 +59,12 @@ MAIL_FROM="NovelHub <no-reply@novelhub.com>"
 OTP_TTL_MINUTES=10
 ```
 
+- **Links in notification emails** ("View Details") are built from
+  `CLIENT_URL`, so on the server set it to the public address, e.g.
+  `CLIENT_URL=https://your-domain.com`. Left at `http://localhost:5173`, every
+  email links to the reader's own machine. The sitemap and robots.txt use the
+  same value, and the API logs a warning at startup when it is missing or
+  invalid, or points at localhost while SMTP is configured.
 - **Forgot password** works whenever SMTP is configured: users request a 6-digit
   code from the login page's "Forgot password?" link, then set a new password.
 - **Signup email verification** is controlled by the admin **Require email

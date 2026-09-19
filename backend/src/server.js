@@ -5,6 +5,7 @@ const connectDB = require('./config/db');
 const scheduler = require('./services/schedulerService');
 const counterService = require('./services/counterService');
 const jobDispatcher = require('./services/jobDispatcher');
+const { warnIfMisconfigured } = require('./utils/publicUrl');
 
 const PORT = process.env.PORT || 5000;
 const SHUTDOWN_TIMEOUT_MS = 20000;
@@ -58,6 +59,10 @@ const shutdown = async (signal) => {
 };
 
 const start = async () => {
+  // Links in notification emails and the sitemap are built from CLIENT_URL.
+  // Say so at boot when it is missing or still points at localhost, rather
+  // than letting readers find out from a broken link.
+  warnIfMisconfigured();
   await connectDB(process.env.MONGO_URI);
   server = app.listen(PORT, () => {
     console.info(`NovelHub API running on port ${PORT}`);

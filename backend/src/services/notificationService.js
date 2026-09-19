@@ -4,6 +4,7 @@ const SiteSettings = require('../models/SiteSettings');
 const Campaign = require('../models/Campaign');
 const { NOTIFICATION_TYPES, NOTIFICATION_CHANNELS } = require('../config/constants');
 const { sendNotificationEmail } = require('../utils/mailer');
+const { stripLoopbackOrigin } = require('../utils/publicUrl');
 
 const escapeRegex = (string) => string.replace(/[/\-\\^$*+?.()|[\]{}]/g, '\\$&');
 
@@ -22,6 +23,12 @@ const dispatchNotification = async ({
   settings: providedSettings = null,
 }) => {
   if (!recipient) return null;
+
+  // An admin who copies a link from a local copy of the site pastes
+  // "http://localhost:5173/novel/x". Store the path instead: the in-app inbox
+  // opens it on whatever host the reader is on, and the mailer adds the public
+  // host for email.
+  link = stripLoopbackOrigin(link);
 
   const recipientId = recipient?._id || recipient;
   const recipientUser =
@@ -400,6 +407,10 @@ const dispatchCampaign = async ({
   adminUser,
   type = NOTIFICATION_TYPES.CAMPAIGN,
 }) => {
+  // Before anything is recorded, so the Campaign row, the in-app records and
+  // the mail to external addresses all carry the same link.
+  link = stripLoopbackOrigin(link);
+
   // The address-list audience resolves recipients from what the admin typed
   // rather than from a User query, so it takes its own path.
   if (targetAudience === 'emails') {

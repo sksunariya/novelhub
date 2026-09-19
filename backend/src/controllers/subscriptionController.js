@@ -13,6 +13,7 @@ const settingsService = require('../services/settingsService');
 const paypalService = require('../services/paypalService');
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { parsePagination } = require('./novelController');
+const { clientBaseUrl } = require('../utils/publicUrl');
 const { SUBSCRIPTION_STATUS } = require('../config/constants');
 
 const audit = (req, action, entityId, changes, note = '') =>
@@ -65,8 +66,10 @@ const subscribe = asyncHandler(async (req, res) => {
   const result = await subscriptionService.start({
     user: req.user,
     planId,
-    returnUrl: returnUrl || `${req.headers.origin || ''}/subscribe/return`,
-    cancelUrl: cancelUrl || `${req.headers.origin || ''}/subscribe`,
+    // /subscribe is where the page confirms a returning subscriber; there is
+    // no /subscribe/return route, so the old fallback landed on the home page.
+    returnUrl: returnUrl || `${clientBaseUrl(req)}/subscribe`,
+    cancelUrl: cancelUrl || `${clientBaseUrl(req)}/subscribe`,
   });
   res.status(201).json({
     subscriptionId: result.subscription._id,

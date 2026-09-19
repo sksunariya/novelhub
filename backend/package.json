@@ -15,6 +15,7 @@
     "test:unit": "jest --config jest.unit.config.js",
     "backfill:revenue": "node scripts/backfillRevenueEvents.js",
     "check:duplicate-reviews": "node scripts/findDuplicateReviews.js",
+    "check:localhost-links": "node scripts/findLocalhostLinks.js",
     "seed:spotlight": "node scripts/seedSpotlight.js",
     "theme:aurora": "node scripts/applyAuroraTheme.js"
   },

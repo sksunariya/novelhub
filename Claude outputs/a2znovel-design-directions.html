@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>a2zNovel – Design Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root { --page: #e9e7e2; --ink: #1b1b1f; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--page); color: var(--ink); font-family: Inter, system-ui, sans-serif; padding: 32px 16px 64px; }
+  .intro { max-width: 1240px; margin: 0 auto 28px; }
+  .intro h1 { font-family: Fraunces, Georgia, serif; font-size: 30px; font-weight: 600; letter-spacing: -0.01em; }
+  .intro p { margin-top: 6px; color: #55555c; font-size: 15px; max-width: 760px; line-height: 1.55; }
+  .direction { max-width: 1240px; margin: 0 auto 44px; }
+  .dir-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 16px; margin-bottom: 14px; }
+  .dir-head .tag { font: 700 12px/1 Inter; letter-spacing: .12em; text-transform: uppercase; background: #1b1b1f; color: #fff; padding: 6px 10px; border-radius: 999px; }
+  .dir-head h2 { font: 600 22px/1.2 Fraunces, Georgia, serif; }
+  .dir-head .desc { color: #55555c; font-size: 14px; flex-basis: 100%; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; flex-basis: 100%; }
+  .sw { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #dcd9d2; border-radius: 10px; padding: 5px 10px 5px 5px; font: 500 12px Inter; color: #3d3d44; }
+  .sw i { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(0,0,0,.08); display: block; }
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
+  @media (max-width: 980px) { .stage { grid-template-columns: 1fr; } .phone { margin: 0 auto; } }
+
+  /* ---------- themed frames ---------- */
+  .frame { background: var(--bg); color: var(--text); border-radius: 16px; overflow: hidden; box-shadow: 0 30px 60px -30px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.08); font-family: var(--ui); }
+  .chrome { height: 34px; background: var(--chrome); display: flex; align-items: center; gap: 7px; padding: 0 14px; border-bottom: 1px solid var(--border); }
+  .chrome span { width: 10px; height: 10px; border-radius: 50%; background: var(--dots); }
+  .chrome .url { margin-left: 14px; height: 20px; flex: 0 1 320px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); font: 500 11px/18px var(--ui); color: var(--muted); padding: 0 10px; }
+
+  .nav { display: flex; align-items: center; gap: 22px; padding: 0 28px; height: 64px; border-bottom: 1px solid var(--border); background: var(--navbg); backdrop-filter: blur(10px); }
+  .logo { display: flex; align-items: center; gap: 10px; font: 700 19px/1 var(--display); letter-spacing: -0.01em; white-space: nowrap; }
+  .logo .mark { width: 30px; height: 30px; border-radius: 9px; background: var(--brandgrad); color: var(--onp); display: grid; place-items: center; font: 800 14px/1 var(--ui); letter-spacing: -0.04em; box-shadow: 0 6px 14px -6px var(--primary); }
+  .links { display: flex; gap: 4px; }
+  .links a { font-size: 14px; font-weight: 500; color: var(--muted); padding: 8px 12px; border-radius: 999px; text-decoration: none; white-space: nowrap; }
+  .links a.on { color: var(--text); background: var(--pill); font-weight: 600; }
+  .search { margin-left: auto; flex: 0 1 300px; min-width: 0; height: 40px; white-space: nowrap; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; color: var(--muted); font-size: 13px; }
+  .search kbd { margin-left: auto; font: 600 11px var(--ui); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; background: var(--raised); color: var(--muted); }
+  .icon-btn { width: 38px; height: 38px; border-radius: 999px; display: grid; place-items: center; color: var(--muted); position: relative; }
+  .icon-btn .dot { position: absolute; top: 8px; right: 9px; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 2px var(--bg); }
+  .avatar { width: 34px; height: 34px; border-radius: 999px; background: var(--brandgrad); color: var(--onp); display: grid; place-items: center; font: 700 12px var(--ui); }
+  svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  .hero { position: relative; overflow: hidden; padding: 44px 28px 30px; }
+  .hero .backdrop { position: absolute; inset: -40px; background: var(--herobg); filter: blur(0); }
+  .hero .veil { position: absolute; inset: 0; background: var(--heroveil); }
+  .hero-inner { position: relative; display: grid; grid-template-columns: minmax(0,1fr) 210px; gap: 36px; align-items: center; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 6px; font: 700 11px/1 var(--ui); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); background: var(--eyebrowbg); border: 1px solid var(--eyebrowbd); padding: 7px 11px; border-radius: 999px; }
+  .hero h3 { font: var(--hweight) clamp(30px, 3.6vw, 46px)/1.06 var(--display); letter-spacing: var(--htrack); margin-top: 16px; max-width: 560px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; font-size: 13px; color: var(--muted); align-items: center; }
+  .meta b { color: var(--text); font-weight: 600; }
+  .meta .star { color: var(--star); }
+  .syn { margin-top: 14px; color: var(--muted); font-size: 15px; line-height: 1.6; max-width: 540px; }
+  .ctas { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
+  .btn { height: 44px; padding: 0 20px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; font: 600 14px var(--ui); white-space: nowrap; }
+  .btn.primary { background: var(--btnbg); color: var(--onp); box-shadow: 0 10px 24px -12px var(--primary); }
+  .btn.ghost { background: var(--ghost); color: var(--text); border: 1px solid var(--border); }
+  .thumbs { display: flex; gap: 10px; margin-top: 28px; align-items: center; }
+  .thumbs .t { width: 34px; height: 48px; border-radius: 6px; opacity: .55; }
+  .thumbs .t.on { opacity: 1; outline: 2px solid var(--primary); outline-offset: 2px; }
+  .thumbs .count { margin-left: 8px; font: 600 12px var(--ui); color: var(--muted); }
+
+  .cover { position: relative; aspect-ratio: 2/3; border-radius: 10px; overflow: hidden; background: var(--g); box-shadow: 0 1px 0 rgba(255,255,255,.15) inset, 0 14px 30px -14px rgba(0,0,0,.55); }
+  .cover::before { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 60% at 80% 0%, rgba(255,255,255,.28), transparent 60%), radial-gradient(90% 50% at 10% 100%, rgba(0,0,0,.35), transparent 70%); }
+  .cover::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; background: linear-gradient(90deg, rgba(0,0,0,.25), rgba(255,255,255,.08) 60%, transparent); }
+  .cover .ct { position: absolute; left: 12%; right: 10%; bottom: 17%; font: 700 15px/1.05 'Playfair Display', Georgia, serif; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.35); }
+  .cover .ca { position: absolute; left: 12%; bottom: 8%; font: 600 8px/1 Inter; letter-spacing: .2em; text-transform: uppercase; color: rgba(255,255,255,.8); }
+  .hero .cover.big { width: 210px; transform: rotate(2deg); box-shadow: 0 30px 60px -20px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.1) inset; }
+  .hero .cover.big .ct { font-size: 26px; }
+  .hero .cover.big .ca { font-size: 10px; }
+
+  .body { padding: 8px 28px 30px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 26px; }
+  .chip { height: 34px; padding: 0 14px; border-radius: 999px; font: 500 13px/32px var(--ui); color: var(--muted); border: 1px solid var(--border); background: var(--surface); white-space: nowrap; }
+  .chip.on { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
+  .rail-h { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .rail-h h4 { font: var(--h4weight) 21px/1.2 var(--display); letter-spacing: var(--htrack2); }
+  .rail-h p { font-size: 13px; color: var(--muted); margin-top: 3px; }
+  .rail-h .right { display: flex; align-items: center; gap: 8px; font: 600 13px var(--ui); color: var(--accent); white-space: nowrap; }
+  .arrow { width: 32px; height: 32px; border-radius: 999px; border: 1px solid var(--border); display: grid; place-items: center; color: var(--muted); background: var(--surface); }
+  .arrow svg { width: 15px; height: 15px; }
+  .grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(4, minmax(0,1fr)); } .grid .card:nth-child(n+5) { display: none; } }
+  .card .cover { border-radius: 10px; }
+  .card .badge { position: absolute; left: 8px; top: 8px; z-index: 2; font: 700 9.5px/1 var(--ui); letter-spacing: .06em; text-transform: uppercase; padding: 5px 7px; border-radius: 6px; background: rgba(10,10,14,.62); color: #fff; backdrop-filter: blur(6px); }
+  .card h5 { margin-top: 10px; font: 600 14px/1.3 var(--ui); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card .by { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .card .m { display: flex; align-items: center; gap: 10px; white-space: nowrap; margin-top: 7px; font: 500 12px var(--ui); color: var(--muted); }
+  .card .m .s { color: var(--star); display: inline-flex; align-items: center; gap: 3px; font-weight: 600; }
+  .card .m .s svg { width: 12px; height: 12px; fill: currentColor; stroke: none; }
+  .card:first-child .cover { box-shadow: 0 0 0 2px var(--primary), 0 18px 34px -16px var(--primary); transform: translateY(-4px); }
+
+  /* phone */
+  .phone { width: 300px; border-radius: 38px; padding: 10px; background: #0c0c0f; box-shadow: 0 30px 60px -30px rgba(0,0,0,.5); }
+  .screen { border-radius: 30px; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--ui); height: 600px; position: relative; display: flex; flex-direction: column; }
+  .p-top { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 10px; }
+  .p-top .logo { font-size: 16px; }
+  .p-top .logo .mark { width: 26px; height: 26px; font-size: 12px; border-radius: 8px; }
+  .p-top .r { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+  .p-hero { margin: 4px 14px 0; border-radius: 18px; overflow: hidden; position: relative; padding: 16px; display: flex; gap: 14px; align-items: flex-end; background: var(--surface); border: 1px solid var(--border); }
+  .p-hero .backdrop { position: absolute; inset: 0; background: var(--herobg); opacity: .9; }
+  .p-hero .veil { position: absolute; inset: 0; background: var(--heroveil); }
+  .p-hero .cover { width: 84px; flex: none; position: relative; }
+  .p-hero .cover .ct { font-size: 11px; }
+  .p-hero .txt { position: relative; min-width: 0; }
+  .p-hero .eyebrow { font-size: 9px; padding: 5px 8px; }
+  .p-hero h6 { font: var(--hweight) 19px/1.1 var(--display); margin-top: 8px; letter-spacing: var(--htrack); }
+  .p-hero .btn { height: 34px; font-size: 12px; padding: 0 14px; margin-top: 10px; }
+  .p-chips { display: flex; gap: 6px; padding: 14px 14px 4px; overflow: hidden; }
+  .p-chips .chip { height: 30px; line-height: 28px; font-size: 12px; padding: 0 12px; }
+  .p-sec { padding: 12px 14px 0; }
+  .p-sec .rail-h h4 { font-size: 16px; }
+  .p-sec .rail-h .right { font-size: 12px; }
+  .p-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .p-row .card h5 { font-size: 11.5px; margin-top: 7px; }
+  .p-row .card .by { font-size: 10.5px; }
+  .p-row .card .m { font-size: 10.5px; gap: 6px; }
+  .p-row .card .m span:last-child { display: none; }
+  .p-row .cover .ct { font-size: 10px; }
+  .p-row .card:first-child .cover { transform: none; box-shadow: 0 14px 30px -14px rgba(0,0,0,.55); }
+  .tabbar { margin-top: auto; display: grid; grid-template-columns: repeat(5, 1fr); padding: 8px 6px 18px; border-top: 1px solid var(--border); background: var(--navbg); backdrop-filter: blur(10px); }
+  .tabbar div { display: flex; flex-direction: column; align-items: center; gap: 4px; font: 600 10px var(--ui); color: var(--muted); }
+  .tabbar div.on { color: var(--accent); }
+  .tabbar div.on svg { stroke-width: 2.4; }
+
+  /* ---------- themes ---------- */
+  .A { --bg:#F7F6F2; --surface:#FFFFFF; --raised:#F0EEE8; --border:#E4E0D8; --text:#17171C; --muted:#63636B; --primary:#4F46E5; --accent:#4338CA; --onp:#fff; --star:#D97706;
+       --btnbg:#4F46E5; --brandgrad:linear-gradient(135deg,#4F46E5,#7C3AED); --pill:#ECEAF9; --ghost:#FFFFFF; --navbg:rgba(247,246,242,.85); --chrome:#EFEDE8; --dots:#D6D2CA;
+       --eyebrowbg:#EEF0FF; --eyebrowbd:#DAD9FB; --herobg: radial-gradient(60% 90% at 85% 40%, rgba(124,58,237,.18), transparent 70%), radial-gradient(50% 80% at 10% 0%, rgba(79,70,229,.12), transparent 70%), linear-gradient(180deg,#F3F1FB,#F7F6F2);
+       --heroveil: transparent; --display: Fraunces, Georgia, serif; --ui: Inter, system-ui, sans-serif; --hweight: 600; --h4weight: 600; --htrack: -0.02em; --htrack2: -0.01em; }
+  .B { --bg:#0A0E17; --surface:#111723; --raised:#182031; --border:#243044; --text:#ECEFF4; --muted:#95A0B4; --primary:#D9A54A; --accent:#F0C674; --onp:#1B1305; --star:#F0C674;
+       --btnbg:linear-gradient(180deg,#E8B85C,#C99335); --brandgrad:linear-gradient(135deg,#F0C674,#B8862E); --pill:#182031; --ghost:rgba(255,255,255,.04); --navbg:rgba(10,14,23,.8); --chrome:#0E131E; --dots:#2A3448;
+       --eyebrowbg:rgba(217,165,74,.1); --eyebrowbd:rgba(217,165,74,.3); --herobg: radial-gradient(55% 90% at 82% 45%, rgba(180,70,29,.55), transparent 70%), radial-gradient(40% 70% at 70% 0%, rgba(242,179,91,.25), transparent 70%), linear-gradient(180deg,#0E1322,#0A0E17);
+       --heroveil: linear-gradient(90deg, rgba(10,14,23,.92) 25%, rgba(10,14,23,.35)); --display: 'Playfair Display', Georgia, serif; --ui: Inter, system-ui, sans-serif; --hweight: 700; --h4weight: 600; --htrack: -0.01em; --htrack2: 0; }
+  .C { --bg:#0C0A13; --surface:#14111D; --raised:#1C1829; --border:#2A243B; --text:#F2EFF9; --muted:#A49DB8; --primary:#7C3AED; --accent:#C4B5FD; --onp:#fff; --star:#FBBF24;
+       --btnbg:linear-gradient(135deg,#7C3AED,#C026D3); --brandgrad:linear-gradient(135deg,#8B5CF6,#EC4899); --pill:#1F1A30; --ghost:rgba(255,255,255,.05); --navbg:rgba(12,10,19,.8); --chrome:#110E1A; --dots:#2E2842;
+       --eyebrowbg:rgba(139,92,246,.14); --eyebrowbd:rgba(167,139,250,.35); --herobg: radial-gradient(50% 80% at 85% 30%, rgba(236,72,153,.35), transparent 70%), radial-gradient(60% 90% at 60% 100%, rgba(124,58,237,.45), transparent 70%), linear-gradient(180deg,#120E1E,#0C0A13);
+       --heroveil: linear-gradient(90deg, rgba(12,10,19,.9) 25%, rgba(12,10,19,.2)); --display: 'Plus Jakarta Sans', Inter, sans-serif; --ui: 'Plus Jakarta Sans', Inter, sans-serif; --hweight: 800; --h4weight: 700; --htrack: -0.03em; --htrack2: -0.02em; }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>a2zNovel — three design directions</h1>
+    <p>Each direction shows the same new layout — a cleaner navbar with a prominent search, a full-bleed featured hero, genre shortcuts, redesigned novel cards, and an app-style bottom tab bar on phones. Only the palette and typography change between them. Covers here are placeholders.</p>
+  </div>
+  <div id="root"></div>
+
+<script>
+const I = {
+  search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+  bell: '<svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
+  book: '<svg viewBox="0 0 24 24"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  star: '<svg viewBox="0 0 24 24"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>',
+  left: '<svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>',
+  right: '<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>',
+  arrow: '<svg viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  home: '<svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+  compass: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3z"/></svg>',
+  trophy: '<svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>',
+  lib: '<svg viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>',
+  user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+  flame: '<svg viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M12 22c4 0 7-2.7 7-7 0-4-3-6-4-10-1.5 2-2 3.5-2 5-1.5-1-2.5-3-2.5-5C7 7 5 10.5 5 15c0 4.3 3 7 7 7z"/></svg>',
+};
+const NOVELS = [
+  { t: 'The Ember Crown', a: 'Mira Solen', g: 'linear-gradient(160deg,#3b0d0c,#b4461d 55%,#f2b35b)', r: 4.8, c: 312, s: 'Ongoing' },
+  { t: 'Moonlit Protocol', a: 'K. Aravind', g: 'linear-gradient(160deg,#0b1a3a,#274c8f 60%,#8fb4ff)', r: 4.6, c: 188, s: 'Ongoing' },
+  { t: 'Salt & Starlight', a: 'Ria Kapoor', g: 'linear-gradient(160deg,#3a1030,#b03a6c 55%,#ffc2a8)', r: 4.7, c: 96, s: 'Completed' },
+  { t: 'A Thousand Quiet Kingdoms', a: 'Elan Ward', g: 'linear-gradient(160deg,#0f2a24,#2f7a5f 55%,#c9e6b8)', r: 4.5, c: 540, s: 'Ongoing' },
+  { t: 'The Last Cartographer', a: 'Noor Haddad', g: 'linear-gradient(160deg,#2b1d0e,#8a6a2f 55%,#f0dca0)', r: 4.4, c: 142, s: 'Hiatus' },
+  { t: 'Velvet Requiem', a: 'J. Marlowe', g: 'linear-gradient(160deg,#1a0d2e,#5b2a86 55%,#c7a2ff)', r: 4.9, c: 77, s: 'Completed' },
+];
+const cover = (n, cls = '') => `<div class="cover ${cls}" style="--g:${n.g}"><span class="ca">${n.a}</span><span class="ct">${n.t}</span></div>`;
+const card = (n) => `<div class="card"><div style="position:relative">${`<span class="badge">${n.s}</span>`}${cover(n)}</div><h5>${n.t}</h5><div class="by">${n.a}</div><div class="m"><span class="s">${I.star}${n.r}</span><span>${n.c} ch</span></div></div>`;
+
+const DIRS = [
+  { k: 'A', name: 'Ivory & Indigo', mode: 'Light · editorial', desc: 'Warm paper background, ink text and a confident indigo. Fraunces serif headings with Inter for UI. The most "publisher-grade" and the biggest departure from the current dark theme.',
+    sw: [['#F7F6F2','Paper'],['#FFFFFF','Surface'],['#17171C','Ink'],['#4F46E5','Indigo'],['#D97706','Star']] },
+  { k: 'B', name: 'Midnight & Gold', mode: 'Dark · premium', desc: 'Deep navy with antique-gold accents and Playfair Display headings. Feels like a luxury book club — still dark for night readers, but calm and upscale instead of gothic.',
+    sw: [['#0A0E17','Midnight'],['#111723','Surface'],['#ECEFF4','Text'],['#D9A54A','Gold'],['#F0C674','Accent']] },
+  { k: 'C', name: 'Aurora Violet', mode: 'Dark · modern', desc: 'Near-black violet with a violet-to-magenta gradient and bold Plus Jakarta Sans. Energetic and app-like — closest to modern web-novel apps popular with younger readers.',
+    sw: [['#0C0A13','Night'],['#14111D','Surface'],['#F2EFF9','Text'],['#7C3AED','Violet'],['#EC4899','Magenta']] },
+];
+
+const frame = (d) => `
+<section class="direction">
+  <div class="dir-head">
+    <span class="tag">Direction ${d.k}</span><h2>${d.name}</h2><span style="color:#6a6a70;font-size:14px">${d.mode}</span>
+    <p class="desc">${d.desc}</p>
+    <div class="swatches">${d.sw.map(([c, l]) => `<span class="sw"><i style="background:${c}"></i>${l} <span style="color:#8a8a90">${c}</span></span>`).join('')}</div>
+  </div>
+  <div class="stage ${d.k}">
+    <div class="frame">
+      <div class="chrome"><span></span><span></span><span></span><div class="url">a2znovel.com</div></div>
+      <div class="nav">
+        <div class="logo"><div class="mark">a2</div>a2zNovel</div>
+        <div class="links"><a class="on">Home</a><a>Browse</a><a>Rankings</a><a>Community</a></div>
+        <div class="search">${I.search}<span style="overflow:hidden;text-overflow:ellipsis">Search titles, authors, genres…</span><kbd>/</kbd></div>
+        <div class="icon-btn">${I.bell}<span class="dot"></span></div>
+        <div class="avatar">SK</div>
+      </div>
+      <div class="hero">
+        <div class="backdrop"></div><div class="veil"></div>
+        <div class="hero-inner">
+          <div>
+            <span class="eyebrow">${I.flame} Editor's pick</span>
+            <h3>The Ember Crown</h3>
+            <div class="meta"><span class="star">★ <b>4.8</b></span><span>Fantasy · Adventure</span><span><b>312</b> chapters</span><span>Ongoing</span></div>
+            <p class="syn">A disgraced royal cartographer discovers the crown she was sworn to protect is burning its way through the kingdom — and only she can read the map it leaves behind.</p>
+            <div class="ctas"><span class="btn primary">${I.book}Start reading</span><span class="btn ghost">${I.plus}Add to library</span></div>
+            <div class="thumbs">${NOVELS.slice(0, 5).map((n, i) => `<div class="t ${i === 0 ? 'on' : ''}" style="background:${n.g}"></div>`).join('')}<span class="count">1 / 5</span></div>
+          </div>
+          ${cover(NOVELS[0], 'big')}
+        </div>
+      </div>
+      <div class="body">
+        <div class="chips"><span class="chip on">All</span><span class="chip">Fantasy</span><span class="chip">Romance</span><span class="chip">Sci-Fi</span><span class="chip">Mystery</span><span class="chip">Action</span><span class="chip">Drama</span><span class="chip">Horror</span></div>
+        <div class="rail-h"><div><h4>Trending this week</h4><p>What readers can't put down right now</p></div><div class="right">View all ${I.arrow}<span class="arrow">${I.left}</span><span class="arrow">${I.right}</span></div></div>
+        <div class="grid">${NOVELS.map(card).join('')}</div>
+      </div>
+    </div>
+    <div class="phone"><div class="screen">
+      <div class="p-top"><div class="logo"><div class="mark">a2</div>a2zNovel</div><div class="r"><span class="icon-btn">${I.search}</span><span class="avatar" style="width:30px;height:30px">SK</span></div></div>
+      <div class="p-hero"><div class="backdrop"></div><div class="veil"></div>${cover(NOVELS[0])}<div class="txt"><span class="eyebrow">Editor's pick</span><h6>The Ember Crown</h6><div class="meta" style="margin-top:6px;font-size:11px"><span class="star">★ <b>4.8</b></span><span>312 ch</span></div><span class="btn primary">Start reading</span></div></div>
+      <div class="p-chips"><span class="chip on">All</span><span class="chip">Fantasy</span><span class="chip">Romance</span><span class="chip">Sci-Fi</span></div>
+      <div class="p-sec"><div class="rail-h"><div><h4>Trending</h4></div><div class="right">View all</div></div><div class="p-row">${NOVELS.slice(1, 4).map(card).join('')}</div></div>
+      <div class="tabbar"><div class="on">${I.home}Home</div><div>${I.compass}Browse</div><div>${I.trophy}Rankings</div><div>${I.lib}Library</div><div>${I.user}Profile</div></div>
+    </div></div>
+  </div>
+</section>`;
+
+document.getElementById('root').innerHTML = DIRS.map(frame).join('');
+</script>
+</body>
+</html>

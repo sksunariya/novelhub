@@ -4,6 +4,7 @@ const settingsService = require('../services/settingsService');
 const cacheService = require('../services/cacheService');
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { SPACE_STATUS, SPACE_VISIBILITY, POST_STATUS } = require('../config/constants');
+const { publicBaseUrl } = require('../utils/publicUrl');
 
 // Sitemaps and robots.txt.
 //
@@ -31,7 +32,9 @@ const escapeXml = (value) =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 
-const baseUrl = () => (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/+$/, '');
+// CLIENT_URL (or APP_URL). Never a request header: these responses are cached,
+// and a spoofed Host would be served to every crawler for the next hour.
+const baseUrl = () => publicBaseUrl();
 
 const urlEntry = ({ loc, lastmod, changefreq, priority }) =>
   `  <url>\n    <loc>${escapeXml(loc)}</loc>\n` +

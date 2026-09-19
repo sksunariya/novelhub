@@ -6,6 +6,7 @@ const settingsService = require('../services/settingsService');
 const { asyncHandler } = require('../middlewares/errorHandler');
 const { parsePagination } = require('./novelController');
 const { ORDER_STATUS } = require('../config/constants');
+const { clientBaseUrl } = require('../utils/publicUrl');
 
 /** Buyer country, from whichever header the admin configured. */
 const detectCountry = async (req) => {
@@ -70,12 +71,12 @@ const getPacks = asyncHandler(async (req, res) => {
  *
  * Derived server-side rather than trusted from the request body: the client
  * has never sent these, and PayPal's live API rejects the whole order when the
- * experience block is present without them. Falls back to CLIENT_URL so a
- * request with no Origin header still produces something valid.
+ * experience block is present without them. Falls back to the configured
+ * public URL (CLIENT_URL) so a request with no Origin header still produces
+ * something valid.
  */
 const returnUrls = (req) => {
-  const origin = req.headers.origin || '';
-  const base = (/^https?:\/\//.test(origin) ? origin : process.env.CLIENT_URL || '').replace(/\/+$/, '');
+  const base = clientBaseUrl(req);
   if (!base) return {};
   return { returnUrl: `${base}/store?paypal=return`, cancelUrl: `${base}/store?paypal=cancel` };
 };
@@ -95,8 +96,11 @@ const createOrder = asyncHandler(async (req, res) => {
     ipCountry: await detectCountry(req),
     ipAddress: req.ip,
     userAgent: req.headers['user-agent'],
-    returnUrl: returnUrl || `${process.env.CLIENT_URL || ''}/store/success`,
-    cancelUrl: cancelUrl || `${process.env.CLIENT_URL || ''}/store`,
+    // No further fallback. The old one pointed at /store/success, a page that
+    // does not exist; without absolute URLs paypalService leaves the optional
+    // experience block out, which is what the JS SDK checkout expects anyway.
+    returnUrl,
+    cancelUrl,
   });
 
   res.status(201).json({

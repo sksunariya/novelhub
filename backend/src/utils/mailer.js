@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { absoluteUrl } = require('./publicUrl');
 
 let transport;
 
@@ -137,8 +138,10 @@ const sendOtpEmail = async ({ to, code, purpose }) => {
 };
 
 const notificationHtml = ({ title, message, link }) => {
-  const appUrl = process.env.APP_URL || 'http://localhost:5173';
-  const fullLink = link ? (link.startsWith('http') ? link : `${appUrl}${link}`) : '';
+  // Built from CLIENT_URL (or APP_URL). This used to read APP_URL alone, which
+  // nothing sets, and fall back to http://localhost:5173 — so every button in
+  // every notification email pointed at the reader's own machine.
+  const fullLink = absoluteUrl(link);
   const safeBrand = escapeHtml(brandName());
 
   return `
@@ -192,16 +195,19 @@ const notificationHtml = ({ title, message, link }) => {
 
 /** Actually deliver a notification email. Called by the queue, not directly. */
 const deliverNotificationEmail = async ({ to, title, message, link }) => {
+  // The same absolute link for both parts. The plain-text part used to carry
+  // the raw path ("/novel/slug"), which no mail client can open.
+  const fullLink = absoluteUrl(link);
   if (!isMailerConfigured()) {
-    console.info(`[mailer] Notification for ${to}: "${title}" - ${message}`);
+    console.info(`[mailer] Notification for ${to}: "${title}" - ${message}${fullLink ? ` (${fullLink})` : ''}`);
     return;
   }
   await getTransport().sendMail({
     from: defaultFrom(),
     to,
     subject: title || 'New Notification',
-    text: `${title}\n\n${message}${link ? `\n\nLink: ${link}` : ''}`,
-    html: notificationHtml({ title, message, link }),
+    text: `${title}\n\n${message}${fullLink ? `\n\nLink: ${fullLink}` : ''}`,
+    html: notificationHtml({ title, message, link: fullLink }),
   });
 };
 
@@ -220,4 +226,5 @@ module.exports = {
   sendOtpEmail,
   sendNotificationEmail,
   deliverNotificationEmail,
+  notificationHtml,
 };
