@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Megaphone, Palette, Globe, Image, Send, LayoutGrid } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Megaphone, Palette, Globe, Image, Send, LayoutGrid, Undo2 } from 'lucide-react';
 import client from '../api/client';
 import { useSettings } from '../context/SettingsContext';
 import Spinner from '../components/Spinner';
+import { applyThemeColors } from '../theme/applyTheme';
+import { PRESET_KEYS, sameColor } from '../theme/presets';
+import ThemePresetPicker from './ThemePresetPicker';
 import ReadingGateFields, { ReadingGateSection, gatePayload, toGateForm } from './ReadingGateFields';
 
 const inputClass =
@@ -34,10 +37,43 @@ const SettingsAdmin = () => {
   const [broadcast, setBroadcast] = useState({ message: '', link: '' });
   const [broadcasting, setBroadcasting] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState(null);
+  // The colours as last saved, for the undo button and for putting the page
+  // back the way it was if the admin leaves without saving.
+  const savedColors = useRef(null);
 
   useEffect(() => {
-    client.get('/admin/settings').then(({ data }) => setForm(data.settings)).catch(() => setForm(null));
+    client
+      .get('/admin/settings')
+      .then(({ data }) => {
+        savedColors.current = { ...data.settings.themeColors };
+        setForm(data.settings);
+      })
+      .catch(() => setForm(null));
   }, []);
+
+  // Colour changes are applied to this page as you make them, so a palette can
+  // be judged before anyone else sees it. Nothing here touches the database.
+  const themeColors = form?.themeColors;
+  useEffect(() => {
+    if (themeColors) applyThemeColors(themeColors);
+  }, [themeColors]);
+
+  // Leaving without saving restores what readers are actually being served.
+  useEffect(
+    () => () => {
+      if (savedColors.current) applyThemeColors(savedColors.current);
+    },
+    []
+  );
+
+  const setColors = (colors) => setForm((f) => ({ ...f, themeColors: { ...f.themeColors, ...colors } }));
+
+  const colorsChanged =
+    Boolean(themeColors) &&
+    Boolean(savedColors.current) &&
+    PRESET_KEYS.some(
+      (key) => (themeColors[key] || '') !== (savedColors.current[key] || '') && !sameColor(themeColors[key], savedColors.current[key])
+    );
 
   const save = async (e) => {
     e.preventDefault();
@@ -66,6 +102,7 @@ const SettingsAdmin = () => {
       if (files.logo) body.append('logo', files.logo);
       if (files.favicon) body.append('favicon', files.favicon);
       const { data } = await client.put('/admin/settings', body);
+      savedColors.current = { ...data.settings.themeColors };
       setForm(data.settings);
       setFiles({ logo: null, favicon: null });
       await refresh();
@@ -146,6 +183,26 @@ const SettingsAdmin = () => {
           <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-bold text-silver">
             <Palette className="h-4 w-4 text-crimson" aria-hidden="true" /> Theme Colors
           </h2>
+          <p className="-mt-2 mb-4 text-xs leading-relaxed text-silver-muted">
+            Pick a preset, or set the five colours yourself. The rest of the palette — hover fills, the
+            brand gradient, borders and muted text — is derived from them, so it always matches.
+          </p>
+
+          <ThemePresetPicker value={form.themeColors} onSelect={setColors} />
+
+          <div className="mt-5 border-t border-line pt-4">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <p className="text-sm font-medium text-silver">Fine-tune</p>
+              {colorsChanged && (
+                <button
+                  type="button"
+                  onClick={() => setColors(savedColors.current)}
+                  className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-silver-muted transition-colors hover:text-crimson-soft"
+                >
+                  <Undo2 className="h-3.5 w-3.5" aria-hidden="true" /> Undo colour changes
+                </button>
+              )}
+            </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {COLOR_FIELDS.map((field) => (
               <div key={field.key}>
@@ -167,6 +224,7 @@ const SettingsAdmin = () => {
                 </div>
               </div>
             ))}
+          </div>
           </div>
         </section>
 

@@ -76,9 +76,17 @@ OTP_TTL_MINUTES=10
 ### Theme colours
 
 The five brand colours (primary, accent, background, surface, text) live in the
-database and can be changed in Admin → Settings → Theme colors; the frontend
-derives the remaining shades from them. A database created before the Aurora
-Violet theme still holds the old red values, so switch it once after deploying:
+database and are set in Admin → Settings → Theme colors, either by picking one
+of the built-in presets (Aurora Violet, Crimson Noir, Ember Gold, Deep Ocean,
+Evergreen, Sakura Night, Obsidian) or by editing the colours directly. The
+picker previews a palette on the admin page before it is saved, and the
+frontend derives the remaining shades — hover fills, the brand gradient,
+borders and muted text — from those five. Presets live in
+`frontend/src/theme/presets.js`; all of them are dark, because the reader UI is
+built dark-first.
+
+A database created before the Aurora Violet theme still holds the old red
+values, so switch it once after deploying:
 
 ```bash
 cd backend
