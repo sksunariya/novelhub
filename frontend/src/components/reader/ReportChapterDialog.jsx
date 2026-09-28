@@ -30,7 +30,7 @@ let categoriesCache = null;
  * selected passage (if any), how far through the chapter they were, and their
  * display settings. All of it goes to the admin with the report.
  */
-const ReportChapterDialog = ({ open, onClose, theme, chapter, user, context }) => {
+const ReportChapterDialog = ({ open, onClose, theme, chapter, user, context, allowQuote = true }) => {
   const [categories, setCategories] = useState(categoriesCache || FALLBACK_CATEGORIES);
   const [category, setCategory] = useState('');
   const [details, setDetails] = useState('');
@@ -232,7 +232,9 @@ const ReportChapterDialog = ({ open, onClose, theme, chapter, user, context }) =
                   placeholder={
                     quote
                       ? 'What is wrong with this passage?'
-                      : 'Where in the chapter, and what did you expect to see? Tip: select the text first to attach it.'
+                      : allowQuote
+                        ? 'Where in the chapter, and what did you expect to see? Tip: select the text first to attach it.'
+                        : 'Where in the chapter, and what did you expect to see?'
                   }
                   className="w-full resize-none rounded-xl border px-3 py-2.5 text-sm placeholder:opacity-50 focus:border-crimson focus:outline-none focus:ring-2 focus:ring-crimson/25"
                   style={fieldStyle}

@@ -400,6 +400,35 @@ const Reader = () => {
 
   const closeReport = useCallback(() => setReportOpen(false), []);
 
+  // Chapter text is read-only for everyone, admins included: no selecting,
+  // copying, cutting, dragging or context menu. The CSS class stops selection;
+  // these handlers catch the paths CSS can't (keyboard shortcuts on a selection
+  // that started outside, the context menu's Copy, dragging text out).
+  const protectContent = true;
+  const blockEvent = useCallback((e) => e.preventDefault(), []);
+
+  useEffect(() => {
+    if (!protectContent) return undefined;
+    const onCopyOrCut = (e) => {
+      const selection = window.getSelection?.();
+      const el = contentRef.current;
+      if (!el || !selection || selection.rangeCount === 0) return;
+      for (let i = 0; i < selection.rangeCount; i += 1) {
+        if (selection.getRangeAt(i).intersectsNode(el)) {
+          e.preventDefault();
+          e.clipboardData?.setData('text/plain', '');
+          return;
+        }
+      }
+    };
+    document.addEventListener('copy', onCopyOrCut);
+    document.addEventListener('cut', onCopyOrCut);
+    return () => {
+      document.removeEventListener('copy', onCopyOrCut);
+      document.removeEventListener('cut', onCopyOrCut);
+    };
+  }, [protectContent, data]);
+
   const commentCount = (comments || []).reduce((count, comment) => count + 1 + (comment.replies?.length || 0), 0);
 
   const [showDeletedModal, setShowDeletedModal] = useState(false);
@@ -643,7 +672,11 @@ const Reader = () => {
           >
             <div
               ref={contentRef}
-              className="reading-content"
+              className={`reading-content${protectContent ? ' no-copy' : ''}`}
+              onCopy={protectContent ? blockEvent : undefined}
+              onCut={protectContent ? blockEvent : undefined}
+              onContextMenu={protectContent ? blockEvent : undefined}
+              onDragStart={protectContent ? blockEvent : undefined}
               style={{
                 fontSize: `${settings.fontSize}px`,
                 lineHeight: settings.lineHeight,
@@ -950,6 +983,7 @@ const Reader = () => {
           user={user}
           chapter={{ id: data.chapter.id, number: data.chapter.number, title: data.chapter.title }}
           context={reportContext}
+          allowQuote={!protectContent}
         />
       )}
       <DeletedItemModal

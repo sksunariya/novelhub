@@ -194,6 +194,24 @@ body::before {
 .reading-content p {
   margin-bottom: 1.25em;
 }
+
+/* Nobody can select or copy chapter text (see Reader.jsx).
+   touch-callout stops the iOS long-press copy menu. */
+.reading-content.no-copy,
+.reading-content.no-copy * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.reading-content.no-copy img {
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+@media print {
+  .reading-content.no-copy {
+    display: none;
+  }
+}
 .reading-content p:empty,
 .reading-content p:has(> br:only-child),
 .reading-content h1:empty,
