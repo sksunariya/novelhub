@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, ChevronLeft, ChevronRight, Home, Menu, X } from 'lucide-react';
@@ -14,6 +14,7 @@ import DeletedItemModal from '../components/DeletedItemModal';
 import { ANCHORS, readHashTarget, isTargetInItems } from '../utils/hashTarget';
 import ReaderToolbar from '../components/reader/ReaderToolbar';
 import ReaderSettingsPopover from '../components/reader/ReaderSettingsPopover';
+import ReportChapterDialog from '../components/reader/ReportChapterDialog';
 import useTextToSpeech from '../components/reader/useTextToSpeech';
 import useFullscreen from '../components/reader/useFullscreen';
 
@@ -37,10 +38,10 @@ const applyReaction = (item, reaction, userId) => ({
 // Light's page colour is a shade darker than it used to be for the same reason
 // — a white card needs something to sit on.
 const READER_THEMES = {
-  dark: { background: '#0c0a13', surface: '#15121f', border: 'rgba(255,255,255,0.08)', text: '#dcd7e8', shadow: '0 8px 30px rgba(0,0,0,0.55)', name: 'Dark' },
-  black: { background: '#000000', surface: '#111111', border: 'rgba(255,255,255,0.09)', text: '#c7c7c7', shadow: '0 8px 30px rgba(0,0,0,0.7)', name: 'Black' },
-  sepia: { background: '#f4ecd8', surface: '#fbf5e6', border: 'rgba(67,52,34,0.16)', text: '#433422', shadow: '0 6px 24px rgba(67,52,34,0.16)', name: 'Sepia' },
-  light: { background: '#f1f1f0', surface: '#ffffff', border: 'rgba(28,25,23,0.12)', text: '#1c1917', shadow: '0 6px 24px rgba(28,25,23,0.13)', name: 'Light' },
+  dark: { background: '#0c0a13', surface: '#15121f', border: 'rgba(255,255,255,0.08)', text: '#dcd7e8', shadow: '0 8px 30px rgba(0,0,0,0.55)', name: 'Dark', scheme: 'dark' },
+  black: { background: '#000000', surface: '#111111', border: 'rgba(255,255,255,0.09)', text: '#c7c7c7', shadow: '0 8px 30px rgba(0,0,0,0.7)', name: 'Black', scheme: 'dark' },
+  sepia: { background: '#f4ecd8', surface: '#fbf5e6', border: 'rgba(67,52,34,0.16)', text: '#433422', shadow: '0 6px 24px rgba(67,52,34,0.16)', name: 'Sepia', scheme: 'light' },
+  light: { background: '#f1f1f0', surface: '#ffffff', border: 'rgba(28,25,23,0.12)', text: '#1c1917', shadow: '0 6px 24px rgba(28,25,23,0.13)', name: 'Light', scheme: 'light' },
 };
 
 // Link colour inside the prose. The light brand shade reads on the dark pages
@@ -117,6 +118,10 @@ const Reader = () => {
   const [chapterReviewForm, setChapterReviewForm] = useState({ rating: 0, content: '' });
   const [savingChapterReview, setSavingChapterReview] = useState(false);
   const [chapterReviewMsg, setChapterReviewMsg] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportContext, setReportContext] = useState(null);
+  const contentRef = useRef(null);
+  const pendingQuote = useRef('');
 
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -160,6 +165,7 @@ const Reader = () => {
     setChapterReviews(null);
     setChapterReviewForm({ rating: 0, content: '' });
     setChapterReviewMsg('');
+    setReportOpen(false);
     window.scrollTo(0, 0);
     loadChapter();
   }, [slug, number, loadChapter]);
@@ -358,6 +364,41 @@ const Reader = () => {
 
   const likeChapterReviewReply = reactToChapterReviewReply('like');
   const dislikeChapterReviewReply = reactToChapterReviewReply('dislike');
+
+  // A passage selected inside the chapter text, read on pointerdown of the
+  // report button — by the time `click` fires, the press has cleared it.
+  const captureSelection = useCallback(() => {
+    const selection = window.getSelection?.();
+    const text = selection?.toString().replace(/\s+/g, ' ').trim();
+    if (text && contentRef.current && selection.anchorNode && contentRef.current.contains(selection.anchorNode)) {
+      pendingQuote.current = text;
+    }
+  }, []);
+
+  const openReport = useCallback(() => {
+    captureSelection();
+    // Position is measured against the prose card, not the page, so the
+    // comments below the chapter don't drag the figure down.
+    let progress = null;
+    const rect = contentRef.current?.getBoundingClientRect();
+    if (rect && rect.height > 0) {
+      const reached = (window.innerHeight / 2 - rect.top) / rect.height;
+      progress = Math.round(Math.min(1, Math.max(0, reached)) * 100);
+    }
+    setReportContext({
+      quote: pendingQuote.current,
+      progress,
+      theme: settings.theme,
+      font: settings.font,
+      fontSize: settings.fontSize,
+    });
+    pendingQuote.current = '';
+    setSettingsOpen(false);
+    setPanel('');
+    setReportOpen(true);
+  }, [captureSelection, settings.theme, settings.font, settings.fontSize]);
+
+  const closeReport = useCallback(() => setReportOpen(false), []);
 
   const commentCount = (comments || []).reduce((count, comment) => count + 1 + (comment.replies?.length || 0), 0);
 
@@ -601,6 +642,7 @@ const Reader = () => {
             style={{ backgroundColor: theme.surface, borderColor: theme.border }}
           >
             <div
+              ref={contentRef}
               className="reading-content"
               style={{
                 fontSize: `${settings.fontSize}px`,
@@ -896,6 +938,18 @@ const Reader = () => {
           speech={speech}
           prevTo={data.prev ? `/novel/${slug}/chapter/${data.prev.number}` : null}
           nextTo={data.next ? `/novel/${slug}/chapter/${data.next.number}` : null}
+          onReport={openReport}
+          onReportPointerDown={captureSelection}
+        />
+      )}
+      {data && (
+        <ReportChapterDialog
+          open={reportOpen}
+          onClose={closeReport}
+          theme={theme}
+          user={user}
+          chapter={{ id: data.chapter.id, number: data.chapter.number, title: data.chapter.title }}
+          context={reportContext}
         />
       )}
       <DeletedItemModal

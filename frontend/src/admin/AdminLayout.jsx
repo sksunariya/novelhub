@@ -28,6 +28,7 @@ const GROUPS = [
     label: 'Content',
     links: [
       { to: '/admin/novels', label: 'Novels', icon: BookOpen, module: 'novels' },
+      { to: '/admin/chapter-reports', label: 'Chapter reports', icon: Flag, module: 'chapter_reports' },
       { to: '/admin/carousel', label: 'Hero carousel', icon: Images, module: 'carousel' },
       { to: '/admin/spotlight', label: 'Homepage rails', icon: LayoutList, module: 'spotlight' },
     ],

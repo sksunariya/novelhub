@@ -40,6 +40,7 @@ const NovelsAdmin = lazy(() => import('./admin/NovelsAdmin'));
 const ChaptersAdmin = lazy(() => import('./admin/ChaptersAdmin'));
 const UsersAdmin = lazy(() => import('./admin/UsersAdmin'));
 const ModerationAdmin = lazy(() => import('./admin/ModerationAdmin'));
+const ChapterReportsAdmin = lazy(() => import('./admin/ChapterReportsAdmin'));
 const NotificationsAdmin = lazy(() => import('./admin/NotificationsAdmin'));
 const SettingsAdmin = lazy(() => import('./admin/SettingsAdmin'));
 const ConfigPage = lazy(() => import('./admin/settings/ConfigPage'));
@@ -294,6 +295,14 @@ const App = () => {
             element={
               <AdminRoute module="novels">
                 <ChaptersAdmin />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="chapter-reports"
+            element={
+              <AdminRoute module="chapter_reports">
+                <ChapterReportsAdmin />
               </AdminRoute>
             }
           />

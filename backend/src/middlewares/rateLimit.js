@@ -86,6 +86,7 @@ module.exports = {
   unlockLimiter: createLimiter('rateLimits.unlockPerMinute', MINUTE, 'unlock'),
   couponLimiter: createLimiter('rateLimits.couponValidatePerMinute', MINUTE, 'coupon'),
   refundLimiter: createLimiter('rateLimits.refundRequestPerDay', DAY, 'refund'),
+  chapterIssueLimiter: createLimiter('rateLimits.chapterIssuesPerDay', DAY, 'chapter.issue'),
 
   // Community. Used from Phase 2 onward.
   postLimiter: createLimiter('spaces.posting.postsPerHour', HOUR, 'space.post'),
