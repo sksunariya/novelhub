@@ -13,6 +13,7 @@ const feedRoutes = require('./routes/feedRoutes');
 const postCommentRoutes = require('./routes/commentRoutes');
 const mediaRoutes = require('./routes/mediaRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const chapterIssueRoutes = require('./routes/chapterIssueRoutes');
 const communityUserRoutes = require('./routes/communityUserRoutes');
 const libraryRoutes = require('./routes/libraryRoutes');
 const walletRoutes = require('./routes/walletRoutes');
@@ -93,6 +94,8 @@ app.use('/api/feed', feedRoutes);
 app.use('/api/comments', postCommentRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/reports', reportRoutes);
+// Reader-filed chapter problems (missing text, formatting, wrong chapter).
+app.use('/api/chapter-issues', chapterIssueRoutes);
 app.use('/api/u', communityUserRoutes);
 app.use('/api/library', libraryRoutes);
 app.use('/api/wallet', walletRoutes);

@@ -1190,6 +1190,16 @@ const settings = [
     label: 'Coupon checks per minute',
   },
   {
+    key: 'rateLimits.chapterIssuesPerDay',
+    section: SECTIONS.RATE_LIMITS,
+    type: 'integer',
+    default: 20,
+    min: 1,
+    max: 1000,
+    label: 'Chapter reports per day',
+    help: 'How many chapter problem reports one reader can file in 24 hours.',
+  },
+  {
     key: 'rateLimits.refundRequestPerDay',
     section: SECTIONS.RATE_LIMITS,
     type: 'integer',

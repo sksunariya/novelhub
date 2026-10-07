@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUp, ChevronLeft, ChevronRight, Maximize2, Minimize2, Pause, Volume2 } from 'lucide-react';
+import { ArrowUp, ChevronLeft, ChevronRight, Flag, Maximize2, Minimize2, Pause, Volume2 } from 'lucide-react';
 
 /**
- * The floating control bar: fullscreen, back to top, read aloud, and chapter
- * paging. It sits over the prose, so it hides itself while the reader is moving
+ * The floating control bar: fullscreen, back to top, report a problem, read
+ * aloud, and chapter paging. It sits over the prose, so it hides itself while the reader is moving
  * down the page and comes back on any scroll up, or on reaching the end of the
  * chapter. A bar that never moved would cover the last two lines of every page
  * on a phone.
@@ -37,10 +37,11 @@ const useAutoHide = () => {
   return visible;
 };
 
-const ToolbarButton = ({ label, onClick, disabled, children }) => (
+const ToolbarButton = ({ label, onClick, onPointerDown, disabled, children }) => (
   <button
     type="button"
     onClick={onClick}
+    onPointerDown={onPointerDown}
     disabled={disabled}
     aria-label={label}
     title={label}
@@ -50,7 +51,7 @@ const ToolbarButton = ({ label, onClick, disabled, children }) => (
   </button>
 );
 
-const ReaderToolbar = ({ theme, fullscreen, speech, prevTo, nextTo }) => {
+const ReaderToolbar = ({ theme, fullscreen, speech, prevTo, nextTo, onReport, onReportPointerDown }) => {
   const visible = useAutoHide();
 
   const pagingLink = (to, label, children) =>
@@ -111,6 +112,15 @@ const ReaderToolbar = ({ theme, fullscreen, speech, prevTo, nextTo }) => {
         >
           <ArrowUp className="h-[18px] w-[18px]" aria-hidden="true" />
         </ToolbarButton>
+
+        {onReport && (
+          // The pointerdown hook runs before the press collapses the page
+          // selection, so a passage the reader highlighted can ride along
+          // with the report.
+          <ToolbarButton label="Report a problem with this chapter" onClick={onReport} onPointerDown={onReportPointerDown}>
+            <Flag className="h-[18px] w-[18px]" aria-hidden="true" />
+          </ToolbarButton>
+        )}
 
         {speech.supported && (
           <button

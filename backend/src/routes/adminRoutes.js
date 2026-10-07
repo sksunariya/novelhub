@@ -59,6 +59,7 @@ const {
 } = require('../controllers/analyticsController');
 const { replayWebhook } = require('../controllers/webhookController');
 const accessControl = require('../controllers/accessControlController');
+const chapterIssues = require('../controllers/chapterIssueController');
 const monetizationAdminRoutes = require('./monetizationAdminRoutes');
 const adminCommunityRoutes = require('./adminCommunityRoutes');
 const { protect, adminOnly, superAdminOnly, requireModule, requireAnyModule } = require('../middlewares/auth');
@@ -152,6 +153,13 @@ router.get('/chapters/:id', getChapter);
 router.get('/chapters/:id/source', getChapterSource);
 router.put('/chapters/:id', updateChapter);
 router.delete('/chapters/:id', deleteChapter);
+
+// Chapter problems reported by readers. Static paths before `/:id`.
+router.use('/chapter-issues', requireModule('chapter_reports'));
+router.get('/chapter-issues/hotspots', chapterIssues.getHotspots);
+router.post('/chapter-issues/bulk', chapterIssues.bulkUpdate);
+router.get('/chapter-issues', chapterIssues.listIssues);
+router.patch('/chapter-issues/:id', chapterIssues.updateIssue);
 
 router.use('/users', requireModule('users'));
 router.get('/users', listUsers);

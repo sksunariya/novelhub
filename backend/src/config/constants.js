@@ -79,6 +79,14 @@ const ADMIN_MODULES = [
     description: 'Create and edit novels, upload and price chapters.',
   },
   {
+    id: 'chapter_reports',
+    label: 'Chapter reports',
+    group: ADMIN_MODULE_GROUPS.CONTENT,
+    description:
+      'Problems readers report from the chapter reader — missing or broken text, formatting, typos, '
+      + 'wrong order, access errors — and resolving or dismissing them.',
+  },
+  {
     id: 'carousel',
     label: 'Hero carousel',
     group: ADMIN_MODULE_GROUPS.CONTENT,
@@ -655,6 +663,40 @@ const REPORT_TARGET_TYPES = {
   USER: 'user',
 };
 
+// Reader-filed chapter problems ("the text cuts off", "this is chapter 12
+// again"). Separate from the community REPORT_* system above: that one hides
+// content on a reporter threshold and runs the DSA statement/appeal flow,
+// while these are quality reports that never change what readers see.
+//
+// Keys are stored on every report, so treat them as permanent. Labels can
+// change freely.
+const CHAPTER_ISSUE_CATEGORIES = [
+  { key: 'missing_content', label: 'Missing or incomplete text', hint: 'The chapter cuts off, is empty or has gaps.' },
+  { key: 'wrong_chapter', label: 'Wrong or duplicate chapter', hint: 'This is a different chapter, or a repeat of one.' },
+  { key: 'wrong_order', label: 'Wrong order or numbering', hint: 'Chapters are out of sequence or misnumbered.' },
+  { key: 'formatting', label: 'Formatting problem', hint: 'Broken layout, stray code, images not showing.' },
+  { key: 'typos', label: 'Typos or translation errors', hint: 'Spelling, grammar or mistranslated passages.' },
+  { key: 'access', label: 'Locked or access problem', hint: 'Charged, locked or gated when it should not be.' },
+  { key: 'inappropriate', label: 'Inappropriate content', hint: 'Content that should not be on the site.' },
+  { key: 'other', label: 'Something else', hint: 'Describe the problem below.' },
+];
+
+const CHAPTER_ISSUE_CATEGORY_KEYS = CHAPTER_ISSUE_CATEGORIES.map((c) => c.key);
+
+const CHAPTER_ISSUE_STATUS = {
+  OPEN: 'open',
+  IN_PROGRESS: 'in_progress',
+  RESOLVED: 'resolved',
+  DISMISSED: 'dismissed',
+};
+
+const CHAPTER_ISSUE_LIMITS = {
+  DETAILS_MAX: 1000,
+  QUOTE_MAX: 500,
+  NOTE_MAX: 1000,
+  USER_AGENT_MAX: 300,
+};
+
 const REPORT_STATUS = {
   OPEN: 'open',
   ACTIONED: 'actioned',
@@ -754,6 +796,10 @@ module.exports = {
   REPORT_TARGET_TYPES,
   REPORT_STATUS,
   REPORT_SOURCES,
+  CHAPTER_ISSUE_CATEGORIES,
+  CHAPTER_ISSUE_CATEGORY_KEYS,
+  CHAPTER_ISSUE_STATUS,
+  CHAPTER_ISSUE_LIMITS,
   SPACE_CREATION_POLICY,
   SPACE_CREATION_MODES,
   HOT_SCORE_EPOCH_SECONDS,
