@@ -1,133 +1,80 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Sparkles, BookOpen, Star, Layers, Flame } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Sparkles, Star, Layers } from 'lucide-react';
 import client from '../api/client';
-import { useSettings } from '../context/SettingsContext';
-import HeroEmbers from './HeroEmbers';
 
-const THEME_STYLES = {
-  'dark-crimson': {
-    glow: 'radial-gradient(ellipse at 50% 10%, rgba(220,38,38,0.35), transparent 70%)',
-    border: 'border-crimson/30 hover:border-crimson/60',
-    badgeBg: 'bg-crimson/20 text-crimson-soft border-crimson/40',
-    buttonPrimary: 'bg-crimson hover:bg-crimson-soft text-white shadow-glow',
-    glowColor: 'rgba(220, 38, 38, 0.4)',
-  },
-  'dark-violet': {
-    glow: 'radial-gradient(ellipse at 50% 10%, rgba(147,51,234,0.35), transparent 70%)',
-    border: 'border-purple-500/30 hover:border-purple-500/60',
-    badgeBg: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
-    buttonPrimary: 'bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_20px_rgba(147,51,234,0.4)]',
-    glowColor: 'rgba(147, 51, 234, 0.4)',
-  },
-  'dark-gold': {
-    glow: 'radial-gradient(ellipse at 50% 10%, rgba(217,119,6,0.35), transparent 70%)',
-    border: 'border-amber-500/30 hover:border-amber-500/60',
-    badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-    buttonPrimary: 'bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_20px_rgba(217,119,6,0.4)]',
-    glowColor: 'rgba(217, 119, 6, 0.4)',
-  },
-  'dark-emerald': {
-    glow: 'radial-gradient(ellipse at 50% 10%, rgba(16,185,129,0.35), transparent 70%)',
-    border: 'border-emerald-500/30 hover:border-emerald-500/60',
-    badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-    buttonPrimary: 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)]',
-    glowColor: 'rgba(16, 185, 129, 0.4)',
-  },
-  'dark-obsidian': {
-    glow: 'radial-gradient(ellipse at 50% 10%, rgba(71,85,105,0.35), transparent 70%)',
-    border: 'border-slate-600/40 hover:border-slate-500',
-    badgeBg: 'bg-slate-700/40 text-slate-200 border-slate-600',
-    buttonPrimary: 'bg-slate-700 hover:bg-slate-600 text-white shadow-[0_0_20px_rgba(71,85,105,0.4)]',
-    glowColor: 'rgba(71, 85, 105, 0.4)',
-  },
-  'dark-cyber': {
-    glow: 'radial-gradient(ellipse at 50% 10%, rgba(6,182,212,0.35), transparent 70%)',
-    border: 'border-cyan-500/30 hover:border-cyan-500/60',
-    badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
-    buttonPrimary: 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)]',
-    glowColor: 'rgba(6, 182, 212, 0.4)',
-  },
+/**
+ * Cover-flow hero: the current cover sits large in the middle with its rating
+ * and title over the art, its neighbours peek in smaller on either side, and
+ * the whole band is washed in a blurred copy of the current cover.
+ *
+ * Props are unchanged from the previous carousel, so the admin live preview
+ * (slidesProp) and the public /carousel fetch both still work.
+ */
+
+const SIDE_SCALE = 0.78; // neighbours relative to the centre card
+const GAP = 14; // px between the centre card and a neighbour
+const ASPECT = 1.45; // cover height / width
+
+// Signed shortest distance from `current` to `index` on a ring of `count`.
+const ringOffset = (index, current, count) => {
+  let d = index - current;
+  if (d > count / 2) d -= count;
+  if (d < -count / 2) d += count;
+  return d;
 };
 
-const BADGE_COLORS = {
-  crimson: 'bg-crimson/20 text-crimson-soft border-crimson/40',
-  amber: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-  emerald: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-  azure: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
-  violet: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
-  gold: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
-  rose: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
-  cyber: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
-};
+const SlideLink = ({ url, className, children, ...rest }) =>
+  url?.startsWith('/') ? (
+    <Link to={url} className={className} {...rest}>
+      {children}
+    </Link>
+  ) : (
+    <a href={url || '#'} className={className} {...rest}>
+      {children}
+    </a>
+  );
 
-const slideVariants = {
-  enter: (direction) => ({
-    x: direction > 0 ? 120 : -120,
-    opacity: 0,
-    scale: 0.96,
-  }),
-  center: {
-    x: 0,
-    opacity: 1,
-    scale: 1,
-    transition: {
-      duration: 0.55,
-      ease: [0.25, 1, 0.5, 1],
-    },
-  },
-  exit: (direction) => ({
-    x: direction < 0 ? 120 : -120,
-    opacity: 0,
-    scale: 0.96,
-    transition: {
-      duration: 0.4,
-      ease: 'easeIn',
-    },
-  }),
-};
-
-const contentContainer = {
-  hidden: {},
-  show: {
-    transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.1,
-    },
-  },
-};
-
-const contentItem = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+const Cover = ({ slide, active }) => {
+  const [broken, setBroken] = useState(false);
+  return (
+    <>
+      {slide.imageUrl && !broken ? (
+        <img
+          src={slide.imageUrl}
+          alt={active ? '' : slide.title}
+          onError={() => setBroken(true)}
+          draggable={false}
+          className="h-full w-full select-none object-cover"
+          loading={active ? 'eager' : 'lazy'}
+        />
+      ) : (
+        <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-night-surface to-night-raised p-4 text-center">
+          <Layers className="mb-2 h-10 w-10 text-silver-muted/50" aria-hidden="true" />
+          <p className="font-display text-sm font-bold text-silver line-clamp-3">{slide.title}</p>
+        </div>
+      )}
+    </>
+  );
 };
 
 const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6 }) => {
-  const { settings } = useSettings();
   const [slides, setSlides] = useState(slidesProp || []);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [direction, setDirection] = useState(1);
   const [isPaused, setIsPaused] = useState(false);
   const [loading, setLoading] = useState(!slidesProp);
   const [autoPlayInterval, setAutoPlayInterval] = useState(intervalProp);
   const [enableAutoPlay, setEnableAutoPlay] = useState(autoPlayProp);
-  const [imgError, setImgError] = useState(false);
+  const [width, setWidth] = useState(0);
   const shouldReduceMotion = useReducedMotion();
   const containerRef = useRef(null);
+  const dragged = useRef(false);
 
-  // Clamp currentIndex when slides array shrinks
   useEffect(() => {
-    if (slides.length > 0 && currentIndex >= slides.length) {
-      setCurrentIndex(slides.length - 1);
-    }
+    if (slides.length > 0 && currentIndex >= slides.length) setCurrentIndex(slides.length - 1);
   }, [slides.length, currentIndex]);
 
-  useEffect(() => {
-    setImgError(false);
-  }, [currentIndex, slides]);
-
-  // Sync slides if provided as prop (e.g. live admin preview)
   useEffect(() => {
     if (slidesProp) {
       setSlides(slidesProp);
@@ -135,9 +82,8 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
     }
   }, [slidesProp]);
 
-  // Fetch public slides if not passed as prop
   useEffect(() => {
-    if (slidesProp) return;
+    if (slidesProp) return undefined;
     let isMounted = true;
     client
       .get('/carousel')
@@ -151,9 +97,7 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
           }
         }
       })
-      .catch((err) => {
-        console.error('Failed to fetch carousel slides:', err);
-      })
+      .catch((err) => console.error('Failed to fetch carousel slides:', err))
       .finally(() => {
         if (isMounted) setLoading(false);
       });
@@ -162,55 +106,54 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
     };
   }, [slidesProp]);
 
+  // Card size follows the band's width, so the neighbours always peek in.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [loading, slides.length]);
+
   const handleNext = useCallback(() => {
     if (slides.length === 0) return;
-    setDirection(1);
     setCurrentIndex((prev) => (prev + 1) % slides.length);
   }, [slides.length]);
 
   const handlePrev = useCallback(() => {
     if (slides.length === 0) return;
-    setDirection(-1);
     setCurrentIndex((prev) => (prev - 1 + slides.length) % slides.length);
   }, [slides.length]);
 
-  const handleGoTo = (index) => {
-    if (index === currentIndex) return;
-    setDirection(index > currentIndex ? 1 : -1);
-    setCurrentIndex(index);
-  };
-
-  // Keyboard navigation
   const handleKeyDown = (e) => {
     if (e.key === 'ArrowLeft') handlePrev();
     if (e.key === 'ArrowRight') handleNext();
   };
 
-  // Auto-play timer
   useEffect(() => {
-    if (!enableAutoPlay || isPaused || slides.length <= 1) return;
-    const timer = setInterval(() => {
-      handleNext();
-    }, autoPlayInterval * 1000);
+    if (!enableAutoPlay || isPaused || slides.length <= 1) return undefined;
+    const timer = setInterval(handleNext, autoPlayInterval * 1000);
     return () => clearInterval(timer);
   }, [enableAutoPlay, isPaused, slides.length, autoPlayInterval, handleNext]);
 
   if (loading) {
     return (
-      <div className="relative h-72 sm:h-96 w-full animate-pulse rounded-2xl border border-line bg-night-surface p-8 shadow-card flex items-center justify-center">
-        <div className="flex items-center gap-3 text-silver-muted">
-          <Sparkles className="h-6 w-6 animate-spin text-crimson" />
-          <span className="font-medium text-sm">Loading Hero Carousel...</span>
-        </div>
+      <div className="flex h-[420px] w-full animate-pulse items-center justify-center rounded-2xl bg-night-surface">
+        <Sparkles className="h-6 w-6 animate-spin text-crimson" aria-hidden="true" />
       </div>
     );
   }
 
   if (slides.length === 0) return null;
 
-  const currentSlide = slides[currentIndex] || slides[0];
-  const theme = THEME_STYLES[currentSlide.themeStyle] || THEME_STYLES['dark-crimson'];
-  const badgeStyle = BADGE_COLORS[currentSlide.badgeColor] || THEME_STYLES['dark-crimson'].badgeBg;
+  const current = slides[currentIndex] || slides[0];
+  const count = slides.length;
+
+  // Centre card: ~72% of the band on phones, capped on wide screens.
+  const cardW = Math.max(200, Math.min(width * 0.72, 420));
+  const cardH = cardW * ASPECT;
+  const step = cardW / 2 + (cardW * SIDE_SCALE) / 2 + GAP;
+  const visibleRange = width >= 900 ? 2 : 1;
 
   return (
     <div
@@ -221,254 +164,130 @@ const HeroCarousel = ({ slidesProp = null, autoPlayProp = true, intervalProp = 6
       onBlur={() => setIsPaused(false)}
       onKeyDown={handleKeyDown}
       tabIndex={0}
-      className="group relative overflow-hidden rounded-2xl border border-line bg-night-surface shadow-card transition-all focus:outline-none focus:ring-1 focus:ring-crimson/50"
-      aria-label="Featured Novels Carousel"
+      role="region"
+      aria-roledescription="carousel"
+      aria-label="Featured novels"
+      className="relative w-full overflow-hidden rounded-2xl bg-night focus:outline-none focus-visible:ring-1 focus-visible:ring-crimson/50"
+      style={{ height: cardH + 48 }}
     >
-      {/* Dynamic Radial Ambient Backdrop */}
+      {/* Blurred wash of the current cover */}
+      {slides.map((slide, i) => (
+        <motion.div
+          key={`bg-${slide._id || i}`}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 scale-125 bg-cover bg-center blur-3xl"
+          style={{ backgroundImage: slide.imageUrl ? `url(${slide.imageUrl})` : undefined }}
+          initial={false}
+          animate={{ opacity: i === currentIndex ? 0.55 : 0 }}
+          transition={{ duration: shouldReduceMotion ? 0 : 0.6 }}
+        />
+      ))}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-b from-night/40 via-night/20 to-night/70" />
+
+      {/* Track */}
       <motion.div
-        className="pointer-events-none absolute inset-0 opacity-60 transition-opacity duration-700"
-        style={{ background: theme.glow }}
-        animate={shouldReduceMotion ? { opacity: 0.6 } : { opacity: [0.4, 0.65, 0.4] }}
-        transition={shouldReduceMotion ? undefined : { duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-        aria-hidden="true"
-      />
+        className="absolute inset-0"
+        drag={count > 1 ? 'x' : false}
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.15}
+        onDragStart={() => {
+          dragged.current = true;
+        }}
+        onDragEnd={(e, { offset, velocity }) => {
+          const swipe = offset.x + velocity.x * 0.2;
+          if (swipe < -50) handleNext();
+          else if (swipe > 50) handlePrev();
+          // Let the click that ends a drag fall through without navigating.
+          setTimeout(() => {
+            dragged.current = false;
+          }, 0);
+        }}
+      >
+        {slides.map((slide, i) => {
+          const offset = count > 1 ? ringOffset(i, currentIndex, count) : 0;
+          const active = offset === 0;
+          const hidden = Math.abs(offset) > visibleRange;
+          const scale = active ? 1 : SIDE_SCALE;
+          const x =
+            offset === 0
+              ? 0
+              : Math.sign(offset) * (step + (Math.abs(offset) - 1) * (cardW * SIDE_SCALE + GAP));
 
-      {/* Floating Ember Particles */}
-      {!shouldReduceMotion && <HeroEmbers />}
-
-      {/* Main Slide Track & Animations */}
-      <div className="relative min-h-0 md:min-h-[440px] w-full px-4 py-7 sm:px-6 sm:py-9 md:px-12 md:py-12 lg:px-16 lg:py-14 flex items-center justify-center">
-        <AnimatePresence initial={false} custom={direction} mode="wait">
-          <motion.div
-            key={currentSlide._id || currentIndex}
-            custom={direction}
-            variants={slideVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.2}
-            onDragEnd={(e, { offset }) => {
-              if (offset.x < -50) handleNext();
-              else if (offset.x > 50) handlePrev();
-            }}
-            className="flex flex-col items-center justify-center md:grid md:grid-cols-12 md:items-center md:gap-8 w-full"
-          >
-            {/* Left Content Side (Desktop & Tablet only) */}
+          return (
             <motion.div
-              variants={contentContainer}
-              initial="hidden"
-              animate="show"
-              className="hidden md:flex md:flex-col md:items-start md:text-left md:col-span-7 z-10"
+              key={slide._id || i}
+              className="absolute left-1/2 top-1/2"
+              style={{ width: cardW, height: cardH, marginLeft: -cardW / 2, marginTop: -cardH / 2, zIndex: 10 - Math.abs(offset) }}
+              initial={false}
+              animate={{ x, scale, opacity: hidden ? 0 : 1 }}
+              transition={shouldReduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 260, damping: 32 }}
+              aria-hidden={!active}
             >
-              {/* Badge */}
-              <motion.div variants={contentItem} className="mb-3 md:mb-4">
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1 text-xs font-bold tracking-wider uppercase backdrop-blur-md shadow-sm ${badgeStyle}`}
-                >
-                  <Flame className="h-3.5 w-3.5" />
-                  {currentSlide.badgeText || 'FEATURED'}
-                </span>
-              </motion.div>
-
-              {/* Title */}
-              <motion.h1
-                variants={contentItem}
-                className="font-display text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-silver line-clamp-2 leading-tight"
+              <SlideLink
+                url={slide.primaryButtonUrl}
+                tabIndex={active ? 0 : -1}
+                aria-label={active ? `Read ${slide.title}` : undefined}
+                draggable={false}
+                onClick={(e) => {
+                  if (dragged.current) {
+                    e.preventDefault();
+                    return;
+                  }
+                  // A neighbour brings itself to the centre instead of navigating.
+                  if (!active) {
+                    e.preventDefault();
+                    setCurrentIndex(i);
+                  }
+                }}
+                className={`relative block h-full w-full overflow-hidden rounded-2xl bg-night-surface shadow-2xl ring-1 ring-white/10 transition-[filter] duration-300 ${
+                  active ? '' : 'brightness-75 hover:brightness-90'
+                } ${hidden ? 'pointer-events-none' : ''}`}
               >
-                {currentSlide.title}
-              </motion.h1>
+                <Cover slide={slide} active={active} />
 
-              {/* Subtitle / Author Tagline */}
-              {currentSlide.subtitle && (
-                <motion.p variants={contentItem} className="mt-2 text-sm md:text-base font-semibold text-crimson-soft">
-                  {currentSlide.subtitle}
-                </motion.p>
-              )}
+                {active && (
+                  <>
+                    <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
 
-              {/* Description */}
-              <motion.p
-                variants={contentItem}
-                className="mt-3 max-w-xl text-sm md:text-base leading-relaxed text-silver-muted line-clamp-3"
-              >
-                {currentSlide.description}
-              </motion.p>
+                    {slide.novel?.ratingAvg > 0 && (
+                      <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-xl bg-black/75 px-2.5 py-1.5 text-sm font-semibold text-white backdrop-blur-sm sm:left-4 sm:top-4 sm:text-base">
+                        <Star className="h-4 w-4 fill-amber-400 text-amber-400 sm:h-5 sm:w-5" aria-hidden="true" />
+                        <span>{slide.novel.ratingAvg.toFixed(1)}</span>
+                      </div>
+                    )}
 
-              {/* CTA Button */}
-              <motion.div
-                variants={contentItem}
-                className="mt-6 md:mt-7 flex items-center justify-start"
-              >
-                {currentSlide.primaryButtonUrl?.startsWith('/') ? (
-                  <Link
-                    to={currentSlide.primaryButtonUrl}
-                    className={`inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-bold transition-all transform hover:scale-105 active:scale-95 ${theme.buttonPrimary}`}
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    {currentSlide.primaryButtonText || 'Start Reading'}
-                  </Link>
-                ) : (
-                  <a
-                    href={currentSlide.primaryButtonUrl || '#'}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={`inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-bold transition-all transform hover:scale-105 active:scale-95 ${theme.buttonPrimary}`}
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    {currentSlide.primaryButtonText || 'Start Reading'}
-                  </a>
+                    <h2 className="absolute inset-x-0 bottom-0 p-4 font-display text-base font-bold leading-snug text-white drop-shadow line-clamp-2 sm:p-5 sm:text-lg">
+                      {slide.title}
+                    </h2>
+                  </>
                 )}
-              </motion.div>
+              </SlideLink>
             </motion.div>
+          );
+        })}
+      </motion.div>
 
-            {/* Right Side / Mobile Center: 3D Animated Cover Poster Card */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.15 }}
-              className="flex justify-center md:col-span-5 z-10"
-            >
-              {currentSlide.primaryButtonUrl?.startsWith('/') ? (
-                <Link
-                  to={currentSlide.primaryButtonUrl}
-                  className="relative group/poster cursor-pointer block"
-                  aria-label={`Read ${currentSlide.title}`}
-                >
-                  {/* Glowing Aura Ring */}
-                  <div
-                    className="absolute -inset-1.5 rounded-2xl opacity-60 blur-xl transition-all duration-500 group-hover/poster:opacity-100 group-hover/poster:blur-2xl"
-                    style={{ background: theme.glowColor }}
-                  />
-
-                  {/* Poster Frame Container */}
-                  <div
-                    className={`relative overflow-hidden rounded-xl sm:rounded-2xl border bg-night-surface/90 shadow-2xl transition-all duration-300 transform group-hover/poster:-translate-y-2 group-hover/poster:rotate-1 ${theme.border}`}
-                  >
-                    {currentSlide.imageUrl && !imgError ? (
-                      <img
-                        src={currentSlide.imageUrl}
-                        alt={currentSlide.title}
-                        onError={() => setImgError(true)}
-                        className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 object-cover transition-transform duration-700 group-hover/poster:scale-105"
-                        loading="eager"
-                      />
-                    ) : (
-                      <div className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
-                        <Layers className="h-10 w-10 sm:h-12 sm:w-12 text-silver-muted/50 mb-2 sm:mb-3" />
-                        <p className="font-display font-bold text-silver text-xs sm:text-sm line-clamp-3">{currentSlide.title}</p>
-                        <p className="text-[10px] sm:text-xs text-crimson-soft mt-1">{settings?.siteName || ''}</p>
-                      </div>
-                    )}
-
-                    {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-night/80 via-transparent to-transparent opacity-70" />
-
-                    {/* Live Rating Pill */}
-                    {currentSlide.novel?.ratingAvg > 0 && (
-                      <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 rounded-full bg-night/80 border border-amber-500/40 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-xs font-bold text-amber-400 backdrop-blur-md flex items-center gap-1 shadow-md">
-                        <Star className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-amber-400" />
-                        <span>{currentSlide.novel.ratingAvg.toFixed(1)}</span>
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              ) : (
-                <a
-                  href={currentSlide.primaryButtonUrl || '#'}
-                  className="relative group/poster cursor-pointer block"
-                  aria-label={`Read ${currentSlide.title}`}
-                >
-                  {/* Glowing Aura Ring */}
-                  <div
-                    className="absolute -inset-1.5 rounded-2xl opacity-60 blur-xl transition-all duration-500 group-hover/poster:opacity-100 group-hover/poster:blur-2xl"
-                    style={{ background: theme.glowColor }}
-                  />
-
-                  {/* Poster Frame Container */}
-                  <div
-                    className={`relative overflow-hidden rounded-xl sm:rounded-2xl border bg-night-surface/90 shadow-2xl transition-all duration-300 transform group-hover/poster:-translate-y-2 group-hover/poster:rotate-1 ${theme.border}`}
-                  >
-                    {currentSlide.imageUrl && !imgError ? (
-                      <img
-                        src={currentSlide.imageUrl}
-                        alt={currentSlide.title}
-                        onError={() => setImgError(true)}
-                        className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 object-cover transition-transform duration-700 group-hover/poster:scale-105"
-                        loading="eager"
-                      />
-                    ) : (
-                      <div className="h-72 xs:h-80 sm:h-[360px] md:h-80 lg:h-96 w-48 xs:w-56 sm:w-60 md:w-56 lg:w-64 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-night-surface to-night-raised text-center border border-line">
-                        <Layers className="h-10 w-10 sm:h-12 sm:w-12 text-silver-muted/50 mb-2 sm:mb-3" />
-                        <p className="font-display font-bold text-silver text-xs sm:text-sm line-clamp-3">{currentSlide.title}</p>
-                        <p className="text-[10px] sm:text-xs text-crimson-soft mt-1">{settings?.siteName || ''}</p>
-                      </div>
-                    )}
-
-                    {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-night/80 via-transparent to-transparent opacity-70" />
-
-                    {/* Live Rating Pill */}
-                    {currentSlide.novel?.ratingAvg > 0 && (
-                      <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 rounded-full bg-night/80 border border-amber-500/40 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[11px] sm:text-xs font-bold text-amber-400 backdrop-blur-md flex items-center gap-1 shadow-md">
-                        <Star className="h-3 w-3 sm:h-3.5 sm:w-3.5 fill-amber-400" />
-                        <span>{currentSlide.novel.ratingAvg.toFixed(1)}</span>
-                      </div>
-                    )}
-                  </div>
-                </a>
-              )}
-            </motion.div>
-          </motion.div>
-        </AnimatePresence>
-      </div>
-
-      {/* Navigation Arrows */}
-      {slides.length > 1 && (
-        <>
-          <button
-            onClick={handlePrev}
-            aria-label="Previous Slide"
-            className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-20 rounded-full border border-line bg-night/70 p-1.5 sm:p-2.5 text-silver backdrop-blur-md transition-all hover:bg-crimson hover:border-crimson hover:text-white hover:scale-110 active:scale-90"
-          >
-            <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
-          </button>
-          <button
-            onClick={handleNext}
-            aria-label="Next Slide"
-            className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 z-20 rounded-full border border-line bg-night/70 p-1.5 sm:p-2.5 text-silver backdrop-blur-md transition-all hover:bg-crimson hover:border-crimson hover:text-white hover:scale-110 active:scale-90"
-          >
-            <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
-          </button>
-        </>
-      )}
-
-      {/* Dot Indicators & Slide Counter */}
-      {slides.length > 1 && (
-        <div className="absolute bottom-2 sm:bottom-3 md:bottom-4 left-0 right-0 z-20 flex items-center justify-center gap-1.5 sm:gap-2">
+      {/* Dots */}
+      {count > 1 && (
+        <div className="absolute bottom-3 left-0 right-0 z-20 flex items-center justify-center gap-1.5">
           {slides.map((_, idx) => (
             <button
               key={idx}
-              onClick={() => handleGoTo(idx)}
+              type="button"
+              onClick={() => setCurrentIndex(idx)}
               aria-label={`Go to slide ${idx + 1}`}
-              className={`h-1.5 sm:h-2 rounded-full transition-all duration-300 ${
-                idx === currentIndex ? 'w-6 sm:w-8 bg-crimson shadow-glow' : 'w-1.5 sm:w-2 bg-silver-muted/30 hover:bg-silver-muted/60'
+              aria-current={idx === currentIndex ? 'true' : undefined}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                idx === currentIndex ? 'w-6 bg-white' : 'w-1.5 bg-white/35 hover:bg-white/60'
               }`}
             />
           ))}
         </div>
       )}
 
-      {/* Animated Countdown Progress Bar */}
-      {enableAutoPlay && slides.length > 1 && !isPaused && (
-        <motion.div
-          key={`progress-${currentIndex}`}
-          className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-crimson to-amber-500 z-30"
-          initial={{ width: '0%' }}
-          animate={{ width: '100%' }}
-          transition={{ duration: autoPlayInterval, ease: 'linear' }}
-        />
-      )}
+      <span className="sr-only" aria-live="polite">
+        {current.title}
+      </span>
     </div>
   );
 };
