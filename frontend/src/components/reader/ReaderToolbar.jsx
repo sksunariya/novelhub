@@ -118,7 +118,7 @@ const ReaderToolbar = ({ theme, fullscreen, speech, prevTo, nextTo, onReport, on
           // selection, so a passage the reader highlighted can ride along
           // with the report.
           <ToolbarButton label="Report a problem with this chapter" onClick={onReport} onPointerDown={onReportPointerDown}>
-            <Flag className="h-[18px] w-[18px]" aria-hidden="true" />
+            <Flag className="h-[18px] w-[18px] text-red-500" aria-hidden="true" />
           </ToolbarButton>
         )}
 
