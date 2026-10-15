@@ -22,7 +22,7 @@ const Chapter = require('../src/models/Chapter');
 const ChapterRead = require('../src/models/ChapterRead');
 const { createUser, createNovel, createChapter } = require('./helpers');
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => require('../src/utils/reportingDay').dayKey();
 
 /** `revenueLifetimeUsdMicros` is select:false, so it must be asked for. */
 const lifetimeOf = async (chapterId) =>

@@ -10,7 +10,7 @@ const NovelRevenueDaily = require('../src/models/NovelRevenueDaily');
 const RevenueDaily = require('../src/models/RevenueDaily');
 const { api, createUser, createAdmin, createNovel, createChapter } = require('./helpers');
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => require('../src/utils/reportingDay').dayKey();
 
 let novel;
 let chapter;

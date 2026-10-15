@@ -20,7 +20,7 @@ const gateImpressionSchema = new mongoose.Schema(
     balanceAtTime: { type: Number, default: 0 },
     couldAfford: { type: Boolean, default: false },
 
-    // Bucketed to the UTC day so a reader refreshing a locked page twenty times
+    // Bucketed to the IST day so a reader refreshing a locked page twenty times
     // counts once. Without this the funnel denominator is meaningless.
     day: { type: String, required: true }, // YYYY-MM-DD
     at: { type: Date, default: Date.now },

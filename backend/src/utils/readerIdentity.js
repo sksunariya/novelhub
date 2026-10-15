@@ -70,7 +70,7 @@ const resolveReader = (req, res) => {
   return { readerKey: `d:${deviceId}`, user: null, anonymous: true };
 };
 
-/** UTC day bucket. Reports must not shift with the server's timezone. */
-const dayKey = (date = new Date()) => date.toISOString().slice(0, 10);
+/** Day bucket in the reporting zone (IST). Never the server's local zone. */
+const { dayKey } = require('./reportingDay');
 
 module.exports = { resolveReader, readDeviceId, issueDeviceId, isBot, dayKey, COOKIE_NAME, parseCookies };

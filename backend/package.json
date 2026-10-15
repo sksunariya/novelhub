@@ -14,6 +14,7 @@
     "test": "jest --runInBand",
     "test:unit": "jest --config jest.unit.config.js",
     "backfill:revenue": "node scripts/backfillRevenueEvents.js",
+    "rekey:reporting-days": "node scripts/rekeyReportingDays.js",
     "check:duplicate-reviews": "node scripts/findDuplicateReviews.js",
     "seed:spotlight": "node scripts/seedSpotlight.js"
   },

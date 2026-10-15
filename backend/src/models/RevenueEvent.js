@@ -50,7 +50,7 @@ const revenueEventSchema = new mongoose.Schema(
     // The real-world instant. Day bucketing for a configured reporting
     // timezone is derived from this, so a tz change needs no migration.
     occurredAt: { type: Date, required: true, default: Date.now },
-    // UTC day key, denormalized for the rollup match and its index.
+    // IST day key (utils/reportingDay), denormalized for the rollup match and its index.
     day: { type: String, required: true },
 
     idempotencyKey: { type: String },

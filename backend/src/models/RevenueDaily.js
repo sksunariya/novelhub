@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 // up reporting revenue it never received.
 const revenueDailySchema = new mongoose.Schema(
   {
-    day: { type: String, required: true }, // YYYY-MM-DD, UTC
+    day: { type: String, required: true }, // YYYY-MM-DD, IST (utils/reportingDay)
     currency: { type: String, required: true, uppercase: true },
 
     orders: { type: Number, default: 0 },

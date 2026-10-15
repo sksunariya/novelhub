@@ -17,7 +17,7 @@ const Novel = require('../models/Novel');
 const settingsService = require('./settingsService');
 const { MICROS_PER_CENT, REVENUE_EVENT_KINDS } = require('../config/constants');
 
-const dayKey = (date = new Date()) => date.toISOString().slice(0, 10);
+const { dayKey } = require('../utils/reportingDay');
 
 /**
  * Credit face value in micro-USD at the rate in force right now.

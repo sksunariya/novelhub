@@ -1043,10 +1043,10 @@ const settings = [
     key: 'analytics.reportingTimezone',
     section: SECTIONS.ANALYTICS,
     type: 'string',
-    default: 'UTC',
+    default: 'Asia/Kolkata',
     maxLength: 64,
     label: 'Reporting timezone',
-    help: 'IANA zone (e.g. Asia/Kolkata) used to decide which day a sale falls in. Stored data stays UTC, so this can be changed at any time without a migration.',
+    help: 'IANA zone used to decide which day a sale falls in on the Revenue reports. Daily rollups (author earnings, read counts) are always kept in IST; pick anything other than Asia/Kolkata and read counts become approximate at the range edges.',
   },
   {
     key: 'analytics.deductPaymentFees',

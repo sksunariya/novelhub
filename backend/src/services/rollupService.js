@@ -22,25 +22,13 @@ const Novel = require('../models/Novel');
 const settingsService = require('./settingsService');
 const { ORDER_STATUS, CREDIT_TRANSACTION_TYPES } = require('../config/constants');
 
-const dayBounds = (day) => ({
-  from: new Date(`${day}T00:00:00.000Z`),
-  to: new Date(`${day}T23:59:59.999Z`),
-});
-
-const dayKey = (date) => date.toISOString().slice(0, 10);
+// Day keys and bounds are in the reporting zone (IST), not UTC.
+const { dayKey, dayBounds, recentDays } = require('../utils/reportingDay');
 
 // Reserved `currency` value for the platform-wide totals row. Not a real
 // currency, so it can never collide with a settlement currency.
 const PLATFORM_ROW = '__ALL__';
 
-/** Days from `back` days ago through today, oldest first. */
-const recentDays = (back) => {
-  const days = [];
-  for (let i = back; i >= 0; i -= 1) {
-    days.push(dayKey(new Date(Date.now() - i * 86400000)));
-  }
-  return days;
-};
 
 /**
  * Per-chapter counters for one day, rebuilt from source.

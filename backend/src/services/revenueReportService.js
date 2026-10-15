@@ -13,6 +13,7 @@
 
 const mongoose = require('mongoose');
 const RevenueEvent = require('../models/RevenueEvent');
+const { REPORTING_TZ, dayKey: rollupDay } = require('../utils/reportingDay');
 const ChapterStatsDaily = require('../models/ChapterStatsDaily');
 const Novel = require('../models/Novel');
 const Chapter = require('../models/Chapter');
@@ -38,7 +39,7 @@ const validTimezone = (zone) => {
 
 const timezone = async () => {
   const zone = await settingsService.get('analytics.reportingTimezone');
-  return validTimezone(zone) ? zone : 'UTC';
+  return validTimezone(zone) ? zone : REPORTING_TZ;
 };
 
 /**
@@ -316,7 +317,7 @@ const bucketLabel = (date, range) => {
 /**
  * Readership context for the same window.
  *
- * Sourced from ChapterStatsDaily, whose buckets are UTC days. In a non-UTC
+ * Sourced from ChapterStatsDaily, whose buckets are IST days. In any other
  * reporting zone the read counts can therefore be off by the part of a day at
  * each edge of the range; revenue is exact regardless. Callers surface this as
  * `readsApproximate` rather than quietly presenting the two as equally precise.
@@ -330,8 +331,8 @@ const readership = async (range, scope) => {
       $match: {
         ...match,
         day: {
-          $gte: new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(range.start),
-          $lte: new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(new Date(range.endExclusive.getTime() - 1)),
+          $gte: rollupDay(range.start),
+          $lte: rollupDay(new Date(range.endExclusive.getTime() - 1)),
         },
       },
     },
@@ -351,7 +352,7 @@ const readership = async (range, scope) => {
     // readers" is how a dashboard doubles its own audience.
     readerDays: row?.readerDays || 0,
     gateImpressions: row?.gateImpressions || 0,
-    readsApproximate: range.zone !== 'UTC',
+    readsApproximate: range.zone !== REPORTING_TZ,
   };
 };
 
@@ -474,10 +475,10 @@ const chapterBreakdown = async (novelId, options = {}) => {
   const current = new Map(rows.map((row) => [String(row._id), row]));
   const previous = new Map(previousRows.map((row) => [String(row._id), shapeTotals(row)]));
 
-  const utcFrom = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(range.start);
-  const utcTo = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(new Date(range.endExclusive.getTime() - 1));
+  const rollupFrom = rollupDay(range.start);
+  const rollupTo = rollupDay(new Date(range.endExclusive.getTime() - 1));
   const readRows = await ChapterStatsDaily.aggregate([
-    { $match: { novel: oid(novelId), day: { $gte: utcFrom, $lte: utcTo } } },
+    { $match: { novel: oid(novelId), day: { $gte: rollupFrom, $lte: rollupTo } } },
     {
       $group: {
         _id: '$chapter',

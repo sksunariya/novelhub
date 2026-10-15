@@ -67,7 +67,7 @@ const BATCH = 1000;
 
 const usd = (micros) => `$${(micros / 1000000).toFixed(4)}`;
 const n = (value) => Number(value || 0).toLocaleString();
-const dayOf = (date) => new Date(date).toISOString().slice(0, 10);
+const { dayKey: dayOf } = require('../src/utils/reportingDay');
 
 const heading = (text) => console.log(`\n${text}\n${'-'.repeat(text.length)}`);
 const warn = (text) => console.log(`  ! ${text}`);

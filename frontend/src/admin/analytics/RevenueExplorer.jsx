@@ -109,7 +109,7 @@ const Summary = ({ data }) => {
           {readership.readsApproximate && (
             <span className="flex items-center gap-1 text-[11px]">
               <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-              Read counts bucket by UTC day; revenue uses {data.range.timezone}.
+              Read counts bucket by IST day; revenue uses {data.range.timezone}.
             </span>
           )}
         </div>

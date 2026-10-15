@@ -505,7 +505,7 @@ const attributeCycle = async (subscription, cycle) => {
       chapterNumber: read.chapterNumber,
       creditsSpent: 0,
       attributedUsdMicros: micros,
-      day: at.toISOString().slice(0, 10),
+      day: require('../utils/reportingDay').dayKey(at),
     });
   }
 

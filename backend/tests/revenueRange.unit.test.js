@@ -86,11 +86,11 @@ describe('resolveRange', () => {
     expect((await resolveRange({ from: '2026-03-01', to: '2026-03-31', granularity: 'fortnight' })).unit).toBe('day');
   });
 
-  it('falls back to UTC when the configured zone is not a real one', async () => {
+  it('falls back to IST when the configured zone is not a real one', async () => {
     useZone('Mars/Olympus_Mons');
     const range = await resolveRange({ from: '2026-03-01', to: '2026-03-01' });
-    expect(range.zone).toBe('UTC');
-    expect(range.start.toISOString()).toBe('2026-03-01T00:00:00.000Z');
+    expect(range.zone).toBe('Asia/Kolkata');
+    expect(range.start.toISOString()).toBe('2026-02-28T18:30:00.000Z');
   });
 
   it('caps an absurd `days` rather than scanning the whole ledger', async () => {

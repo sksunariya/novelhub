@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 // the raw table is kept for cohort work.
 const chapterStatsDailySchema = new mongoose.Schema(
   {
-    day: { type: String, required: true }, // YYYY-MM-DD, UTC
+    day: { type: String, required: true }, // YYYY-MM-DD, IST (utils/reportingDay)
     chapter: { type: mongoose.Schema.Types.ObjectId, ref: 'Chapter', required: true },
     novel: { type: mongoose.Schema.Types.ObjectId, ref: 'Novel', required: true },
     chapterNumber: { type: Number, required: true },

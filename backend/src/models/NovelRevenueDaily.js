@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
 // times out once there are a hundred thousand unlocks.
 const novelRevenueDailySchema = new mongoose.Schema(
   {
-    day: { type: String, required: true }, // YYYY-MM-DD, UTC
+    day: { type: String, required: true }, // YYYY-MM-DD, IST (utils/reportingDay)
     novel: { type: mongoose.Schema.Types.ObjectId, ref: 'Novel', required: true },
     // Denormalized so an earnings report can group by author without joining
     // every novel — and so history survives a novel changing hands.
