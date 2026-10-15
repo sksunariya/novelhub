@@ -136,11 +136,10 @@ Add a client-generated idempotency key to the unlock request so a double-click i
 
 ### 2.4 Store page (1–2 days)
 
-`pages/Store.jsx` + `components/store/PackCard.jsx`, `CurrencyPicker.jsx`, `CreditCalculator.jsx`.
+`pages/Store.jsx` + `components/store/PackCard.jsx`, `CurrencyPicker.jsx`.
 
 - PayPal via `@paypal/react-paypal-js`, `createOrder` → our API, `onApprove` → our capture.
 - **The estimate disclosure is not optional.** When `isEstimate` is true the card must say "Charged as $9.99 USD — your bank's rate may differ". Silently showing ₹860 and charging what lands as ₹871 is the top source of payment support tickets.
-- The credit calculator is a pure function of `credits.perUsd`; hide it when `credits.showCalculator` is off.
 
 ### 2.5 Profile wallet (1 day)
 

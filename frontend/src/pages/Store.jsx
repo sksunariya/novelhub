@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import { useMonetization } from '../context/MonetizationContext';
 import Spinner from '../components/Spinner';
 import PackCard from '../components/store/PackCard';
-import CreditCalculator from '../components/store/CreditCalculator';
 import PayPalCheckout from '../components/store/PayPalCheckout';
 import useCreditPurchase from '../components/store/useCreditPurchase';
 import CreditAmount from '../components/credits/CreditAmount';
@@ -126,9 +125,7 @@ const Store = () => {
         </p>
       )}
 
-      <div className="mt-8 grid gap-6 md:grid-cols-2">
-        <CreditCalculator />
-
+      <div className="mt-8 max-w-xl">
         <div className="panel p-5 sm:p-6">
           <p className="font-display text-base font-bold text-silver">Checkout</p>
 

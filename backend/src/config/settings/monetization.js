@@ -78,14 +78,6 @@ const settings = [
     public: true,
   },
   {
-    key: 'credits.showCalculator',
-    section: SECTIONS.GENERAL,
-    type: 'boolean',
-    default: true,
-    label: 'Show the credit calculator',
-    public: true,
-  },
-  {
     key: 'credits.minPurchaseUsdCents',
     section: SECTIONS.GENERAL,
     type: 'money_usd_cents',

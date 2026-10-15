@@ -44,7 +44,6 @@ const getStoreConfig = asyncHandler(async (req, res) => {
       singular: snapshot.get('credits.labelSingular'),
       plural: snapshot.get('credits.labelPlural'),
     },
-    showCalculator: snapshot.get('credits.showCalculator'),
     heading: snapshot.get('store.heading'),
     subheading: snapshot.get('store.subheading'),
     layout: snapshot.get('store.layout'),
