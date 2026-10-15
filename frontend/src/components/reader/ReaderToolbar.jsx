@@ -37,11 +37,10 @@ const useAutoHide = () => {
   return visible;
 };
 
-const ToolbarButton = ({ label, onClick, onPointerDown, disabled, children }) => (
+const ToolbarButton = ({ label, onClick, disabled, children }) => (
   <button
     type="button"
     onClick={onClick}
-    onPointerDown={onPointerDown}
     disabled={disabled}
     aria-label={label}
     title={label}
@@ -51,7 +50,7 @@ const ToolbarButton = ({ label, onClick, onPointerDown, disabled, children }) =>
   </button>
 );
 
-const ReaderToolbar = ({ theme, fullscreen, speech, prevTo, nextTo, onReport, onReportPointerDown }) => {
+const ReaderToolbar = ({ theme, fullscreen, speech, prevTo, nextTo, onReport }) => {
   const visible = useAutoHide();
 
   const pagingLink = (to, label, children) =>
@@ -114,12 +113,17 @@ const ReaderToolbar = ({ theme, fullscreen, speech, prevTo, nextTo, onReport, on
         </ToolbarButton>
 
         {onReport && (
-          // The pointerdown hook runs before the press collapses the page
-          // selection, so a passage the reader highlighted can ride along
-          // with the report.
-          <ToolbarButton label="Report a problem with this chapter" onClick={onReport} onPointerDown={onReportPointerDown}>
+          // Red on every reader theme so it reads as "something is wrong",
+          // distinct from the brand-coloured read-aloud button beside it.
+          <button
+            type="button"
+            onClick={onReport}
+            aria-label="Report a problem with this chapter"
+            title="Report a problem with this chapter"
+            className="mx-0.5 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border-2 border-red-500 text-red-500 transition-all hover:bg-red-500 hover:text-white"
+          >
             <Flag className="h-[18px] w-[18px]" aria-hidden="true" />
-          </ToolbarButton>
+          </button>
         )}
 
         {speech.supported && (

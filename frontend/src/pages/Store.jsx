@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import { CheckCircle2, AlertTriangle, Coins } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useMonetization } from '../context/MonetizationContext';
 import Spinner from '../components/Spinner';
 import PackCard from '../components/store/PackCard';
 import CreditCalculator from '../components/store/CreditCalculator';
+import PayPalCheckout from '../components/store/PayPalCheckout';
 import useCreditPurchase from '../components/store/useCreditPurchase';
 import CreditAmount from '../components/credits/CreditAmount';
 
@@ -66,7 +66,11 @@ const Store = () => {
   }
 
   const canCheckout = Boolean(selected) && (!requireTerms || accepted) && !config?.readOnly;
-  const { paypalClientId } = purchase;
+  const blockedReason = config?.readOnly
+    ? 'Purchases are paused for maintenance.'
+    : requireTerms && !accepted
+      ? 'Tick the box above to continue.'
+      : '';
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -156,47 +160,14 @@ const Store = () => {
                 <p className="alert-error mt-3" role="alert">{status.message}</p>
               )}
 
-              <div className={`mt-4 ${canCheckout ? '' : 'pointer-events-none opacity-40'}`}>
-                {paypalClientId ? (
-                  <PayPalScriptProvider
-                    // The SDK is loaded per currency, so switching settlement
-                    // currency needs a fresh provider rather than new props.
-                    key={`${paypalClientId}:${selected?.chargedIn || 'USD'}`}
-                    options={{
-                      clientId: paypalClientId,
-                      currency: selected?.chargedIn || 'USD',
-                      intent: 'capture',
-                      'enable-funding': 'card,paylater,venmo',
-                    }}
-                  >
-                    <PayPalButtons
-                      style={{ layout: 'vertical', shape: 'pill' }}
-                      disabled={!canCheckout}
-                      // Without this the buttons keep the callbacks captured on
-                      // first mount and would create an order for the pack the
-                      // reader first clicked, not the one they finally chose.
-                      forceReRender={[selected?.id, currency, canCheckout]}
-                      createOrder={purchase.startOrder}
-                      onApprove={purchase.finishOrder}
-                      onError={() => purchase.failPayment()}
-                      onCancel={purchase.cancelPayment}
-                    />
-                  </PayPalScriptProvider>
-                ) : (
-                  <p className="text-xs text-silver-muted">
-                    Payments are not set up yet. An admin needs to add PayPal credentials under
-                    Settings → Payments.
-                  </p>
-                )}
+              <div className="mt-4">
+                <PayPalCheckout
+                  purchase={purchase}
+                  canCheckout={canCheckout}
+                  blockedReason={blockedReason}
+                  notConfiguredMessage="Payments are not set up yet. An admin needs to add PayPal credentials under Settings → Payments."
+                />
               </div>
-
-              {selected && (
-                <p className="mt-3 text-xs text-silver-muted">
-                  Buying <CreditAmount value={selected.totalCredits} showIcon={false} /> for{' '}
-                  {selected.price?.formatted}
-                  {selected.isEstimate && ` (charged as $${(selected.priceUsdCents / 100).toFixed(2)})`}.
-                </p>
-              )}
             </>
           )}
         </div>

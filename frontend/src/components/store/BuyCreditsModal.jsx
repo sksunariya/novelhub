@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import { X, CheckCircle2, AlertTriangle } from 'lucide-react';
 import useCreditPurchase from './useCreditPurchase';
 import PackCard from './PackCard';
+import PayPalCheckout from './PayPalCheckout';
 import CreditAmount from '../credits/CreditAmount';
 import Spinner from '../Spinner';
 import { useMonetization } from '../../context/MonetizationContext';
@@ -32,7 +32,7 @@ const BuyCreditsModal = ({ open, onClose, shortfall = 0, reason = '', onPurchase
   const dialogRef = useRef(null);
   const preselected = useRef(false);
 
-  const { config, packs, currency, selected, status, setSelected, paypalClientId } = purchase;
+  const { config, packs, currency, selected, status, setSelected } = purchase;
 
   // Pre-select the cheapest pack that actually covers the shortfall, or the first
   // pack if no shortfall is specified.
@@ -90,6 +90,11 @@ const BuyCreditsModal = ({ open, onClose, shortfall = 0, reason = '', onPurchase
   // store page asks for a tick; a dialog that skips it would make the setting
   // depend on which door the reader came through.
   const canCheckout = Boolean(selected) && purchase.storeOpen && (!requireTerms || accepted);
+  const blockedReason = !purchase.storeOpen
+    ? 'Purchases are paused right now.'
+    : requireTerms && !accepted
+      ? 'Tick the box above to continue.'
+      : '';
 
   const body = () => {
     if (status.state === 'loading') return <Spinner />;
@@ -189,42 +194,10 @@ const BuyCreditsModal = ({ open, onClose, shortfall = 0, reason = '', onPurchase
           </label>
         )}
 
-        <div className={`mt-4 ${canCheckout ? '' : 'pointer-events-none opacity-40'}`}>
-          {paypalClientId ? (
-            <PayPalScriptProvider
-              key={`${paypalClientId}:${selected?.chargedIn || 'USD'}`}
-              options={{
-                clientId: paypalClientId,
-                currency: selected?.chargedIn || 'USD',
-                intent: 'capture',
-                'enable-funding': 'card,paylater,venmo',
-              }}
-            >
-              <PayPalButtons
-                style={{ layout: 'vertical', shape: 'pill' }}
-                disabled={!canCheckout}
-                // Without this the buttons keep the callbacks captured on first
-                // mount and would buy the pack first clicked, not the one
-                // finally chosen.
-                forceReRender={[selected?.id, currency, canCheckout]}
-                createOrder={purchase.startOrder}
-                onApprove={purchase.finishOrder}
-                onError={() => purchase.failPayment()}
-                onCancel={purchase.cancelPayment}
-              />
-            </PayPalScriptProvider>
-          ) : (
-            <p className="text-xs text-silver-muted">
-              Payments are not set up yet. Please try again later.
-            </p>
-          )}
-        </div>
-
-        {selected && (
-          <p className="mt-3 text-center text-xs text-silver-muted">
-            <CreditAmount value={selected.totalCredits} showIcon={false} /> for {selected.price?.formatted}
-            {selected.isEstimate && ` (charged as $${(selected.priceUsdCents / 100).toFixed(2)})`}
-          </p>
+        {packs.length > 0 && (
+          <div className="mt-6 border-t border-line pt-5">
+            <PayPalCheckout purchase={purchase} canCheckout={canCheckout} blockedReason={blockedReason} />
+          </div>
         )}
       </>
     );

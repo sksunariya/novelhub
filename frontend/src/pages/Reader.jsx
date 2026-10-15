@@ -121,7 +121,6 @@ const Reader = () => {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportContext, setReportContext] = useState(null);
   const contentRef = useRef(null);
-  const pendingQuote = useRef('');
 
   useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -365,18 +364,7 @@ const Reader = () => {
   const likeChapterReviewReply = reactToChapterReviewReply('like');
   const dislikeChapterReviewReply = reactToChapterReviewReply('dislike');
 
-  // A passage selected inside the chapter text, read on pointerdown of the
-  // report button — by the time `click` fires, the press has cleared it.
-  const captureSelection = useCallback(() => {
-    const selection = window.getSelection?.();
-    const text = selection?.toString().replace(/\s+/g, ' ').trim();
-    if (text && contentRef.current && selection.anchorNode && contentRef.current.contains(selection.anchorNode)) {
-      pendingQuote.current = text;
-    }
-  }, []);
-
   const openReport = useCallback(() => {
-    captureSelection();
     // Position is measured against the prose card, not the page, so the
     // comments below the chapter don't drag the figure down.
     let progress = null;
@@ -386,17 +374,15 @@ const Reader = () => {
       progress = Math.round(Math.min(1, Math.max(0, reached)) * 100);
     }
     setReportContext({
-      quote: pendingQuote.current,
       progress,
       theme: settings.theme,
       font: settings.font,
       fontSize: settings.fontSize,
     });
-    pendingQuote.current = '';
     setSettingsOpen(false);
     setPanel('');
     setReportOpen(true);
-  }, [captureSelection, settings.theme, settings.font, settings.fontSize]);
+  }, [settings.theme, settings.font, settings.fontSize]);
 
   const closeReport = useCallback(() => setReportOpen(false), []);
 
@@ -972,7 +958,6 @@ const Reader = () => {
           prevTo={data.prev ? `/novel/${slug}/chapter/${data.prev.number}` : null}
           nextTo={data.next ? `/novel/${slug}/chapter/${data.next.number}` : null}
           onReport={openReport}
-          onReportPointerDown={captureSelection}
         />
       )}
       {data && (

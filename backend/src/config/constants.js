@@ -671,6 +671,9 @@ const REPORT_TARGET_TYPES = {
 // Keys are stored on every report, so treat them as permanent. Labels can
 // change freely.
 const CHAPTER_ISSUE_CATEGORIES = [
+  // What the reader's dialog files today: one free-text box, no type picker.
+  // The specific keys below remain valid for reports filed before that.
+  { key: 'general', label: 'Reported problem', hint: '' },
   { key: 'missing_content', label: 'Missing or incomplete text', hint: 'The chapter cuts off, is empty or has gaps.' },
   { key: 'wrong_chapter', label: 'Wrong or duplicate chapter', hint: 'This is a different chapter, or a repeat of one.' },
   { key: 'wrong_order', label: 'Wrong order or numbering', hint: 'Chapters are out of sequence or misnumbered.' },

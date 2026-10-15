@@ -152,9 +152,12 @@ const IssueCard = ({ issue, selected, onSelect, onStatus, onFilterChapter, busy 
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${CATEGORY_STYLE[issue.category] || CATEGORY_STYLE.other}`}>
-              {issue.categoryLabel}
-            </span>
+            {/* Text-only reports (the current reader dialog) carry no type worth a chip. */}
+            {issue.category !== 'general' && (
+              <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${CATEGORY_STYLE[issue.category] || CATEGORY_STYLE.other}`}>
+                {issue.categoryLabel}
+              </span>
+            )}
             <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[issue.status]}`}>
               {STATUS_LABEL[issue.status]}
             </span>
@@ -416,7 +419,11 @@ const ChapterReportsAdmin = () => {
                 <p className="truncate text-xs text-silver-muted">
                   Ch. {spot.chapterNumber}{spot.chapterTitle ? ` — ${spot.chapterTitle}` : ''}
                 </p>
-                <p className="mt-1.5 truncate text-[11px] text-silver-muted">{spot.categories.join(' · ')}</p>
+                {spot.categories.some((c) => c !== 'Reported problem') && (
+                  <p className="mt-1.5 truncate text-[11px] text-silver-muted">
+                    {spot.categories.filter((c) => c !== 'Reported problem').join(' · ')}
+                  </p>
+                )}
               </button>
             ))}
           </div>

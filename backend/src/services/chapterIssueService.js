@@ -18,9 +18,10 @@ const badRequest = (message) => Object.assign(new Error(message), { status: 400 
 
 const CATEGORY_LABELS = Object.fromEntries(CHAPTER_ISSUE_CATEGORIES.map((c) => [c.key, c.label]));
 
-// Categories where a bare click tells the admin nothing: "something else" with
-// no description could mean anything.
-const DETAILS_REQUIRED = new Set(['other']);
+// The reader's dialog is a single text box filed as `general`, so for that
+// (and for "something else") the text is the whole report.
+const DEFAULT_CATEGORY = 'general';
+const DETAILS_REQUIRED = new Set(['general', 'other']);
 
 const cleanText = (value, max) =>
   String(value == null ? '' : value)
@@ -42,7 +43,7 @@ const finiteOrNull = (value, min, max) => {
 
 /** Validate and trim what the reader sent. Throws a 400 on anything unusable. */
 const normaliseSubmission = (body = {}) => {
-  const category = String(body.category || '');
+  const category = String(body.category || DEFAULT_CATEGORY);
   if (!CHAPTER_ISSUE_CATEGORY_KEYS.includes(category)) {
     throw badRequest('Choose what kind of problem this is');
   }
@@ -158,8 +159,15 @@ const file = async ({ reporter, chapterId, body, userAgent = '' }) => {
   });
 
   if (existing) {
-    // Keep what they said before if the new submission says nothing.
-    if (input.details) existing.details = input.details;
+    // Keep what they said before. With a single free-text box a second report
+    // is usually a different problem, so it is added rather than replacing
+    // the first; the newest text wins if the two together run over the cap.
+    if (input.details && input.details !== existing.details) {
+      const joined = existing.details ? `${existing.details}\n\n${input.details}` : input.details;
+      existing.details = joined.length > CHAPTER_ISSUE_LIMITS.DETAILS_MAX
+        ? joined.slice(joined.length - CHAPTER_ISSUE_LIMITS.DETAILS_MAX)
+        : joined;
+    }
     if (input.quote) existing.quote = input.quote;
     existing.context = context;
     existing.submissions += 1;

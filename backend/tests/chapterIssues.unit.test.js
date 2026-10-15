@@ -11,7 +11,13 @@ const {
 } = require('../src/config/constants');
 
 describe('chapter issue submission', () => {
-  it('accepts a known category with no details', () => {
+  it('files a text-only report as general and requires the text', () => {
+    expect(normaliseSubmission({ details: 'Second half of the chapter is missing' }).category).toBe('general');
+    expect(() => normaliseSubmission({ details: ' ' })).toThrow(/describe/);
+    expect(() => normaliseSubmission({})).toThrow(/describe/);
+  });
+
+  it('still accepts a specific category with no details', () => {
     const out = normaliseSubmission({ category: 'missing_content' });
     expect(out.category).toBe('missing_content');
     expect(out.details).toBe('');
@@ -20,7 +26,6 @@ describe('chapter issue submission', () => {
 
   it('rejects an unknown or missing category', () => {
     expect(() => normaliseSubmission({ category: 'spam' })).toThrow(/kind of problem/);
-    expect(() => normaliseSubmission({})).toThrow(/kind of problem/);
   });
 
   it('requires a description for "other"', () => {
